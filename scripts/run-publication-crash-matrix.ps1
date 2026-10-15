@@ -1,6 +1,8 @@
 param(
     [switch]$RunMinecraft,
-    [ValidateSet('save', 'import', 'merge', 'restore')] [string]$Kind = 'save',
+    [ValidateSet('save', 'import', 'merge', 'restore', 'upgrade')] [string]$Kind = 'save',
+    [string]$Target = 'legacy-12111',
+    [string]$UpgradeFixture,
     [string[]]$Phase = @(),
     [switch]$RestoreCold,
     [string[]]$ResumeFrom = @(),
@@ -14,6 +16,19 @@ if (-not $RunMinecraft) {
 }
 . (Join-Path $PSScriptRoot 'CrashMatrixDefinition.ps1')
 $taskRepo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$taskCatalog = Get-Content -LiteralPath (Join-Path $taskRepo 'gradle/minecraft-targets.json') -Raw | ConvertFrom-Json
+$taskProfile = @($taskCatalog.targets | Where-Object { $_.id -ceq $Target })
+if ($taskProfile.Count -ne 1) { throw "Unknown target: $Target" }
+$taskModern = $taskProfile[0].javaVersion -gt 21
+$taskBuild = Join-Path $taskRepo $(if ($taskModern) { "versions/$Target/build" } else { 'build' })
+if ($Kind -eq 'upgrade') {
+    if (-not $taskModern) { throw 'Upgrade matrix requires a modern target.' }
+    if ([string]::IsNullOrWhiteSpace($UpgradeFixture)) { throw '-UpgradeFixture must name a stopped-world source/edit fixture.' }
+    $UpgradeFixture = (Resolve-Path -LiteralPath $UpgradeFixture).Path
+    foreach ($name in @('fixture.properties', 'source-a/level.dat', 'source-b/level.dat')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $UpgradeFixture $name))) { throw "Incomplete upgrade fixture: $name" }
+    }
+}
 $taskDefinition = [LumiCrashMatrixDefinition]::new($Kind)
 $taskPhases = $taskDefinition.Phases
 if ($RestoreCold -and $Kind -ne 'restore') { throw '-RestoreCold requires -Kind restore.' }
@@ -23,16 +38,18 @@ if ($Phase.Count -gt 0) {
     }
     $taskPhases = $Phase
 }
-if (-not (Test-Path -LiteralPath $Java)) { throw 'A JDK 21 java.exe is required.' }
+if (-not (Test-Path -LiteralPath $Java)) { throw "JDK $($taskProfile[0].javaVersion) java.exe is required." }
 Push-Location $taskRepo
 try {
     $ErrorActionPreference = 'Continue'
-    & (Join-Path $taskRepo 'gradlew.bat') prepareMultiplayerLaunch --no-daemon
+    $taskPrepare = if ($taskModern) { @('-p', 'modern', ":adapters:${Target}:prepareMultiplayerLaunch") }
+        else { @("-PlumiTarget=$Target", 'prepareMultiplayerLaunch') }
+    & (Join-Path $taskRepo 'gradlew.bat') @taskPrepare --no-daemon
     $ErrorActionPreference = 'Stop'
     if ($LASTEXITCODE -ne 0) { throw 'Client launch preparation failed.' }
     $taskSha = (& git rev-parse HEAD).Trim()
     $taskDirty = [bool](& git status --porcelain)
-    $taskFingerprint = [LumiCrashMatrixEvidence]::Inputs($taskRepo, $Java)
+    $taskFingerprint = [LumiCrashMatrixEvidence]::Inputs($taskRepo, $Java, $taskBuild)
     $taskEvidence = [LumiCrashMatrixEvidence]::new($taskFingerprint, $taskSha, $taskDirty, $taskDefinition)
     $taskResumed = $taskEvidence.Resume($ResumeFrom, $taskPhases, [bool]$RestoreCold)
     $taskRun = Join-Path $taskRepo ('build/reports/lumi-publication-crash/' +
@@ -45,7 +62,7 @@ try {
         status = 'unverified'; completed = @(); results = [ordered]@{}
         resumedFrom = $ResumeFrom
         buildProperties = @((Get-Content -LiteralPath (Join-Path $taskRepo 'gradle.properties')) | ForEach-Object { [string]$_ })
-        minecraftTarget = (Get-Content -LiteralPath (Join-Path $taskRepo 'build/multiplayer-launch.inputs.json') -Raw | ConvertFrom-Json).target
+        minecraftTarget = (Get-Content -LiteralPath (Join-Path $taskBuild 'multiplayer-launch.inputs.json') -Raw | ConvertFrom-Json).target
     }
     $taskManifestPath = Join-Path $taskRun 'manifest.json'
     $taskManifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $taskManifestPath -Encoding UTF8
@@ -65,13 +82,19 @@ try {
             $taskGameDirectory = Join-Path $taskDirectory 'run/clientGameTest'
             $taskTemp = Join-Path $taskDirectory 'tmp'
             New-Item -ItemType Directory -Path $taskGameDirectory, $taskTemp -Force | Out-Null
+            if ($Kind -eq 'upgrade') {
+                foreach ($name in @('fixture.properties', 'source-a', 'source-b')) {
+                    Copy-Item -LiteralPath (Join-Path $UpgradeFixture $name) -Destination $taskDirectory -Recurse
+                }
+            }
             $taskMarker = Join-Path $taskDirectory 'crash.marker'
             $taskReceipts = [ordered]@{}
             foreach ($taskMode in @('produce', 'verify')) {
-                $taskArguments = Get-Content -LiteralPath (Join-Path $taskRepo 'build/multiplayer-launch.args')
+                $taskArguments = Get-Content -LiteralPath (Join-Path $taskBuild 'multiplayer-launch.args')
                 $taskExtra = @('-Djava.io.tmpdir=' + $taskTemp) +
                     $taskDefinition.Arguments($taskPhase, $taskMode, $taskMarker, [bool]$RestoreCold) +
                     @('net.fabricmc.devlaunchinjector.Main', '--username', 'Lumi-crash', '--gameDir', $taskGameDirectory)
+                if ($Kind -eq 'upgrade') { $taskExtra = @("-Dlumi.gametest.upgrade.fixture=$taskDirectory") + $taskExtra }
                 foreach ($taskArgument in $taskExtra) {
                     $taskArguments += '"' + $taskArgument.Replace('\', '\\').Replace('"', '\"') + '"'
                 }
@@ -102,6 +125,17 @@ try {
                         if ($Kind -eq 'restore') {
                             Copy-Item -LiteralPath (Join-Path $taskGameDirectory 'lumi-restore-crash.properties') -Destination (Join-Path $taskDirectory 'producer-metadata.properties')
                         }
+                        if ($Kind -eq 'upgrade') {
+                            Copy-Item -LiteralPath (Join-Path $taskGameDirectory 'saves/lumi-upgrade-target') -Destination (Join-Path $taskDirectory 'crashed-target') -Recurse
+                            $taskMoveSource = [IO.Path]::GetFullPath($taskGameDirectory)
+                            $taskMoveTarget = [IO.Path]::GetFullPath((Join-Path $taskDirectory 'producer-run'))
+                            $taskAllowedRoot = [IO.Path]::GetFullPath($taskDirectory) + [IO.Path]::DirectorySeparatorChar
+                            if (-not $taskMoveSource.StartsWith($taskAllowedRoot) -or -not $taskMoveTarget.StartsWith($taskAllowedRoot)) {
+                                throw 'Upgrade snapshot move escaped its phase directory.'
+                            }
+                            Move-Item -LiteralPath $taskMoveSource -Destination $taskMoveTarget
+                            New-Item -ItemType Directory -Path $taskGameDirectory | Out-Null
+                        }
                     } elseif (-not (Select-String -LiteralPath $taskLog -SimpleMatch $taskDefinition.Gate($taskPhase) -Quiet)) {
                         throw "Verifier exited without its gate: $taskLog"
                     }
@@ -115,7 +149,7 @@ try {
                 }
             }
             if ((& git rev-parse HEAD).Trim() -cne $taskSha -or [bool](& git status --porcelain) -ne $taskDirty -or
-                [LumiCrashMatrixEvidence]::Inputs($taskRepo, $Java) -cne $taskFingerprint) {
+                [LumiCrashMatrixEvidence]::Inputs($taskRepo, $Java, $taskBuild) -cne $taskFingerprint) {
                 throw 'The candidate or launch inputs changed during the crash pair.'
             }
             $taskManifest.results[$taskPhase] = $taskEvidence.Record($taskDirectory, $taskPhase, $taskReceipts)
@@ -124,7 +158,7 @@ try {
             Write-Output "Verified $Kind/$taskPhase`: $taskDirectory"
         }
         if ((& git rev-parse HEAD).Trim() -cne $taskSha -or [bool](& git status --porcelain) -ne $taskDirty -or
-            [LumiCrashMatrixEvidence]::Inputs($taskRepo, $Java) -cne $taskFingerprint) {
+            [LumiCrashMatrixEvidence]::Inputs($taskRepo, $Java, $taskBuild) -cne $taskFingerprint) {
             throw 'The candidate or launch inputs changed during the crash matrix.'
         }
         $taskManifest.status = 'passed'

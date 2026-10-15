@@ -1,3 +1,4 @@
 def sharedProperties = new Properties()
 file('../gradle.properties').withInputStream { sharedProperties.load(it) }
 sharedProperties.each { name, value -> ext.set(name.toString(), value) }
+project(':core').layout.buildDirectory.set(layout.buildDirectory.dir('core'))

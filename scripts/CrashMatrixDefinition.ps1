@@ -14,6 +14,9 @@ class LumiCrashMatrixDefinition {
             if ($kind -eq 'save') {
                 $this.Phases += @('journal-created', 'working-cleared', 'journal-complete', 'cleanup')
             } else { $this.Phases += 'preview-written' }
+        } elseif ($kind -eq 'upgrade') {
+            $this.Phases = @('ALLOCATED', 'WORLD_OBJECT', 'COMMIT', 'METADATA',
+                'VERIFICATION', 'VERIFIED', 'PUBLISHED', 'COMPLETED')
         } else { throw "Unknown crash matrix: $kind" }
     }
 
@@ -22,6 +25,14 @@ class LumiCrashMatrixDefinition {
             throw 'Unknown crash phase or mode.'
         }
         if ($cold -and $this.Kind -ne 'restore') { throw 'Cold fixture requires the Restore matrix.' }
+        if ($this.Kind -eq 'upgrade') {
+            $arguments = @('-Dlumi.gametest.suite=UPGRADE')
+            if ($mode -eq 'produce') {
+                return $arguments + @('-Dlumi.gametest.upgrade.stage=startup',
+                    "-Dlumi.gametest.upgrade.cut=$phase", "-Dlumi.gametest.upgrade.marker=$marker")
+            }
+            return $arguments + @('-Dlumi.gametest.upgrade.stage=resume', "-Dlumi.gametest.upgrade.expectedCut=$phase")
+        }
         if ($this.Kind -eq 'restore') {
             $arguments = @('-Dlumi.gametest.suite=RESTORE_CRASH',
                 "-Dlumi.gametest.restoreCrashMode=$mode")
@@ -38,8 +49,8 @@ class LumiCrashMatrixDefinition {
     [void] AssertMarker([string] $path, [string] $phase) {
         if (-not [IO.File]::Exists($path)) { throw "Crash marker is missing: $path" }
         $lines = [IO.File]::ReadAllLines($path)
-        if ($this.Kind -eq 'restore') {
-            if ([IO.File]::ReadAllText($path) -cne $phase) { throw "Wrong Restore marker: $path" }
+        if ($this.Kind -eq 'restore' -or $this.Kind -eq 'upgrade') {
+            if ([IO.File]::ReadAllText($path) -cne $phase) { throw "Wrong crash marker: $path" }
         } elseif ((@($lines | Where-Object { $_ -ceq "kind=$($this.Kind)" }).Count -ne 1) -or
             (@($lines | Where-Object { $_ -ceq "phase=$phase" }).Count -ne 1)) {
             throw "Wrong publication marker: $path"
@@ -49,6 +60,7 @@ class LumiCrashMatrixDefinition {
     [string] Gate([string] $phase) {
         if ($phase -notin $this.Phases) { throw "Unknown crash phase: $phase" }
         if ($this.Kind -eq 'restore') { return "restore_crash_${phase}: succeeded" }
+        if ($this.Kind -eq 'upgrade') { return "Lumi history upgrade restart ${phase}: succeeded" }
         return "publication_crash_$($this.Kind)_${phase}: succeeded"
     }
 }
@@ -94,14 +106,22 @@ class LumiCrashMatrixEvidence {
     }
 
     static [string] Inputs([string] $repo, [string] $java) {
-        $descriptor = Join-Path $repo 'build/multiplayer-launch.inputs.json'
+        return [LumiCrashMatrixEvidence]::Inputs($repo, $java, (Join-Path $repo 'build'))
+    }
+
+    static [string] Inputs([string] $repo, [string] $java, [string] $build) {
+        $descriptor = Join-Path $build 'multiplayer-launch.inputs.json'
         $launch = Get-Content -LiteralPath $descriptor -Raw | ConvertFrom-Json
         if ($launch.schema -ne 1) { throw 'Unknown prepared-launch input schema.' }
         $jdk = Split-Path (Split-Path ([IO.Path]::GetFullPath($java)) -Parent) -Parent
-        $roots = @($launch.classpath) + @($descriptor, (Join-Path $repo 'build/multiplayer-launch.args'),
-            (Join-Path $repo '.gradle/loom-cache/launch.cfg'),
-            (Join-Path $repo '.gradle/loom-cache/remapClasspath.txt'),
-            (Join-Path $repo '.gradle/loom-cache/log4j.xml'))
+        $roots = @($launch.classpath) + @($descriptor, (Join-Path $build 'multiplayer-launch.args'))
+        if ($launch.PSObject.Properties.Name -contains 'configuration') {
+            $roots += @($launch.configuration)
+        } else {
+            foreach ($name in @('launch.cfg', 'remapClasspath.txt', 'log4j.xml')) {
+                $roots += Join-Path $repo ".gradle/loom-cache/$name"
+            }
+        }
         foreach ($part in @('bin', 'lib', 'conf', 'release')) { $roots += Join-Path $jdk $part }
         $identity = [ordered]@{
             files = [LumiCrashMatrixEvidence]::Inventory($roots); java = [IO.Path]::GetFullPath($java)
@@ -124,6 +144,13 @@ class LumiCrashMatrixEvidence {
             $path = Join-Path $directory 'producer-metadata.properties'
             if (-not (Test-Path -LiteralPath $path)) { throw "Missing producer metadata: $path" }
             $roots += $path
+        }
+        if ($this.Definition.Kind -eq 'upgrade') {
+            foreach ($name in @('producer-run', 'fixture.properties', 'source-a', 'source-b', 'crashed-target')) {
+                $path = Join-Path $directory $name
+                if (-not (Test-Path -LiteralPath $path)) { throw "Missing upgrade artifact: $path" }
+                $roots += $path
+            }
         }
         return [LumiCrashMatrixEvidence]::Digest([LumiCrashMatrixEvidence]::Inventory($roots))
     }

@@ -49,10 +49,13 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
     private LumiWorldSnapshot expectedSaved;
     private LumiWorldSnapshot expectedWorking;
     private MinecraftWorldPayloadConverter converter;
+    private HistoryGenerationConversionService.Phase restartPhase;
 
     @Override public void runTest(ClientGameTestContext context) {
         String stage = System.getProperty("lumi.gametest.upgrade.stage", "");
         if (stage.isEmpty()) return;
+        if (stage.equals("resume")) restartPhase = HistoryGenerationConversionService.Phase.valueOf(
+                System.getProperty("lumi.gametest.upgrade.expectedCut"));
         directory = Path.of(System.getProperty("lumi.gametest.upgrade.fixture")).toAbsolutePath();
         var acceptUpgradeDone = new AtomicBoolean(stage.equals("verify") || stage.equals("startup") || stage.equals("resume"));
         context.runOnClient(client -> ClientTickEvents.END_CLIENT_TICK.register(ticking -> {
@@ -173,7 +176,7 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
             throw new AssertionError("Upgrade or Restore changed the original source history");
         }
         if (automatic && !resume) verifyBackup(context);
-        if (resume) LumiMod.LOGGER.info("Lumi history upgrade restart: succeeded");
+        if (resume) LumiMod.LOGGER.info("Lumi history upgrade restart {}: succeeded", restartPhase);
     }
 
     private void convertBeforeOpening(ClientGameTestContext context) throws IOException {

@@ -1,0 +1,34 @@
+import groovy.json.JsonOutput
+
+tasks.register('prepareMultiplayerLaunch') {
+    group = 'verification'
+    description = 'Prepares an isolated client GameTest JVM and records its native target and classpath'
+    dependsOn 'gametestClasses', 'configureClientLaunch', 'generateDLIConfig', 'downloadAssets'
+    def remap = tasks.findByName('generateRemapClasspath')
+    if (remap != null) dependsOn remap
+    doLast {
+        def run = tasks.named('runClientGameTest').get()
+        def output = layout.buildDirectory.file('multiplayer-launch.args').get().asFile
+        def configuration = ['launch.cfg', 'remapClasspath.txt', 'log4j.xml'].collect {
+            layout.projectDirectory.file(".gradle/loom-cache/${it}").asFile.absolutePath
+        }
+        def arguments = ['-Xmx2G', '-Dfabric.client.gametest',
+                '-Dfabric.client.gametest.disableNetworkSynchronizer=true',
+                "-Dfabric.dli.config=${configuration[0]}", '-Dfabric.dli.env=client',
+                '-Dfabric.dli.main=net.fabricmc.loader.impl.launch.knot.KnotClient',
+                '-classpath', run.classpath.asPath]
+        output.text = arguments.collect { argument ->
+            '"' + argument.toString().replace('\\', '\\\\').replace('"', '\\"') + '"'
+        }.join('\n') + '\n'
+        def target = lumiMinecraftTarget
+        def parameters = [id: target.id(), minecraftVersion: target.minecraftVersion(),
+                minecraftVersions: target.minecraftVersions(), javaVersion: target.javaVersion(),
+                loaderVersion: target.loaderVersion(), fabricApiVersion: target.fabricApiVersion(),
+                worldeditVersionId: target.worldeditVersionId(), axiomVersionId: target.axiomVersionId(),
+                worldeditCuiCoordinate: target.worldeditCuiCoordinate().orElse(null),
+                axiomRuntimeJars: target.axiomRuntimeJars()]
+        layout.buildDirectory.file('multiplayer-launch.inputs.json').get().asFile.text = JsonOutput.toJson([
+                schema: 1, target: parameters, configuration: configuration,
+                classpath: run.classpath.files.collect { it.absolutePath }])
+    }
+}

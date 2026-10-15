@@ -10,13 +10,24 @@ function Assert-Rejected([scriptblock] $action) {
     Assert-That $rejected 'Invalid matrix input was accepted.'
 }
 
-foreach ($kind in @('save', 'import', 'merge', 'restore')) {
+foreach ($kind in @('save', 'import', 'merge', 'restore', 'upgrade')) {
     $matrix = [LumiCrashMatrixDefinition]::new($kind)
-    $counts = @{ save = 12; import = 9; merge = 10; restore = 8 }
+    $counts = @{ save = 12; import = 9; merge = 10; restore = 8; upgrade = 8 }
     Assert-That ($matrix.Phases.Count -eq $counts[$kind]) "Wrong phase count: $kind"
     foreach ($phase in $matrix.Phases) {
         foreach ($mode in @('produce', 'verify')) {
             $arguments = $matrix.Arguments($phase, $mode, 'marker', $false)
+            if ($kind -eq 'upgrade') {
+                if ($mode -eq 'produce') {
+                    Assert-That ($arguments -contains "-Dlumi.gametest.upgrade.cut=$phase") 'Upgrade cut missing.'
+                    Assert-That ($arguments -contains '-Dlumi.gametest.upgrade.stage=startup') 'Startup stage missing.'
+                } else {
+                    Assert-That ($arguments -contains "-Dlumi.gametest.upgrade.expectedCut=$phase") 'Restart identity missing.'
+                    Assert-That ($arguments -contains '-Dlumi.gametest.upgrade.stage=resume') 'Resume stage missing.'
+                    Assert-That (@($arguments | Where-Object { $_ -match '^-Dlumi.gametest.upgrade.(cut|marker)=' }).Count -eq 0) 'Upgrade verifier rearmed the cut.'
+                }
+                continue
+            }
             $prefix = if ($kind -eq 'restore') { 'lumi.gametest.restoreCrash' } else { 'lumi.persistence.' }
             Assert-That ($arguments -contains "-D${prefix}$(if ($kind -eq 'restore') { 'Mode' } else { 'mode' })=$mode") 'Mode missing.'
             if ($kind -eq 'restore' -and $mode -eq 'verify') {
@@ -47,6 +58,10 @@ try {
     $save.AssertMarker($scratch, 'ref-forced')
     Assert-Rejected { $save.AssertMarker($scratch, 'ref') }
     Assert-Rejected { ([LumiCrashMatrixDefinition]::new('import')).AssertMarker($scratch, 'ref-forced') }
+    [IO.File]::WriteAllText($scratch, 'ALLOCATED')
+    $upgrade = [LumiCrashMatrixDefinition]::new('upgrade')
+    $upgrade.AssertMarker($scratch, 'ALLOCATED')
+    Assert-Rejected { $upgrade.AssertMarker($scratch, 'VERIFIED') }
 } finally { [IO.File]::Delete($scratch) }
 Write-Output 'Crash matrix definition checks passed.'
 
@@ -78,6 +93,18 @@ try {
     Assert-Rejected { ([LumiCrashMatrixEvidence]::new('inputs', 'candidate', $true, $save)).Resume(@($manifestPath), @('ref-forced'), $false) }
     [IO.File]::AppendAllText($verifyLog, 'changed')
     Assert-Rejected { $evidence.Resume(@($manifestPath), @('ref-forced'), $false) }
+    [IO.File]::WriteAllText((Join-Path $scratch 'crash.marker'), 'ALLOCATED')
+    [IO.File]::WriteAllText($verifyLog, $upgrade.Gate('ALLOCATED'))
+    $upgradeEvidence = [LumiCrashMatrixEvidence]::new('inputs', 'candidate', $false, $upgrade)
+    Assert-Rejected { $upgradeEvidence.Record($scratch, 'ALLOCATED', $processes) }
+    foreach ($name in @('producer-run', 'source-a', 'source-b', 'crashed-target')) {
+        New-Item -ItemType Directory -Path (Join-Path $scratch $name) | Out-Null
+    }
+    [IO.File]::WriteAllText((Join-Path $scratch 'fixture.properties'), 'head=source')
+    $upgradeProof = $upgradeEvidence.Record($scratch, 'ALLOCATED', $processes)
+    $upgradeEvidence.Assert($upgradeProof, 'ALLOCATED')
+    [IO.File]::WriteAllText((Join-Path $scratch 'crashed-target/history.bin'), 'changed candidate')
+    Assert-Rejected { $upgradeEvidence.Assert($upgradeProof, 'ALLOCATED') }
     [IO.File]::WriteAllText($verifyLog, $save.Gate('ref-forced'))
     [IO.File]::WriteAllText((Join-Path $scratch 'run/world.dat'), 'modified world')
     Assert-Rejected { $evidence.Resume(@($manifestPath), @('ref-forced'), $false) }

@@ -194,29 +194,7 @@ tasks.named('deleteGameTestRunDir') {
     onlyIf { System.getProperty('lumi.gametest.restoreCrashMode') != 'verify' }
 }
 
-tasks.register('prepareMultiplayerLaunch') {
-    group = 'verification'
-    description = 'Prepares the existing client GameTest launch for two isolated JVMs'
-    dependsOn 'gametestClasses', 'configureClientLaunch', 'generateDLIConfig',
-            'generateRemapClasspath', 'downloadAssets'
-    doLast {
-        def run = tasks.named('runClientGameTest').get()
-        def output = layout.buildDirectory.file('multiplayer-launch.args').get().asFile
-        def arguments = ['-Xmx2G', '-Dfabric.client.gametest',
-                '-Dfabric.client.gametest.disableNetworkSynchronizer=true',
-                "-Dfabric.dli.config=${layout.projectDirectory.file('.gradle/loom-cache/launch.cfg').asFile}",
-                '-Dfabric.dli.env=client',
-                '-Dfabric.dli.main=net.fabricmc.loader.impl.launch.knot.KnotClient',
-                '-classpath', run.classpath.asPath]
-        output.text = arguments.collect { argument ->
-            '"' + argument.toString().replace('\\', '\\\\').replace('"', '\\"') + '"'
-        }.join('\n') + '\n'
-        layout.buildDirectory.file('multiplayer-launch.inputs.json').get().asFile.text =
-                groovy.json.JsonOutput.toJson([
-                        schema: 1, target: minecraftTargetParameters,
-                        classpath: run.classpath.files.collect { it.absolutePath }])
-    }
-}
+apply from: 'gradle/client-verification.gradle'
 
 def restoreCrashPhases = ['prepared', 'applying', 'write', 'barrier', 'force', 'verify', 'publication', 'cleanup']
 def restoreCrashVerifiers = []
