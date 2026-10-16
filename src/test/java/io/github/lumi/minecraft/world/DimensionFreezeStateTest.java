@@ -1,6 +1,7 @@
 package io.github.lumi.minecraft.world;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -9,6 +10,19 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class DimensionFreezeStateTest {
+    @Test void saveFreezesDoNotInvalidateExternalWorkOrHistory() {
+        var freeze = new DimensionFreezeState();
+        freeze.replacementBarrier(new WorldReplacementBarrier() {
+            @Override public boolean awaitReady() { throw new AssertionError("Save must not start replacement"); }
+            @Override public boolean isReleaseReady() { throw new AssertionError("No replacement to drain"); }
+            @Override public void released() { throw new AssertionError("No replacement to resume"); }
+        });
+        var lease = freeze.acquire();
+        assertTrue(freeze.isReleaseReady());
+        lease.release();
+        assertEquals(0, freeze.replacementGeneration());
+    }
+
     @Test
     void blocksOrdinaryMutationButAllowsScopedRestoreApply() {
         DimensionFreezeState freeze = new DimensionFreezeState();

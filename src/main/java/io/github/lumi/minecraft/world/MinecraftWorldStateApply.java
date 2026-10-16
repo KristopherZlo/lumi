@@ -46,6 +46,10 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
         return background;
     }
 
+    @Override public boolean awaitMutationAdmission() throws IOException {
+        return freeze.awaitReplacementAdmission();
+    }
+
     @Override
     public PreparedState prepare(State target) throws IOException {
         return preparation.prepare(target);

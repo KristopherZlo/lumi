@@ -1,6 +1,7 @@
 package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.EntityChunkKey;
+import java.io.IOException;
 import java.util.Objects;
 import java.util.Set;
 
@@ -10,6 +11,29 @@ public final class DimensionFreezeState implements DimensionFreeze {
     private final ThreadLocal<Integer> entityAdditionDepth = ThreadLocal.withInitial(() -> 0);
     private Set<EntityChunkKey> suppressedEntityLoads;
     private boolean frozen;
+    private WorldReplacementBarrier replacementBarrier = WorldReplacementBarrier.NONE;
+    private boolean replacementStarted;
+    private long replacementGeneration;
+
+    public synchronized void replacementBarrier(WorldReplacementBarrier barrier) {
+        if (replacementStarted) throw new IllegalStateException("Cannot replace an active barrier");
+        replacementBarrier = Objects.requireNonNull(barrier, "barrier");
+    }
+
+    public synchronized long replacementGeneration() { return replacementGeneration; }
+
+    public synchronized boolean awaitReplacementAdmission() throws IOException {
+        if (!frozen) throw new IllegalStateException("Replacement requires the dimension freeze");
+        if (!replacementStarted) {
+            replacementStarted = true;
+            replacementGeneration++;
+        }
+        return replacementBarrier.awaitReady();
+    }
+
+    @Override public synchronized boolean isReleaseReady() {
+        return !replacementStarted || replacementBarrier.isReleaseReady();
+    }
 
     @Override
     public synchronized Lease acquire() {
@@ -89,6 +113,10 @@ public final class DimensionFreezeState implements DimensionFreeze {
                 }
                 released = true;
                 frozen = false;
+                if (replacementStarted) {
+                    replacementStarted = false;
+                    replacementBarrier.released();
+                }
             }
         }
     }

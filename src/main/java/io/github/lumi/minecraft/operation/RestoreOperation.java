@@ -51,6 +51,7 @@ public final class RestoreOperation implements DimensionMutation {
     private boolean journalPersisted;
     private boolean applyJournalStarted;
     private boolean runtimeInstalled;
+    private boolean mutationAdmitted;
     private boolean degradationPending;
     private ReturnPhase returnPhase;
 
@@ -721,6 +722,16 @@ public final class RestoreOperation implements DimensionMutation {
     }
 
     public RestoreStatus tick(long deadlineNanos) throws IOException {
+        if (!mutationAdmitted && !isTerminal()) {
+            try {
+                if (!world.awaitMutationAdmission()) return status;
+                mutationAdmitted = true;
+            } catch (IOException refused) {
+                if (!cancel()) throw refused;
+                failure = refused;
+                return status;
+            }
+        }
         if (degradationPending) {
             finishDegradation(deadlineNanos);
             return status;
@@ -1094,7 +1105,7 @@ public final class RestoreOperation implements DimensionMutation {
         return switch (status) {
             case COMPLETE -> MutationTerminalState.SUCCEEDED;
             case RETURNED -> MutationTerminalState.RETURNED;
-            case CANCELLED -> MutationTerminalState.CANCELLED;
+            case CANCELLED -> failure == null ? MutationTerminalState.CANCELLED : MutationTerminalState.FAILED;
             case DEGRADED -> MutationTerminalState.DEGRADED;
             default -> throw new IllegalStateException("Restore is not terminal");
         };

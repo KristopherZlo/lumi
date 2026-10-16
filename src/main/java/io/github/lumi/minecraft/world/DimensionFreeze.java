@@ -4,6 +4,8 @@ package io.github.lumi.minecraft.world;
 public interface DimensionFreeze {
     Lease acquire();
 
+    default boolean isReleaseReady() { return true; }
+
     interface Lease {
         void release();
     }

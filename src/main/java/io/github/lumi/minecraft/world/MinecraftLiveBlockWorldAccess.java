@@ -41,6 +41,10 @@ public final class MinecraftLiveBlockWorldAccess implements LiveBlockWorldAccess
                 level.registryAccess().lookupOrThrow(Registries.BLOCK));
     }
 
+    @Override public boolean awaitMutationAdmission() throws IOException {
+        return freeze.awaitReplacementAdmission();
+    }
+
     /** Decodes only changed Restore endpoints before a later live Undo/Redo. */
     public void prepareRestore(
             Map<SectionKey, SectionBlob> target,

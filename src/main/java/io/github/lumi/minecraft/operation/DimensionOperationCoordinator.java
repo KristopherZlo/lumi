@@ -211,7 +211,7 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
     }
 
     private void releaseFreezeIfSafe() {
-        if (lease != null && active.isSafeToRelease()) {
+        if (lease != null && active.isSafeToRelease() && freeze.isReleaseReady()) {
             reportFreezeRelease();
             lease.release();
             lease = null;
@@ -220,7 +220,7 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
     }
 
     private void clearTerminalIfSafe() {
-        if (active.isTerminal() && active.isSafeToRelease()) {
+        if (active.isTerminal() && active.isSafeToRelease() && lease == null) {
             positionObservers.remove(activeTicket);
             progressObservers.remove(activeTicket);
             freezeObservers.remove(activeTicket);
@@ -247,6 +247,7 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
 
     private void reportTerminal() {
         if (active.isTerminal() && !terminalReported) {
+            if (lease != null && active.isSafeToRelease() && !freeze.isReleaseReady()) return;
             DimensionMutation outcome = active.outcome();
             terminalReported = true;
             notifyObserver(terminalObserver, outcome, "global terminal");

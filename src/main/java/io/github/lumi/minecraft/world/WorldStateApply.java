@@ -14,6 +14,8 @@ import java.util.function.LongConsumer;
 
 /** Server-thread port for bounded application of already decoded world state. */
 public interface WorldStateApply {
+    /** Returns false while external editors drain; no replacement may start before admission. */
+    default boolean awaitMutationAdmission() throws IOException { return true; }
     /** Executor for operation persistence; production adapters must supply a worker. */
     default java.util.concurrent.Executor persistenceExecutor() {
         return Runnable::run;

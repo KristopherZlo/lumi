@@ -61,6 +61,42 @@ class RestoreOperationTest {
     @TempDir
     Path repositoryRoot;
 
+    @Test void refusesUndrainedExternalWorkBeforeCreatingAJournalOrPublishing() throws IOException {
+        var journals = new OperationJournalRepository(repositoryRoot);
+        var publications = new AtomicInteger();
+        var world = new ImmediatelyVerified() {
+            @Override public boolean awaitMutationAdmission() throws IOException {
+                throw new IOException("Pending editor work did not drain");
+            }
+        };
+        var operation = RestoreOperation.start(new PreparedRestore(
+                new BranchRef(new BranchName("main"), id('a'), 1), id('b'),
+                Map.of(), Map.of(), Map.of(), Map.of()), world,
+                ignored -> publications.incrementAndGet(), journals, UUID.randomUUID());
+        operation.tick(Long.MAX_VALUE);
+        assertEquals(MutationTerminalState.FAILED, operation.terminalState());
+        assertTrue(operation.isSafeToRelease());
+        assertTrue(journals.read().isEmpty());
+        assertEquals(0, publications.get());
+        assertEquals("Pending editor work did not drain", operation.failure().orElseThrow().getMessage());
+    }
+
+    @Test void yieldsAdmissionWithoutCreatingAJournal() throws IOException {
+        var journals = new OperationJournalRepository(repositoryRoot);
+        var world = new ImmediatelyVerified() {
+            @Override public boolean awaitMutationAdmission() { return false; }
+        };
+        try (var operation = RestoreOperation.start(new PreparedRestore(
+                new BranchRef(new BranchName("main"), id('a'), 1), id('b'),
+                Map.of(), Map.of(), Map.of(), Map.of()), world,
+                ignored -> { throw new AssertionError("Publication before admission"); }, journals, UUID.randomUUID())) {
+            operation.tick(Long.MAX_VALUE);
+            operation.tick(Long.MAX_VALUE);
+            assertFalse(operation.isTerminal());
+            assertTrue(journals.read().isEmpty());
+        }
+    }
+
     @Test
     void preservesOmittedPlayerSpawnsDuringPartialRestorePreparation() throws IOException {
         var expected = new BranchRef(new BranchName("main"), id('a'), 1);

@@ -8,6 +8,8 @@ import java.util.concurrent.CompletableFuture;
 
 /** Narrow server-thread port used by verified session Undo/Redo. */
 public interface LiveBlockWorldAccess {
+    default boolean awaitMutationAdmission() throws IOException { return true; }
+
     void requirePrepared(BlockSnapshot state) throws IOException;
 
     BlockSnapshot read(BlockPosition position) throws IOException;

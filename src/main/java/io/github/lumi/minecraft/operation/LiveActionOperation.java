@@ -32,6 +32,7 @@ public final class LiveActionOperation implements DimensionMutation {
     private final List<WorldChange<?>> mismatches = new ArrayList<>();
     private List<WorldChange<?>> changes = List.of();
     private Phase phase = Phase.SELECTING;
+    private boolean mutationAdmitted;
 
     @Override public OperationProgress progress() {
         return OperationProgress.indeterminate("Live action: " + phase.name().toLowerCase());
@@ -136,6 +137,10 @@ public final class LiveActionOperation implements DimensionMutation {
                 return;
             }
             try {
+                if (!mutationAdmitted) {
+                    if (!world.awaitMutationAdmission()) return;
+                    mutationAdmitted = true;
+                }
                 step();
             } catch (IOException | RuntimeException exception) {
                 failure = exception;
