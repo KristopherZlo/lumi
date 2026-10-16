@@ -96,11 +96,13 @@ def writeTestMetadata = tasks.register('writePackagedTestMetadata') {
             (!withWorldEdit && entry.endsWith('.LumiWorldEditGameTests')) ||
                     (!withAxiom && entry.endsWith('.LumiAxiomGameTests'))
         }
+        if (target.id() == 'modern-263') metadata.mixins += 'fixed-gametest-window.mixins.json'
         def output = testMetadata.get().asFile
         output.parentFile.mkdirs()
         output.text = JsonOutput.prettyPrint(JsonOutput.toJson(metadata)) + '\n'
         def control = new groovy.json.JsonSlurper().parse(new File(sourceSets.gametest.output.resourcesDir, 'vanilla-reopen.mod.json'))
         if (target.javaVersion() > 21) control.mixins = ['vanilla-reopen.mixins.json']
+        if (target.id() == 'modern-263') control.mixins += 'fixed-gametest-window.mixins.json'
         def controlOutput = vanillaMetadata.get().asFile
         controlOutput.parentFile.mkdirs()
         controlOutput.text = JsonOutput.prettyPrint(JsonOutput.toJson(control)) + '\n'
@@ -220,6 +222,9 @@ def requestedClientSuite = System.getProperty('lumi.gametest.suite', 'SMOKE').to
         jvmArgs.add(providers.provider { "-Dlumi.gametest.artifactHash=${evidence.hash(artifact.singleFile.toPath())}" })
         def record = [:]
         doFirst {
+            if (Boolean.getBoolean('lumi.gametest.fixedNativeWindow') && (target.id() != 'modern-263' || benchmark)) {
+                throw new GradleException('Fixed native window is a modern-263 functional GameTest diagnostic')
+            }
             if (benchmark && (requestedClientSuite != 'BENCHMARK' || !Boolean.getBoolean('lumi.benchmark.enabled'))) {
                 throw new GradleException('Packaged benchmark requires BENCHMARK suite and explicit benchmark enablement')
             }
@@ -255,6 +260,7 @@ def requestedClientSuite = System.getProperty('lumi.gametest.suite', 'SMOKE').to
             record.putAll([schema: 1, status: 'running', group: target.id(), game: game,
                     scope: benchmark ? 'client-benchmark' : 'client-gametest', suite: clientSuite, javaVersion: target.javaVersion(),
                     graphicsBackend: graphicsBackend ?: 'default',
+                    fixedNativeWindow: Boolean.getBoolean('lumi.gametest.fixedNativeWindow'),
                     builderTools: builderTools,
                     benchmark: benchmark ? System.properties.findAll { name, ignored -> name.toString().startsWith('lumi.benchmark.') } : [:],
                     artifact: [path: artifact.singleFile.absolutePath, sha256: evidence.hash(artifact.singleFile.toPath())],
@@ -283,6 +289,9 @@ def vanillaTestJar = tasks.register('vanillaReopenGameTestJar', Jar) {
         if (target.javaVersion() > 21) {
             include 'io/github/lumi/gametest/mixin/ClientGameTestStartupMixin.class',
                     'io/github/lumi/gametest/mixin/ClientGameTestWorldCloseMixin.class', 'vanilla-reopen.mixins.json'
+            if (target.id() == 'modern-263') {
+                include 'io/github/lumi/gametest/mixin/FixedGameTestWindowMixin.class', 'fixed-gametest-window.mixins.json'
+            }
         }
     }
     from vanillaMetadata
@@ -331,11 +340,15 @@ tasks.register('runVanillaViewportGameTest', lumiClientProductionRunTaskType) {
                 && !it.startsWith('-XX:ErrorFile=')
     } })
     jvmArgs.add('-Dlumi.gametest.vanillaViewport=true')
+    jvmArgs.add("-Dlumi.gametest.fixedNativeWindow=${Boolean.getBoolean('lumi.gametest.fixedNativeWindow')}")
     def completion = viewportDirectory.map { it.file('viewport.completed').asFile }
     jvmArgs.add(completion.map { "-Dlumi.gametest.completion=${it.absolutePath}" })
     jvmArgs.add(viewportDirectory.map { "-XX:ErrorFile=${it.file('hs_err_pid%p.log').asFile.absolutePath}" })
     if (graphicsBackend != null) programArgs.addAll('--graphicsBackend', graphicsBackend.toUpperCase(Locale.ROOT))
     doFirst {
+        if (Boolean.getBoolean('lumi.gametest.fixedNativeWindow') && target.id() != 'modern-263') {
+            throw new GradleException('Fixed native window is a modern-263 functional GameTest diagnostic')
+        }
         if (graphicsBackend != null && (target.id() != 'modern-263' || !(graphicsBackend in ['opengl', 'vulkan']))) {
             throw new GradleException('Explicit graphics backend requires modern-263 and opengl or vulkan')
         }
@@ -345,7 +358,8 @@ tasks.register('runVanillaViewportGameTest', lumiClientProductionRunTaskType) {
         }
     }
     doLast {
-        if (completion.get().text != game + '\nvanilla-viewport') throw new GradleException('Vanilla viewport did not complete')
+        def mode = Boolean.getBoolean('lumi.gametest.fixedNativeWindow') ? '\nfixed-native-window' : ''
+        if (completion.get().text != game + '\nvanilla-viewport' + mode) throw new GradleException('Vanilla viewport did not complete')
         logger.lifecycle("Vanilla viewport ${game}/${graphicsBackend ?: 'default'}: passed; evidence: ${completion.get()}")
     }
 }

@@ -48,7 +48,9 @@ public final class LumiVanillaViewportGameTest implements FabricClientGameTest {
             String game = FabricLoader.getInstance().getModContainer("minecraft").orElseThrow()
                     .getMetadata().getVersion().getFriendlyString();
             Files.writeString(Path.of(System.getProperty("lumi.gametest.completion")),
-                    game + "\nvanilla-viewport", StandardOpenOption.CREATE_NEW);
+                    game + "\nvanilla-viewport"
+                            + (Boolean.getBoolean("lumi.gametest.fixedNativeWindow") ? "\nfixed-native-window" : ""),
+                    StandardOpenOption.CREATE_NEW);
         } catch (IOException failed) {
             throw new IllegalStateException("Cannot persist vanilla viewport completion", failed);
         }
