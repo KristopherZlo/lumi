@@ -12,13 +12,54 @@ def evidence = new PackagedGameTestEvidence()
 
 def observationJar = tasks.register('ordinaryObservationJar', Jar) {
     from(sourceSets.gametest.output) {
-        include 'io/github/lumi/observation/**', 'observation.mod.json'
+        include 'io/github/lumi/observation/OrdinaryClientObservation.class',
+                'io/github/lumi/observation/RuntimeObservation*.class', 'observation.mod.json'
         filesMatching('observation.mod.json') {
             expand(java_version: target.javaVersion())
             name = 'fabric.mod.json'
         }
     }
     archiveClassifier = target.javaVersion() == 21 ? 'observation-dev' : 'observation'
+}
+
+def nativeViewportJar = tasks.register('nativeViewportControlJar', Jar) {
+    from(sourceSets.gametest.output) {
+        include 'io/github/lumi/observation/NativeViewportControl.class', 'native-viewport.mod.json'
+        filesMatching('native-viewport.mod.json') {
+            expand(java_version: target.javaVersion())
+            name = 'fabric.mod.json'
+        }
+    }
+    archiveClassifier = 'native-viewport-control'
+}
+
+def viewportDirectory = layout.buildDirectory.dir("run/native-viewport/${target.id()}/${game}/${UUID.randomUUID()}")
+tasks.register('runNativeViewportControl', lumiClientProductionRunTaskType) {
+    group = 'verification'
+    description = 'Exercises real 26.3 window resizing without Lumi, builder tools or GameTest APIs'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(target.javaVersion()) }
+    runDir = viewportDirectory
+    mods.setFrom(configurations.packagedTestMods, nativeViewportJar)
+    def completion = viewportDirectory.map { it.file('viewport.completed').asFile }
+    jvmArgs.add('-Dlumi.viewport.enabled=true')
+    jvmArgs.add(completion.map { "-Dlumi.viewport.completion=${it.absolutePath}" })
+    jvmArgs.add(viewportDirectory.map { "-XX:ErrorFile=${it.file('hs_err_pid%p.log').asFile.absolutePath}" })
+    if (backend != null) programArgs.addAll('--graphicsBackend', backend.toUpperCase(Locale.ROOT))
+    doFirst {
+        if (target.id() != 'modern-263' || !(backend in ['opengl', 'vulkan'])
+                || project.findProperty('lumiBuilderTools') != 'none') {
+            throw new GradleException('Native viewport control requires modern-263, explicit graphics backend and -PlumiBuilderTools=none')
+        }
+        def root = viewportDirectory.get().asFile
+        root.mkdirs()
+        new File(root, 'options.txt').text = 'lang:en_us\nmaxFps:30\nenableVsync:false\nfullscreen:false\n'
+    }
+    doLast {
+        if (completion.get().text != game + '\nnative-viewport\n15') {
+            throw new GradleException('Native viewport control did not complete all 15 window/scale combinations')
+        }
+        logger.lifecycle("Native viewport ${game}/${backend}: passed; evidence: ${completion.get()}")
+    }
 }
 def distributable = observationJar
 if (target.javaVersion() == 21) {

@@ -24,6 +24,7 @@ import net.minecraft.world.level.storage.TagValueOutput;
 @SuppressWarnings("UnstableApiUsage")
 public final class LumiVanillaReopenGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
+        if (Boolean.getBoolean("lumi.gametest.vanillaViewport")) return;
         if (FabricLoader.getInstance().isModLoaded("lumi")) throw new AssertionError("Lumi is installed");
         try {
             Class.forName("io.github.lumi.LumiMod", false, getClass().getClassLoader());

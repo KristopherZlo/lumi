@@ -317,3 +317,35 @@ tasks.register('runVanillaReopenGameTest', lumiClientProductionRunTaskType) {
         logger.lifecycle("World reopened without Lumi on ${game}; evidence: ${completion.get()}")
     }
 }
+
+def viewportDirectory = layout.buildDirectory.dir("run/vanilla-viewport/${target.id()}/${game}/${UUID.randomUUID()}")
+tasks.register('runVanillaViewportGameTest', lumiClientProductionRunTaskType) {
+    group = 'verification'
+    description = 'Controls Fabric GameTest window resizing without Lumi or builder tools'
+    def source = tasks.named('runVanillaReopenGameTest').get()
+    javaLauncher.set(source.javaLauncher)
+    mods.setFrom(source.mods)
+    runDir = viewportDirectory
+    jvmArgs.set(source.jvmArgs.map { values -> values.findAll {
+        !it.startsWith('-Dlumi.gametest.completion=') && !it.startsWith('-Dlumi.gametest.upgrade.fixture=')
+                && !it.startsWith('-XX:ErrorFile=')
+    } })
+    jvmArgs.add('-Dlumi.gametest.vanillaViewport=true')
+    def completion = viewportDirectory.map { it.file('viewport.completed').asFile }
+    jvmArgs.add(completion.map { "-Dlumi.gametest.completion=${it.absolutePath}" })
+    jvmArgs.add(viewportDirectory.map { "-XX:ErrorFile=${it.file('hs_err_pid%p.log').asFile.absolutePath}" })
+    if (graphicsBackend != null) programArgs.addAll('--graphicsBackend', graphicsBackend.toUpperCase(Locale.ROOT))
+    doFirst {
+        if (graphicsBackend != null && (target.id() != 'modern-263' || !(graphicsBackend in ['opengl', 'vulkan']))) {
+            throw new GradleException('Explicit graphics backend requires modern-263 and opengl or vulkan')
+        }
+        def requested = providers.gradleProperty('lumiGameVersion').orNull
+        if (requested != null && !target.minecraftVersions().contains(requested)) {
+            throw new GradleException("${requested} is outside target ${target.id()}")
+        }
+    }
+    doLast {
+        if (completion.get().text != game + '\nvanilla-viewport') throw new GradleException('Vanilla viewport did not complete')
+        logger.lifecycle("Vanilla viewport ${game}/${graphicsBackend ?: 'default'}: passed; evidence: ${completion.get()}")
+    }
+}
