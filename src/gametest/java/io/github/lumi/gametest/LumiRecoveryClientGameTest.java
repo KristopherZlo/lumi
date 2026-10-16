@@ -230,6 +230,8 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
 
         assertCleanReopen(context, worldSave, repository, recoveredRef, report,
                 "clean_exit_after_recovery");
+        report.event("gate", "recovery_reopen", "succeeded", 0, 0,
+                "exact recovered state, published ref and clean reopen");
     }
 
     private static List<BlockPos> sectionPositions(
@@ -521,7 +523,7 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
             List<BlockPos> positions,
             boolean expectedPresent,
             String phase) {
-        List<BlockPos> mismatches = server.computeOnServer(minecraft -> {
+        List<String> mismatches = server.computeOnServer(minecraft -> {
             var level = minecraft.getPlayerList().getPlayers().getFirst().level();
             var pois = level.getChunkSource().getPoiManager();
             return positions.stream()
@@ -531,6 +533,8 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
                                 || !actual.equals(PoiTypes.forState(
                                         level.getBlockState(position)));
                     })
+                    .map(position -> position + ": block=" + level.getBlockState(position)
+                            + ", poi=" + pois.getType(position))
                     .toList();
         });
         require(mismatches.isEmpty(),

@@ -6,12 +6,34 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.List;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 
 /** Refuses empty, failed, skipped, or artifact-changing production runs. */
 public final class PackagedGameTestEvidence {
+    public List<String> verifyClientCases(Path completion, String suite) throws IOException {
+        List<String> expected = switch (suite) {
+            case "ALL" -> List.of("gate exact_restore", "gate exact_restore_reopen", "gate recovery_reopen");
+            case "EXACT" -> List.of("gate exact_restore", "gate exact_restore_reopen");
+            case "RECOVERY" -> List.of("gate recovery_reopen");
+            case "SMOKE" -> List.of("gate first_minute", "gate first_minute_reopen");
+            case "BUILDER_TOOLS" -> List.of("gate builder_tools_reopen");
+            case "INTERACTION" -> List.of("gate single_click_interactions");
+            default -> List.of();
+        };
+        if (!expected.isEmpty()) {
+            String log = Files.readString(completion.resolveSibling("logs/latest.log"));
+            for (String name : expected) {
+                if (!log.contains("Behavior " + name + ": succeeded (")) {
+                    throw new IOException("Packaged client lacks expected assertion: " + name);
+                }
+            }
+        }
+        return expected;
+    }
+
     public void verifyClient(Path completion, Path artifact, String expectedHash, String suite) throws IOException {
         if (!hash(artifact).equals(expectedHash)) throw new IOException("Tested Lumi artifact changed");
         if (Files.size(completion) > 256 || !Files.readString(completion).equals(suite + "\n" + expectedHash)) {

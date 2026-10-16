@@ -27,7 +27,7 @@ class LumiMinecraftVerificationTarget {
     }
 
     [string[]] RequiredReleaseGates() {
-        $gates = @('Core', 'Client', 'Exact', 'Recovery', 'Multiplayer', 'RestoreCrash', 'RestoreColdCrash',
+        $gates = @('Core', 'Server', 'Client', 'Render', 'Exact', 'Recovery', 'Multiplayer', 'RestoreCrash', 'RestoreColdCrash',
             'SaveCrash', 'MergeCrash', 'ImportCrash', 'LoadRegression', 'RestoreSoak', 'SaveMemory',
             'IdleAB', 'ForegroundCooling', 'SaveRetainedBound', 'BuilderToolsIntegrated')
         if ($this.Modern) { $gates += 'UpgradeCrash' }

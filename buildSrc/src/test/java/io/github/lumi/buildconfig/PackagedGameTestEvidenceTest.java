@@ -12,6 +12,22 @@ import org.junit.jupiter.api.io.TempDir;
 class PackagedGameTestEvidenceTest {
     @TempDir Path directory;
 
+    @Test void allMustActuallyReachExactAndRecoveryAssertions() throws Exception {
+        var evidence = new PackagedGameTestEvidence();
+        Path completion = directory.resolve("client.completed");
+        Path log = directory.resolve("logs/latest.log");
+        Files.createDirectories(log.getParent());
+        Files.writeString(log, "Behavior gate exact_restore: succeeded (0 ticks)\n"
+                + "Behavior gate exact_restore_reopen: succeeded (0 ticks)\n");
+        assertEquals(2, evidence.verifyClientCases(completion, "EXACT").size());
+        assertThrows(IOException.class, () -> evidence.verifyClientCases(completion, "ALL"));
+        Files.writeString(log, "Behavior gate recovery_reopen: succeeded (0 ticks)\n",
+                java.nio.file.StandardOpenOption.APPEND);
+        assertEquals(3, evidence.verifyClientCases(completion, "ALL").size());
+        Files.delete(log);
+        assertThrows(IOException.class, () -> evidence.verifyClientCases(completion, "ALL"));
+    }
+
     @Test void clientRequiresCompletionOfTheSelectedSuiteAndUnchangedArtifact() throws Exception {
         var evidence = new PackagedGameTestEvidence();
         Path artifact = directory.resolve("lumi.jar");

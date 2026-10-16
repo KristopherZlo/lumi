@@ -18,6 +18,8 @@ Assert-That ($taskNative.TaskArguments(@(':core:test', 'runPackagedGameTest')) -
 Assert-That ($taskNative.TaskArguments(@('runPackagedGameTest')) -contains ':adapters:modern-262:runPackagedGameTest') 'Wrong native server task.'
 Assert-That ($taskLegacy.RequiredReleaseGates() -notcontains 'UpgradeCrash') 'Legacy must not require history conversion from an older supported game.'
 Assert-That ($taskNative.RequiredReleaseGates() -contains 'UpgradeCrash') 'Native release must require process-crash conversion coverage.'
+Assert-That ($taskLegacy.RequiredReleaseGates() -contains 'Server') 'Core units no longer imply native server coverage.'
+Assert-That ($taskLegacy.RequiredReleaseGates() -contains 'Render') 'ALL does not execute the focused renderer.'
 $task263 = [LumiMinecraftVerificationTarget]::new($taskCatalog, 'modern-263', '', '')
 foreach ($taskBackendGate in @('ClientVulkan', 'NativeViewport')) {
     Assert-That ($task263.RequiredReleaseGates() -contains $taskBackendGate) "26.3 release can omit $taskBackendGate."

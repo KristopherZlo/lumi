@@ -12,6 +12,10 @@ param(
     [string]$Target = 'legacy-12111',
     [string]$GameVersion,
     [string]$Artifact,
+    [ValidateSet('none', 'worldedit', 'axiom', 'both')]
+    [string]$BuilderTools = 'both',
+    [string]$ServerFilter = '*',
+    [string[]]$ReuseFrom = @(),
     [string]$UpgradeFixture,
     [string]$FixtureManifest,
     [string]$ExistingWorldSource,
@@ -32,13 +36,17 @@ foreach ($taskResumeGate in $CrashResumeFrom.Keys) {
 $taskRepo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 . (Join-Path $PSScriptRoot 'MinecraftVerificationTarget.ps1')
 . (Join-Path $PSScriptRoot 'VerificationPlan.ps1')
+. (Join-Path $PSScriptRoot 'CrashMatrixDefinition.ps1')
+. (Join-Path $PSScriptRoot 'VerificationEvidence.ps1')
 $taskCatalog = Get-Content -LiteralPath (Join-Path $taskRepo 'gradle/minecraft-targets.json') -Raw | ConvertFrom-Json
 $taskVerification = [LumiMinecraftVerificationTarget]::new($taskCatalog, $Target, $GameVersion, $Artifact)
 $taskPlan = [LumiVerificationPlan]::new($Profile, $Gate)
 $Gate = $taskPlan.Gates
+if ($Gate -contains 'Tools' -and $BuilderTools -eq 'none') { throw 'Tools requires a builder tool.' }
 if ($Plan) {
     [ordered]@{ profile = $Profile; target = $taskVerification.Definition
-        selected = $taskPlan.Describe($taskVerification); releaseReady = $false } | ConvertTo-Json -Depth 8
+        selected = $taskPlan.Describe($taskVerification); builderTools = $BuilderTools
+        serverFilter = $ServerFilter; reuseFrom = $ReuseFrom; releaseReady = $false } | ConvertTo-Json -Depth 8
     return
 }
 $taskTargetArguments = @{ Target = $Target; GameVersion = $taskVerification.Definition.minecraftVersion }
@@ -47,13 +55,15 @@ $taskBuild = if ($taskVerification.Modern) { "versions/$Target/build" } else { '
 $taskArtifact = $null
 Push-Location $taskRepo
 try {
-    if (& git status --porcelain) { throw 'Commit the candidate before its release run.' }
+    function Get-CodeChanges { return @(& git status --porcelain | Where-Object { $_ -notmatch '\.md"?$' }) }
+    if (Get-CodeChanges) { throw 'Commit code changes before verification. Local Markdown may remain uncommitted.' }
     $taskSha = (& git rev-parse HEAD).Trim()
     $taskRun = Join-Path $taskRepo ('build/reports/lumi-release/' +
         [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $taskRun | Out-Null
-    if ($taskVerification.Modern -or $taskVerification.Artifact) {
-        $taskArguments = $taskVerification.PrepareArguments()
+    $taskNeedsLaunch = @($Gate | Where-Object { $_ -notin @('Compile', 'Core', 'LoadRegression') }).Count -gt 0
+    if ($taskNeedsLaunch -and ($taskVerification.Modern -or $taskVerification.Artifact)) {
+        $taskArguments = $taskVerification.PrepareArguments() + "-PlumiBuilderTools=$BuilderTools"
         $ErrorActionPreference = 'Continue'
         & (Join-Path $taskRepo 'gradlew.bat') @taskArguments --console=plain *> (Join-Path $taskRun 'prepare.log')
         $taskExit = $LASTEXITCODE
@@ -70,10 +80,22 @@ try {
             $taskVerification.Definition.minecraftVersion, $taskArtifact.path)
     }
     function Test-Candidate {
-        return ((& git rev-parse HEAD).Trim() -ceq $taskSha -and -not (& git status --porcelain) -and
+        return ((& git rev-parse HEAD).Trim() -ceq $taskSha -and -not (Get-CodeChanges) -and
             ($null -eq $taskArtifact -or ((Test-Path -LiteralPath $taskArtifact.path) -and
             (Get-FileHash -LiteralPath $taskArtifact.path -Algorithm SHA256).Hash.ToLowerInvariant() -ceq $taskArtifact.sha256)))
     }
+    $taskEvidenceInputs = $null
+    if ($taskArtifact) {
+        $taskCodePaths = @(& git ls-files | Where-Object { $_ -notlike '*.md' } | ForEach-Object { Join-Path $taskRepo $_ })
+        $taskEvidenceInputs = [ordered]@{
+            launch = [LumiCrashMatrixEvidence]::Inputs($taskRepo, $taskLaunch.javaExecutable, (Join-Path $taskRepo $taskBuild))
+            implementation = [LumiCrashMatrixEvidence]::Digest([LumiCrashMatrixEvidence]::Inventory($taskCodePaths))
+            target = $taskVerification.Definition; artifact = $taskArtifact.sha256
+            builderTools = $BuilderTools; serverFilter = $ServerFilter
+            fixtures = [LumiCrashMatrixEvidence]::Inventory(@(@($UpgradeFixture, $FixtureManifest, $ExistingWorldSource) | Where-Object { $_ }))
+            existingWorldName = $ExistingWorldName
+        }
+    } elseif ($ReuseFrom.Count) { throw 'Evidence reuse requires a frozen -Artifact.' }
     $taskRequired = $taskVerification.RequiredReleaseGates()
     $taskResults = [ordered]@{}
     foreach ($taskName in @($taskRequired + $Gate | Select-Object -Unique)) {
@@ -82,6 +104,7 @@ try {
     $taskManifest = [ordered]@{
         schema = 3; gitSha = $taskSha; startedUtc = [DateTime]::UtcNow.ToString('o')
         profile = $Profile; selected = $Gate; releaseReady = $false
+        reusableInputs = $taskEvidenceInputs
         minecraftTarget = $taskVerification.Definition; artifact = $taskArtifact
         status = 'incomplete'; gates = $taskResults
         buildProperties = @((Get-Content -LiteralPath 'gradle.properties') | ForEach-Object { [string]$_ })
@@ -95,6 +118,13 @@ try {
     function Write-Manifest {
         $taskManifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $taskManifestPath -Encoding UTF8
     }
+    function Complete-IncludedGates($result) {
+        if ($taskName -notin @('Client', 'ClientVulkan')) { return }
+        foreach ($included in @('Exact', 'Recovery')) {
+            $taskResults[$included] = [ordered]@{ status = 'reused'; artifact = $result.artifact
+                proof = $result.proof; detail = "Assertions completed inside $taskName; no second JVM required." }
+        }
+    }
     Write-Manifest
     foreach ($taskName in $Gate) {
         if (-not (Test-Candidate)) {
@@ -106,6 +136,19 @@ try {
             $taskResult.detail = 'This gate does not apply to the selected adapter.'
             continue
         }
+        $taskEvidence = $null
+        if ($taskEvidenceInputs -and [LumiVerificationEvidence]::Reusable($taskName)) {
+            $taskEvidence = [LumiVerificationEvidence]::new([ordered]@{ inputs = $taskEvidenceInputs; gate = $taskName })
+            $taskReused = $taskEvidence.Find($ReuseFrom, $taskName)
+            if ($taskReused) {
+                $taskResults[$taskName] = $taskReused
+                Complete-IncludedGates $taskReused
+                Write-Manifest
+                Write-Output "$taskName`: reused"
+                continue
+            }
+        }
+        $taskResult.detail = 'No matching intact evidence; selected for execution.'
         $taskDirectory = Join-Path $taskRun $taskName
         New-Item -ItemType Directory -Path $taskDirectory | Out-Null
         $taskLog = Join-Path $taskDirectory 'run.log'
@@ -116,6 +159,7 @@ try {
             $taskTasks = $taskPlan.Tasks($taskName)
             $taskSuite = $taskPlan.Suite($taskName)
             if ($taskSuite) { $taskGradleArguments = @("-Dlumi.gametest.suite=$taskSuite") }
+            if ($taskName -eq 'Server') { $taskGradleArguments += "-Dfabric-api.gametest.filter=$ServerFilter" }
             $taskCrashResume = @()
             if ($CrashResumeFrom.ContainsKey($taskName)) { $taskCrashResume = @($CrashResumeFrom[$taskName]) }
             switch ($taskName) {
@@ -187,7 +231,7 @@ try {
                 }
             }
             if ($taskTasks.Count -gt 0) {
-                $taskGradleArguments = $taskVerification.TaskArguments($taskTasks) + $taskGradleArguments
+                $taskGradleArguments = $taskVerification.TaskArguments($taskTasks) + $taskGradleArguments + "-PlumiBuilderTools=$BuilderTools"
                 # Native stderr is evidence; the Gradle exit code decides success.
                 $ErrorActionPreference = 'Continue'
                 & (Join-Path $taskRepo 'gradlew.bat') @taskGradleArguments --no-daemon *> $taskLog
@@ -208,9 +252,15 @@ try {
                 }
                 # Production worlds already live in unique directories; retain their evidence paths without copying worlds.
                 $taskResult.runtimeEvidence = @(Get-Content -LiteralPath $taskLog | Where-Object { $_ -match 'evidence: ' })
+                if ([LumiVerificationEvidence]::Reusable($taskName)) {
+                    $taskRecorder = if ($taskEvidence) { $taskEvidence } else { [LumiVerificationEvidence]::new(@{}) }
+                    $taskResult.proof = $taskRecorder.Record($taskDirectory, $taskLog, $taskSuite, $taskArtifact.sha256)
+                    if (-not $taskEvidence) { $taskResult.proof.fingerprint = '' }
+                }
             }
             $taskResult.status = 'passed'
             $taskResult.detail = 'Command completed; scope is defined by this gate, not the whole release.'
+            Complete-IncludedGates $taskResult
         } catch {
             $taskResult.status = 'failed'
             $taskResult.detail = $_.Exception.Message
