@@ -17,8 +17,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /** Native isDone means that its final buffer has been sent, not merely batched. */
 @Mixin(value = {DispatchTask.Block.class, DispatchTask.Biome.class}, remap = false)
 abstract class AxiomDispatchCompletionMixin {
-    @Shadow @Final private ResourceKey<Level> dimension;
-    @Shadow @Final private UUID uuid;
+    @Shadow(remap = false) @Final private ResourceKey<Level> dimension;
+    @Shadow(remap = false) @Final private UUID uuid;
     @Unique private boolean lumi$announced;
     @Unique private boolean lumi$completed;
 
