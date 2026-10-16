@@ -32,6 +32,11 @@ try {
     & (Join-Path $taskRepo 'gradlew.bat') @taskPrepare --no-daemon
     $ErrorActionPreference = 'Stop'
     if ($LASTEXITCODE -ne 0) { throw 'Multiplayer launch preparation failed.' }
+    # A single-use Gradle JVM can exit before Windows reclaims its working set.
+    for ($taskMemoryWait = 0; $taskMemoryWait -lt 15; $taskMemoryWait++) {
+        if ((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory -ge 4GB/1KB) { break }
+        Start-Sleep -Seconds 1
+    }
     if ((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory -lt 4GB/1KB) {
         throw 'Multiplayer gate needs at least 4 GiB free physical memory; no clients started.'
     }
