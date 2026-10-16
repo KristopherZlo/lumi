@@ -9,6 +9,8 @@
     "AxiomSpawnEntityMixin",
     "AxiomDeleteEntityMixin",
     "AxiomManipulateEntityMixin",
+    "AxiomBiomeBufferMixin",
+    "AxiomRegionUpdateMixin",
     "BoundTickingBlockEntityMixin",
     "BlockEntityMixin",
     "ChunkMapPersistenceAccessor",
@@ -41,6 +43,7 @@
     "TransientCarrierEntityMixin"
   ],
   "client": [
+    "AxiomIntegratedBiomeMixin",
     "client.GuiGraphicsAccessor",
     "client.GuiGraphicsMixin",
     "client.MouseHandlerMixin"

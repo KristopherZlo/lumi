@@ -37,6 +37,7 @@
       "io.github.lumi.gametest.LumiWorldEditGameTests",
       "io.github.lumi.gametest.LumiAxiomGameTests",
       "io.github.lumi.gametest.LumiAxiomEntityGameTests",
+      "io.github.lumi.gametest.LumiAxiomRegionGameTests",
       "io.github.lumi.gametest.LumiHistoryGameTests"
     ]
   },

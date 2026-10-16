@@ -18,6 +18,7 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
     private BlockPos origin;
     private List<BlockBox> area;
     private LumiWorldSnapshot expected;
+    private boolean expectedDesert;
 
     @Override public void runTest(ClientGameTestContext context) {
         if (!LumiClientTestSuite.includes(LumiClientTestSuite.BUILDER_TOOLS)
@@ -80,11 +81,13 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
             });
         }
         if (loaded("axiom")) {
+            exerciseBiomes(context, world, report);
             BlockPos target = origin.offset(4, 0, 0);
             exerciseTool(context, world, report, "axiom", target,
                     () -> context.runOnClient(client -> AxiomClientEdits.apply(target)));
         }
         expected = new LumiBehaviorChecks(context, world, report).snapshot("tools_final", area);
+        if (loaded("axiom")) assertBiomes(world);
         report.assertNoRuntimeFailures();
     }
 
@@ -128,6 +131,7 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
         checks.assertSnapshot(tool + "_restore_before", area, baseline.snapshot());
         operations.restore(tool + "_after", edited.commit());
         checks.assertSnapshot(tool + "_restore_after", area, edited.snapshot());
+        if (tool.equals("axiom")) assertBiomes(world);
         checks.finish();
         report.event("gate", tool + "_client_history", "succeeded", 0, 0,
                 "client tool entry point;2 blocks;Compare;Undo;Redo;Save;Restore");
@@ -138,6 +142,7 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
         new LumiUiTestDriver(context).completeOnboardingIfShown();
         var checks = new LumiBehaviorChecks(context, world, report);
         checks.assertSnapshot("tools_reopened", area, expected);
+        if (loaded("axiom")) assertBiomes(world);
         checks.finish();
         report.event("gate", "builder_tools_reopen", "succeeded", 0, 0, "exact world state");
     }
@@ -146,12 +151,59 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
         return FabricLoader.getInstance().isModLoaded(mod);
     }
 
+    private void exerciseBiomes(ClientGameTestContext context, TestSingleplayerContext world,
+            LumiBehaviorReport report) {
+        var server = world.getServer();
+        expectedDesert = server.computeOnServer(minecraft -> !minecraft.getPlayerList().getPlayers().getFirst()
+                .level().getNoiseBiome(origin.getX() >> 2, origin.getY() >> 2, origin.getZ() >> 2).is(net.minecraft.world.level.biome.Biomes.DESERT));
+        var before = server.computeOnServer(minecraft -> LumiMod.serverRuntime()
+                .find(minecraft.getPlayerList().getPlayers().getFirst().level()).orElseThrow().mutations().builderSnapshot());
+        var freeze = server.computeOnServer(minecraft -> LumiMod.serverRuntime()
+                .find(minecraft.getPlayerList().getPlayers().getFirst().level()).orElseThrow().freeze().acquire());
+        try {
+            context.runOnClient(client -> AxiomClientEdits.applyBiome(origin, expectedDesert));
+            context.waitTicks(10);
+            boolean changed = server.computeOnServer(minecraft -> minecraft.getPlayerList().getPlayers().getFirst()
+                    .level().getNoiseBiome(origin.getX() >> 2, origin.getY() >> 2, origin.getZ() >> 2).is(expectedDesert ? net.minecraft.world.level.biome.Biomes.DESERT
+                            : net.minecraft.world.level.biome.Biomes.PLAINS));
+            if (changed) throw new AssertionError("Integrated Axiom biome dispatcher bypassed the freeze");
+        } finally {
+            server.runOnServer(minecraft -> freeze.release());
+        }
+        context.runOnClient(client -> AxiomClientEdits.applyBiome(origin, expectedDesert));
+        for (int tick = 0; ; tick++) {
+            if (server.computeOnServer(minecraft -> minecraft.getPlayerList().getPlayers().getFirst()
+                    .level().getNoiseBiome(origin.getX() >> 2, origin.getY() >> 2, origin.getZ() >> 2).is(expectedDesert ? net.minecraft.world.level.biome.Biomes.DESERT
+                            : net.minecraft.world.level.biome.Biomes.PLAINS))) break;
+            if (tick == 200) throw new AssertionError("Integrated Axiom biome edit did not reach the server");
+            context.waitTick();
+        }
+        var after = server.computeOnServer(minecraft -> LumiMod.serverRuntime()
+                .find(minecraft.getPlayerList().getPlayers().getFirst().level()).orElseThrow().mutations().builderSnapshot());
+        if (!before.equals(after)) throw new AssertionError("Integrated biome-only edit entered Lumi history");
+        report.event("gate", "axiom_integrated_biomes", "succeeded", 0, 0, "freeze guarded; excluded from history");
+    }
+
+    private void assertBiomes(TestSingleplayerContext world) {
+        boolean matches = world.getServer().computeOnServer(minecraft -> minecraft.getPlayerList().getPlayers().getFirst()
+                .level().getNoiseBiome(origin.getX() >> 2, origin.getY() >> 2, origin.getZ() >> 2).is(expectedDesert ? net.minecraft.world.level.biome.Biomes.DESERT
+                        : net.minecraft.world.level.biome.Biomes.PLAINS));
+        if (!matches) throw new AssertionError("Block/entity Restore or reopen changed the current Axiom biome");
+    }
+
     private static String coordinates(BlockPos position) {
         return position.getX() + "," + position.getY() + "," + position.getZ();
     }
 
     /** Keeps Axiom linkage out of a WorldEdit-only JVM. */
     private static final class AxiomClientEdits {
+        private static void applyBiome(BlockPos position, boolean desert) {
+            var buffer = new com.moulberry.axiom.world_modification.BiomeBuffer();
+            buffer.set(position.getX() >> 2, position.getY() >> 2, position.getZ() >> 2,
+                    desert ? net.minecraft.world.level.biome.Biomes.DESERT : net.minecraft.world.level.biome.Biomes.PLAINS);
+            com.moulberry.axiom.world_modification.Dispatcher.apply(buffer, false);
+        }
+
         private static void apply(BlockPos position) {
             var buffer = new com.moulberry.axiom.world_modification.BlockBuffer();
             for (int x = 0; x < 2; x++) buffer.set(position.getX() + x,
