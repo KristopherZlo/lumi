@@ -14,7 +14,6 @@ class LumiMinecraftVerificationTarget {
             throw 'Alternate-game verification requires a frozen artifact.'
         }
         if (-not [string]::IsNullOrWhiteSpace($artifact)) {
-            if (-not $this.Modern) { throw 'Frozen client launch artifacts require a native adapter.' }
             $this.Artifact = [IO.Path]::GetFullPath($artifact)
             if (-not [IO.File]::Exists($this.Artifact) -or [IO.Path]::GetExtension($this.Artifact) -cne '.jar') {
                 throw "A frozen distributable JAR is required: $artifact"

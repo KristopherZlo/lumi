@@ -39,7 +39,7 @@ try {
     $taskRun = Join-Path $taskRepo ('build/reports/lumi-release/' +
         [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $taskRun | Out-Null
-    if ($taskVerification.Modern) {
+    if ($taskVerification.Modern -or $taskVerification.Artifact) {
         $taskArguments = $taskVerification.PrepareArguments()
         $ErrorActionPreference = 'Continue'
         & (Join-Path $taskRepo 'gradlew.bat') @taskArguments --console=plain *> (Join-Path $taskRun 'prepare.log')
@@ -177,7 +177,7 @@ try {
     if ($ReviewedEvidence) {
         $taskReviewed = Get-Content -LiteralPath $ReviewedEvidence -Raw | ConvertFrom-Json
         if ($taskReviewed.gitSha -ne $taskSha) { throw 'Reviewed evidence belongs to another candidate.' }
-        if ($taskVerification.Modern -and ($taskReviewed.minecraftTarget.id -cne $Target -or
+        if ($null -ne $taskArtifact -and ($taskReviewed.minecraftTarget.id -cne $Target -or
             $taskReviewed.minecraftTarget.minecraftVersion -cne $taskVerification.Definition.minecraftVersion -or
             $taskReviewed.artifact.sha256 -cne $taskArtifact.sha256)) {
             throw 'Reviewed evidence belongs to a different game or player JAR.'

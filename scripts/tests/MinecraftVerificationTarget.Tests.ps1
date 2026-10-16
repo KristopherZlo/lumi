@@ -28,7 +28,9 @@ try {
     Assert-That ($taskPatch.PrepareArguments() -contains '-PlumiGameVersion=26.1.2') 'Selected runtime argument missing.'
     Assert-That ($taskPatch.PrepareArguments() -contains ("-PlumiArtifact=" + [IO.Path]::GetFullPath($taskFixture))) 'Frozen JAR missing.'
     Assert-That ($taskCatalog.targets[1].minecraftVersion -ceq '26.1') 'Verification mutated the compile catalog.'
-    Assert-Rejected { [LumiMinecraftVerificationTarget]::new($taskCatalog, 'legacy-12111', '', $taskFixture) }
+    $taskFrozenLegacy = [LumiMinecraftVerificationTarget]::new($taskCatalog, 'legacy-12111', '', $taskFixture)
+    Assert-That (-not $taskFrozenLegacy.Modern) 'Frozen legacy launch must use the root build.'
+    Assert-That ($taskFrozenLegacy.PrepareArguments() -contains ("-PlumiArtifact=" + [IO.Path]::GetFullPath($taskFixture))) 'Frozen legacy JAR missing.'
 } finally {
     Remove-Item -LiteralPath $taskFixture
 }

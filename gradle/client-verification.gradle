@@ -3,7 +3,7 @@ import groovy.json.JsonSlurper
 import io.github.lumi.buildconfig.MinecraftArtifactVerifier
 import io.github.lumi.buildconfig.PackagedGameTestEvidence
 
-def production = project.hasProperty('lumiPreparedClientLaunchType')
+def production = lumiMinecraftTarget.javaVersion() > 21 || providers.gradleProperty('lumiArtifact').isPresent()
 def launchType = production ? lumiPreparedClientLaunchType : DefaultTask
 
 tasks.register('prepareMultiplayerLaunch', launchType) {
@@ -17,8 +17,8 @@ tasks.register('prepareMultiplayerLaunch', launchType) {
         mods.setFrom(source.mods)
         programArgs.set(source.programArgs)
         jvmArgs.set(source.jvmArgs.map { values -> values.findAll {
-            !it.startsWith('-Dlumi.gametest.completion=')
-        } })
+            !it.startsWith('-Dlumi.gametest.completion=') && !it.startsWith('-XX:ErrorFile=')
+        } + ['-XX:ErrorFile=hs_err_pid%p.log'] })
         descriptor.set(layout.buildDirectory.file('production-client-command.json'))
         doFirst {
             new MinecraftArtifactVerifier().verify(lumiPackagedArtifact.singleFile.toPath(),
