@@ -12,14 +12,13 @@ $taskGroups = @($taskCatalog.targets | ForEach-Object {
 })
 [ordered]@{ schema = 1; modVersion = '0.3.0'; groups = $taskGroups } | ConvertTo-Json -Depth 10 |
     Set-Content -LiteralPath (Join-Path $taskRoot 'candidate.json') -Encoding UTF8
-$taskOld = @{ version = '0.2.0'; loader = 'fabric'; minecraftVersions = @('1.20.1'); summary = 'Last supported release';
+$taskOld = @{ version = '0.2.0'; loader = 'fabric'; minecraftVersions = @('1.20.1'); summary = ('Last release ' + [char]0x0410 + [char]0x0411);
     downloadUrl = 'https://github.com/KristopherZlo/lumi/releases/download/v0.2.0/old.jar' }
 $taskPrevious = Join-Path $taskRoot 'previous.json'
-@{ schema = 1; modId = 'lumi'; versions = @($taskOld) } | ConvertTo-Json -Depth 8 |
-    Set-Content -LiteralPath $taskPrevious -Encoding UTF8
+[IO.File]::WriteAllText($taskPrevious, (@{ schema = 1; modId = 'lumi'; versions = @($taskOld) } | ConvertTo-Json -Depth 8))
 $taskOutput = Join-Path $taskRoot 'prepared'
 & $taskScript -CandidateDirectory $taskRoot -Summary 'Grouped release' -OutputDirectory $taskOutput -PreviousManifest $taskPrevious
-$taskManifest = Get-Content -LiteralPath (Join-Path $taskOutput 'lumi-fabric.json') -Raw | ConvertFrom-Json
+$taskManifest = Get-Content -LiteralPath (Join-Path $taskOutput 'lumi-fabric.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 foreach ($taskTarget in $taskCatalog.targets) {
     foreach ($taskGame in $taskTarget.minecraftVersions) {
         $taskEntry = @($taskManifest.versions | Where-Object { $_.version -ceq '0.3.0' -and $taskGame -cin $_.minecraftVersions })
@@ -29,7 +28,8 @@ foreach ($taskTarget in $taskCatalog.targets) {
     }
 }
 if (@($taskManifest.versions | Where-Object { '1.20.1' -cin $_.minecraftVersions }).Count -ne 1 -or
-    $taskManifest.versions[-1].downloadUrl -cne $taskOld.downloadUrl) { throw 'Retired-game release was lost.' }
+    $taskManifest.versions[-1].downloadUrl -cne $taskOld.downloadUrl -or
+    $taskManifest.versions[-1].summary -cne $taskOld.summary) { throw 'Retired-game release was lost or changed.' }
 try {
     & $taskScript -CandidateDirectory $taskRoot -Summary 'Update' -OutputDirectory (Join-Path $taskRoot 'overwrite') `
         -PreviousManifest (Join-Path $taskOutput 'lumi-fabric.json')

@@ -10,15 +10,15 @@ $taskRepo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $taskCandidateDirectory = (Resolve-Path -LiteralPath $CandidateDirectory).Path
 $taskOutput = [IO.Path]::GetFullPath($OutputDirectory)
 if (Test-Path -LiteralPath $taskOutput) { throw "Release output must be unused: $taskOutput" }
-$taskCandidate = Get-Content -LiteralPath (Join-Path $taskCandidateDirectory 'candidate.json') -Raw | ConvertFrom-Json
-$taskCatalog = Get-Content -LiteralPath (Join-Path $taskRepo 'gradle/minecraft-targets.json') -Raw | ConvertFrom-Json
+$taskCandidate = Get-Content -LiteralPath (Join-Path $taskCandidateDirectory 'candidate.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$taskCatalog = Get-Content -LiteralPath (Join-Path $taskRepo 'gradle/minecraft-targets.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $taskVersionPattern = '^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?(?:\+[A-Za-z0-9.-]+)?$'
 if ($taskCandidate.schema -ne 1 -or $taskCandidate.groups.Count -ne $taskCatalog.targets.Count -or
     $taskCandidate.modVersion -cnotmatch $taskVersionPattern -or
     $taskCandidate.modVersion.Length -gt 32) { throw 'Invalid grouped candidate.' }
 $taskVersions = @()
 if ($PreviousManifest) {
-    $taskPrevious = Get-Content -LiteralPath $PreviousManifest -Raw | ConvertFrom-Json
+    $taskPrevious = Get-Content -LiteralPath $PreviousManifest -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($taskPrevious.schema -ne 1 -or $taskPrevious.modId -cne 'lumi' -or
         $taskPrevious.versions -isnot [Array]) { throw 'Invalid previous update manifest.' }
     foreach ($taskEntry in $taskPrevious.versions) {
