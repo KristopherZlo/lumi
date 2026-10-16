@@ -52,7 +52,7 @@ tasks.register('runNativeViewportControl', lumiClientProductionRunTaskType) {
         }
         def root = viewportDirectory.get().asFile
         root.mkdirs()
-        new File(root, 'options.txt').text = 'lang:en_us\nmaxFps:30\nenableVsync:false\nfullscreen:false\n'
+        new File(root, 'options.txt').text = 'lang:en_us\nmaxFps:30\nenableVsync:false\nfullscreen:false\nonboardAccessibility:false\n'
     }
     doLast {
         if (completion.get().text != game + '\nnative-viewport\n15') {
