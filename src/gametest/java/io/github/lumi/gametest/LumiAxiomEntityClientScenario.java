@@ -6,6 +6,7 @@ import com.moulberry.axiom.packets.AxiomServerboundManipulateEntity.PassengerMan
 import com.moulberry.axiom.packets.AxiomServerboundSpawnEntity;
 import com.moulberry.axiom.packets.AxiomServerboundSpawnEntity.SpawnEntry;
 import io.github.lumi.LumiMod;
+import io.github.lumi.client.integration.AxiomClientWorkBarrier;
 import io.github.lumi.domain.model.BlockBox;
 import java.io.IOException;
 import java.util.List;
@@ -31,6 +32,7 @@ final class LumiAxiomEntityClientScenario {
         var server = world.getServer();
         var operations = new LumiBehaviorOperations(context, server, report);
         var checks = new LumiBehaviorChecks(context, world, report);
+        context.waitFor(client -> !AxiomClientWorkBarrier.isPaused());
         Vec3 start = Vec3.atBottomCenterOf(origin.above(2));
         context.runOnClient(client -> new AxiomServerboundSpawnEntity(List.of(
                 spawn(first, start), spawn(second, start.add(4, 0, 0)), spawn(rider, start.add(2, 0, 0)))).send());
@@ -67,7 +69,11 @@ final class LumiAxiomEntityClientScenario {
         if (!moved) throw new AssertionError("Axiom serialized NBT/pose edit differs");
         operations.awaitDurability("axiom_entity_edited");
         var editedState = checks.snapshot("axiom_entities_edited", area);
+        long generation = context.computeOnClient(client -> AxiomClientWorkBarrier.generation());
         operations.undo("axiom_entities");
+        context.waitFor(client -> !AxiomClientWorkBarrier.isPaused());
+        if (context.computeOnClient(client -> AxiomClientWorkBarrier.generation())
+                <= generation) throw new AssertionError("Axiom replacement barrier was not exercised");
         checks.assertSnapshot("axiom_entities_undo", area, baseline.snapshot());
         operations.redo("axiom_entities");
         checks.assertSnapshot("axiom_entities_redo", area, editedState);
@@ -80,8 +86,16 @@ final class LumiAxiomEntityClientScenario {
         if (summary.changedBlocks() != 0 || summary.changedEntityChunks() == 0) {
             throw new AssertionError("Axiom entity Compare differs: " + summary);
         }
-        operations.restore("axiom_entities_before", baseline.commit());
+        var runtime = server.computeOnServer(minecraft -> LumiMod.serverRuntime()
+                .find(minecraft.getPlayerList().getPlayers().getFirst().level()).orElseThrow());
+        context.waitFor(client -> !AxiomClientWorkBarrier.isPaused());
+        try (var pending = new LumiAxiomPendingWork(context, runtime, origin.offset(60, 0, 0))) {
+            operations.restore("axiom_entities_before", baseline.commit());
+            pending.assertDrained();
+        }
         checks.assertSnapshot("axiom_entities_restore_before", area, baseline.snapshot());
+        report.event("gate", "axiom_pending_work", "succeeded", 0, 0,
+                "actual worker drain before admission and resume; stale queue/callback/history rejection; exact world state");
         operations.restore("axiom_entities_after", edited.commit());
         checks.assertSnapshot("axiom_entities_restore_after", area, edited.snapshot());
         report.event("gate", "axiom_entity_client_history", "succeeded", 0, 0,

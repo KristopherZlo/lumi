@@ -416,8 +416,14 @@ final class LumiUiTestDriver {
                                         .findFirst().orElse(null)
                                 : null);
                 if (!text.equals(actual)) {
+                    String controls = context.computeOnClient(client -> client.screen == null ? "screen=null"
+                            : "screen=" + client.screen.getClass().getSimpleName() + ", fields="
+                                    + client.screen.children().stream().filter(EditBox.class::isInstance)
+                                            .map(EditBox.class::cast)
+                                            .map(field -> "'" + field.getValue() + "' focused=" + field.isFocused())
+                                            .toList());
                     throw new AssertionError(expectedScreen.getSimpleName()
-                            + " received '" + actual + "' instead of '" + text + "'");
+                            + " received '" + actual + "' instead of '" + text + "'; " + controls);
                 }
                 return;
             }

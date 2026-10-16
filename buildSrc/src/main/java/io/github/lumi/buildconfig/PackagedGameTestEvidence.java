@@ -35,6 +35,7 @@ public final class PackagedGameTestEvidence {
             if (builderTools.equals("axiom") || builderTools.equals("both")) {
                 expected.add("gate axiom_integrated_biomes");
                 expected.add("gate axiom_entity_client_history");
+                expected.add("gate axiom_pending_work");
             }
         }
         if (!expected.isEmpty()) {
