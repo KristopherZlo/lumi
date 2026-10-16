@@ -36,6 +36,7 @@ public final class PackagedGameTestEvidence {
                 expected.add("gate axiom_integrated_biomes");
                 expected.add("gate axiom_entity_client_history");
                 expected.add("gate axiom_pending_work");
+                expected.add("gate axiom_split_dispatch");
             }
         }
         if (!expected.isEmpty()) {

@@ -44,7 +44,7 @@ class PackagedGameTestEvidenceTest {
         assertThrows(IOException.class, () -> evidence.verifyClient(completion, artifact, hash, "EXACT"));
     }
 
-    @Test void axiomToolEvidenceRequiresNativeBiomeEntityAndPendingWorkScenarios() throws Exception {
+    @Test void axiomToolEvidenceRequiresNativeBiomeEntityPendingWorkAndSplitDispatchScenarios() throws Exception {
         var evidence = new PackagedGameTestEvidence();
         Path completion = directory.resolve("client.completed");
         Path log = directory.resolve("logs/latest.log");
@@ -60,7 +60,10 @@ class PackagedGameTestEvidenceTest {
         assertThrows(IOException.class, () -> evidence.verifyClientCases(completion, "BUILDER_TOOLS", "axiom"));
         Files.writeString(log, "Behavior gate axiom_pending_work: succeeded (0 ticks)\n",
                 java.nio.file.StandardOpenOption.APPEND);
-        assertEquals(4, evidence.verifyClientCases(completion, "BUILDER_TOOLS", "axiom").size());
+        assertThrows(IOException.class, () -> evidence.verifyClientCases(completion, "BUILDER_TOOLS", "axiom"));
+        Files.writeString(log, "Behavior gate axiom_split_dispatch: succeeded (0 ticks)\n",
+                java.nio.file.StandardOpenOption.APPEND);
+        assertEquals(5, evidence.verifyClientCases(completion, "BUILDER_TOOLS", "axiom").size());
         assertThrows(IOException.class, () -> evidence.verifyClientCases(completion, "ALL", "both"));
     }
 
