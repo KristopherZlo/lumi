@@ -13,6 +13,7 @@
       "io.github.lumi.gametest.LumiMultiplayerClientGameTest",
       "io.github.lumi.gametest.LumiInteractionClientGameTest",
       "io.github.lumi.gametest.LumiBuilderToolsClientGameTest",
+      "io.github.lumi.gametest.LumiAxiomEditorClientGameTest",
       "io.github.lumi.gametest.LumiHistoryBenchmarkClientGameTest",
       "io.github.lumi.gametest.LumiUiWorkflowClientGameTest",
       "io.github.lumi.gametest.LumiUiContractClientGameTest",

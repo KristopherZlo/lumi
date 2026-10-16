@@ -44,7 +44,7 @@ class PackagedGameTestEvidenceTest {
         assertThrows(IOException.class, () -> evidence.verifyClient(completion, artifact, hash, "EXACT"));
     }
 
-    @Test void axiomToolEvidenceRequiresNativeBiomeEntityPendingWorkAndSplitDispatchScenarios() throws Exception {
+    @Test void axiomToolEvidenceRequiresNativeHistoryAndEditorScenarios() throws Exception {
         var evidence = new PackagedGameTestEvidence();
         Path completion = directory.resolve("client.completed");
         Path log = directory.resolve("logs/latest.log");
@@ -63,8 +63,23 @@ class PackagedGameTestEvidenceTest {
         assertThrows(IOException.class, () -> evidence.verifyClientCases(completion, "BUILDER_TOOLS", "axiom"));
         Files.writeString(log, "Behavior gate axiom_split_dispatch: succeeded (0 ticks)\n",
                 java.nio.file.StandardOpenOption.APPEND);
-        assertEquals(5, evidence.verifyClientCases(completion, "BUILDER_TOOLS", "axiom").size());
+        assertThrows(IOException.class, () -> evidence.verifyClientCases(completion, "BUILDER_TOOLS", "axiom"));
+        Files.writeString(log, "Behavior gate axiom_editor_ui: succeeded (0 ticks)\n",
+                java.nio.file.StandardOpenOption.APPEND);
+        assertEquals(6, evidence.verifyClientCases(completion, "BUILDER_TOOLS", "axiom").size());
         assertThrows(IOException.class, () -> evidence.verifyClientCases(completion, "ALL", "both"));
+    }
+
+    @Test void focusedEditorEvidenceCannotSubstituteForToolHistory() throws Exception {
+        var evidence = new PackagedGameTestEvidence();
+        Path completion = directory.resolve("client.completed");
+        Path log = directory.resolve("logs/latest.log");
+        Files.createDirectories(log.getParent());
+        Files.writeString(log, "Behavior gate builder_tools_reopen: succeeded (0 ticks)\n");
+        assertThrows(IOException.class, () -> evidence.verifyClientCases(completion, "AXIOM_EDITOR", "axiom"));
+        Files.writeString(log, "Behavior gate axiom_editor_ui: succeeded (0 ticks)\n");
+        assertEquals(1, evidence.verifyClientCases(completion, "AXIOM_EDITOR", "axiom").size());
+        assertThrows(IOException.class, () -> evidence.verifyClientCases(completion, "BUILDER_TOOLS", "axiom"));
     }
 
     @Test
