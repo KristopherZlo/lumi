@@ -41,6 +41,11 @@ public final class LumiAxiomCaptureGameTests {
     }
 
     @GameTest(maxTicks = 300000)
+    public void axiomPartialApplyAboveCaptureLimitKeepsDurableHistory(GameTestHelper helper) {
+        new Scenario(helper, true, true).run();
+    }
+
+    @GameTest(maxTicks = 300000)
     public void axiomNoOpAboveCaptureLimitDoesNotCreateBuilderChanges(GameTestHelper helper) {
         unchangedAboveLimit(helper, false);
     }
@@ -98,6 +103,7 @@ public final class LumiAxiomCaptureGameTests {
         private final GameTestHelper helper;
         private final FabricDimensionRuntime runtime;
         private final boolean fallback;
+        private final boolean partialApply;
         private final UUID lease = UUID.randomUUID();
         private final List<BlockPos> positions;
         private ServerPlayer player;
@@ -110,8 +116,13 @@ public final class LumiAxiomCaptureGameTests {
         private Map<SectionKey, SectionBlob> edited;
 
         private Scenario(GameTestHelper helper, boolean fallback) {
+            this(helper, fallback, false);
+        }
+
+        private Scenario(GameTestHelper helper, boolean fallback, boolean partialApply) {
             this.helper = helper;
             this.fallback = fallback;
+            this.partialApply = partialApply;
             runtime = LumiMod.serverRuntime().find(helper.getLevel()).orElseThrow();
             positions = List.of(new BlockPos(2, 2, 2), new BlockPos(3, 2, 2), new BlockPos(2, 18, 2))
                     .stream().map(helper::absolutePos).toList();
@@ -169,18 +180,40 @@ public final class LumiAxiomCaptureGameTests {
         private void editAndSave() {
             succeeded();
             baselineCommit = activeCommit();
+            var injectedFailure = new IllegalStateException("Injected Axiom failure after the first native section");
             BlockBuffer buffer = new BlockBuffer() {
+                private int appliedSections;
                 @Override public int estimateSizeInRAM() { return (64 << 20) + (fallback ? 1 : 0); }
+                @Override public it.unimi.dsi.fastutil.shorts.Short2ObjectMap<com.moulberry.axiom.world_modification.CompressedBlockEntity>
+                        getBlockEntityChunkMap(long key) {
+                    if (partialApply && ++appliedSections == 2) throw injectedFailure;
+                    return super.getBlockEntityChunkMap(key);
+                }
             };
             for (BlockPos position : positions) {
                 buffer.set(position.getX(), position.getY(), position.getZ(),
                         position.equals(positions.getFirst()) ? Blocks.AIR.defaultBlockState() : Blocks.GOLD_BLOCK.defaultBlockState());
             }
             var before = runtime.mutations().builderSnapshot();
-            AxiomServerboundSetBuffer.applyBlockBufferServer(buffer, helper.getLevel(), null, player);
+            if (partialApply) {
+                helper.getLevel().getServer().getPlayerList().op(player.nameAndId(),
+                        java.util.Optional.of(net.minecraft.server.permissions.LevelBasedPermissionSet.OWNER), java.util.Optional.empty());
+                LumiAxiomGameTests.activateAxiom(player);
+            }
+            try {
+                AxiomServerboundSetBuffer.applyBlockBufferServer(buffer, helper.getLevel(), null, player);
+                helper.assertFalse(partialApply, "Native partial-apply failure was not reached");
+            } catch (IllegalStateException failed) {
+                helper.assertTrue(partialApply && failed == injectedFailure, "Native apply failure was replaced or unexpected");
+            } finally {
+                if (partialApply) {
+                    LumiAxiomGameTests.deactivateAxiom(player);
+                    helper.getLevel().getServer().getPlayerList().deop(player.nameAndId());
+                }
+            }
             helper.assertFalse(before.equals(runtime.mutations().builderSnapshot()), "Axiom fallback lost builder attribution");
             for (BlockPos position : positions) {
-                helper.assertTrue(runtime.mutations().builderSnapshot().generations()
+                if (!partialApply) helper.assertTrue(runtime.mutations().builderSnapshot().generations()
                                 .containsKey(MinecraftSectionCapture.key(position)),
                         "Axiom fallback omitted a builder section");
             }
@@ -191,10 +224,10 @@ public final class LumiAxiomCaptureGameTests {
                                 .filter(reason -> reason.contains("capture limit")).isPresent(),
                         "Capture fallback did not explain why live Undo is unavailable");
             }
-            helper.assertTrue(helper.getLevel().getBlockState(positions.getFirst()).isAir(), "Axiom did not remove the chest");
-            for (BlockPos position : positions.subList(1, positions.size())) {
-                helper.assertTrue(helper.getLevel().getBlockState(position).is(Blocks.GOLD_BLOCK), "Axiom omitted a buffer section");
-            }
+            long changed = positions.stream().filter(position -> helper.getLevel().getBlockState(position)
+                    .is(position.equals(positions.getFirst()) ? Blocks.AIR : Blocks.GOLD_BLOCK)).count();
+            helper.assertTrue(partialApply ? changed > 0 && changed < positions.size() : changed == positions.size(),
+                    "Unexpected number of applied Axiom cells: " + changed);
             edited = capture();
             save("Capture boundary edited");
         }
