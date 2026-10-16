@@ -160,7 +160,7 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
         }
 
         assertCleanReopen(context, worldSave, repository, interruptedState, report,
-                "clean_exit_before_fixture");
+                "clean_exit_before_fixture", poiPositions, false);
         OperationJournal interrupted;
         try (LumiCrashCopy crash = LumiCrashCopy.create(
                 worldSave.getSaveDirectory())) {
@@ -229,7 +229,7 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
         }
 
         assertCleanReopen(context, worldSave, repository, recoveredRef, report,
-                "clean_exit_after_recovery");
+                "clean_exit_after_recovery", poiPositions, true);
         report.event("gate", "recovery_reopen", "succeeded", 0, 0,
                 "exact recovered state, published ref and clean reopen");
     }
@@ -450,10 +450,12 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
             Path repository,
             BranchRef expected,
             LumiBehaviorReport report,
-            String name) throws IOException {
+            String name, List<BlockPos> poiPositions, boolean expectedPois) throws IOException {
         long started = System.nanoTime();
         try (TestSingleplayerContext clean = worldSave.open()) {
+            clean.getClientWorld().waitForChunksDownload();
             awaitHistory(context);
+            assertPois(clean.getServer(), poiPositions, expectedPois, name + " initial loaded state");
             for (int tick = 0; tick < 40; tick++) {
                 require(!context.computeOnClient(
                                 client -> client.screen instanceof LumiRecoveryScreen),
@@ -472,6 +474,7 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
                     name + " froze the dimension");
             require(new OperationJournalRepository(repository).read().isEmpty(),
                     name + " produced active.bin");
+            assertPois(clean.getServer(), poiPositions, expectedPois, name + " settled state");
         }
         report.event("assertion", name, "succeeded", 40,
                 elapsedMillis(started), "");
@@ -529,7 +532,9 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
             return positions.stream()
                     .filter(position -> {
                         var actual = pois.getType(position);
-                        return actual.isPresent() != expectedPresent
+                        var expectedBlock = (expectedPresent ? Blocks.LECTERN : Blocks.AIR).defaultBlockState();
+                        return !level.getBlockState(position).equals(expectedBlock)
+                                || actual.isPresent() != expectedPresent
                                 || !actual.equals(PoiTypes.forState(
                                         level.getBlockState(position)));
                     })
