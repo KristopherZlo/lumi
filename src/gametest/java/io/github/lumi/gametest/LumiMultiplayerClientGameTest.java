@@ -60,6 +60,9 @@ public final class LumiMultiplayerClientGameTest implements FabricClientGameTest
                 mailbox.request(context, "head", saved.hex());
                 new LumiMultiplayerQueueScenario(context, server, report, mailbox).run();
                 new LumiMultiplayerApplyScenario(context, server, report, mailbox).run();
+                if (FabricLoader.getInstance().isModLoaded("axiom")) {
+                    new LumiAxiomMultiplayerScenario(context, server, report, mailbox).run();
+                }
                 server.runOnServer(minecraft -> {
                     var runtime = LumiMod.serverRuntime().find(minecraft.overworld()).orElseThrow();
                     if (runtime.operations().hasActiveOperation() || runtime.freeze().isFrozen()) {

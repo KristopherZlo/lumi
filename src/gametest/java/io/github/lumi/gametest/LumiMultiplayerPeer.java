@@ -18,6 +18,7 @@ final class LumiMultiplayerPeer {
     private final ClientGameTestContext context;
     private final LumiMultiplayerMailbox mailbox;
     private String address;
+    private LumiAxiomDispatchTestDriver axiom;
 
     LumiMultiplayerPeer(ClientGameTestContext context, LumiMultiplayerMailbox mailbox) {
         this.context = context;
@@ -45,6 +46,19 @@ final class LumiMultiplayerPeer {
 
     private void execute(String action, String argument, Properties reply) {
         switch (action) {
+            case "undo" -> reply.setProperty("request", context.computeOnClient(
+                    client -> LumiClient.networking().undo()).toString());
+            case "redo" -> reply.setProperty("request", context.computeOnClient(
+                    client -> LumiClient.networking().redo()).toString());
+            case "axiom-begin" -> {
+                String[] coordinates = argument.split(",");
+                axiom = new LumiAxiomDispatchTestDriver(context);
+                axiom.begin(new net.minecraft.core.BlockPos(Integer.parseInt(coordinates[0]),
+                        Integer.parseInt(coordinates[1]), Integer.parseInt(coordinates[2])),
+                        net.minecraft.world.level.block.Blocks.EMERALD_BLOCK.defaultBlockState());
+            }
+            case "axiom-tick" -> axiom.tick();
+            case "axiom-ready" -> new LumiAxiomDispatchTestDriver(context).ready(argument);
             case "save" -> reply.setProperty("request", context.computeOnClient(
                     client -> LumiClient.networking().save(argument)).toString());
             case "restore" -> reply.setProperty("request", context.computeOnClient(
@@ -66,8 +80,10 @@ final class LumiMultiplayerPeer {
                         .filter(snapshot -> snapshot.head().hex().equals(argument)).isPresent(), 12000);
                 reply.setProperty("head", argument);
             }
-            case "disconnect", "stop" -> context.runOnClient(
-                    client -> client.disconnect(new TitleScreen(), false));
+            case "disconnect", "stop" -> {
+                axiom = null;
+                context.runOnClient(client -> client.disconnect(new TitleScreen(), false));
+            }
             case "connect" -> connect();
             case "break" -> {
                 String[] coordinates = argument.split(",");
@@ -93,7 +109,9 @@ final class LumiMultiplayerPeer {
     private void connect() {
         context.runOnClient(client -> {
             client.options.pauseOnLostFocus = false;
-            com.moulberry.axiom.Axiom.configuration.internal.shownIntroduction = true;
+            if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom")) {
+                com.moulberry.axiom.Axiom.configuration.internal.shownIntroduction = true;
+            }
             ConnectScreen.startConnecting(new TitleScreen(), client,
                     ServerAddress.parseString(address),
                     new ServerData("Lumi multiplayer", address, ServerData.Type.OTHER), false, null);
