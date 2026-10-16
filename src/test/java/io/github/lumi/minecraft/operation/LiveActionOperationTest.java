@@ -25,6 +25,33 @@ class LiveActionOperationTest {
     private static final UUID ENTITY = new UUID(0, 8);
     private static final BlockPosition POSITION = new BlockPosition(1, 2, 3);
 
+    @Test void waitsForExternalWorkBeforeSelectingOrApplyingUndo() {
+        var journal = action(block("stone"), block("gold_block"));
+        var world = new FakeWorld(block("gold_block"));
+        world.admitted = false;
+        var operation = new LiveActionOperation(journal, PLAYER, LiveActionJournal.Direction.UNDO, world, () -> 0L);
+        operation.advance(Long.MAX_VALUE);
+        assertTrue(!operation.isTerminal());
+        assertEquals(0, world.writes);
+        assertTrue(journal.prepareUndo(PLAYER).isPresent());
+        world.admitted = true;
+        operation.advance(Long.MAX_VALUE);
+        assertEquals(MutationTerminalState.SUCCEEDED, operation.terminalState());
+        assertEquals(block("stone"), world.states.get(POSITION));
+    }
+
+    @Test void refusedExternalWorkLeavesUndoAvailableAndWorldUntouched() {
+        var journal = action(block("stone"), block("gold_block"));
+        var world = new FakeWorld(block("gold_block"));
+        world.admissionFailure = new IOException("Editor cannot drain");
+        var operation = new LiveActionOperation(journal, PLAYER, LiveActionJournal.Direction.UNDO, world, () -> 0L);
+        operation.advance(Long.MAX_VALUE);
+        assertEquals(MutationTerminalState.FAILED, operation.terminalState());
+        assertEquals(0, world.writes);
+        assertTrue(journal.prepareUndo(PLAYER).isPresent());
+        assertEquals(block("gold_block"), world.states.get(POSITION));
+    }
+
     @Test
     void explainsWhenUndoOrRedoHasNoAvailableAction() {
         for (LiveActionJournal.Direction direction : LiveActionJournal.Direction.values()) {
@@ -361,6 +388,13 @@ class LiveActionOperationTest {
     }
 
     private static final class FakeWorld implements LiveBlockWorldAccess {
+        private boolean admitted = true;
+        private IOException admissionFailure;
+
+        @Override public boolean awaitMutationAdmission() throws IOException {
+            if (admissionFailure != null) throw admissionFailure;
+            return admitted;
+        }
         private final Map<BlockPosition, BlockSnapshot> states = new HashMap<>();
         private int ignoredWrites;
         private int writes;

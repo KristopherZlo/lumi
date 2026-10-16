@@ -5,10 +5,28 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class DeferredDimensionMutationTest {
+    @Test void refOnlySwitchWaitsBeforeCreatingOrPublishingItsDelegate() throws Exception {
+        var admitted = new AtomicBoolean();
+        var creations = new AtomicInteger();
+        var deferred = DeferredDimensionMutation.awaitingAdmission(admitted::get, () -> {
+            creations.incrementAndGet();
+            return new OneTickMutation();
+        });
+        assertTrue(deferred.requiresFreeze());
+        deferred.advance(Long.MAX_VALUE);
+        assertEquals(0, creations.get());
+        assertFalse(deferred.isTerminal());
+        admitted.set(true);
+        deferred.advance(Long.MAX_VALUE);
+        assertEquals(1, creations.get());
+        assertTrue(deferred.isTerminal());
+    }
+
     @Test
     void createsCurrentOperationOnlyAfterTheQueueActivatesIt() throws Exception {
         AtomicInteger creations = new AtomicInteger();

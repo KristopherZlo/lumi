@@ -1389,8 +1389,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
         Objects.requireNonNull(name, "name");
-        var operation = new DeferredDimensionMutation(true, () ->
-                createAndSwitchBranch(name, startingPoint));
+        var operation = DeferredDimensionMutation.awaitingAdmission(
+                freeze::awaitReplacementAdmission, () -> createAndSwitchBranch(name, startingPoint));
         enqueueForeground(
                 operation, OperationPriority.NORMAL, clearingLiveHistory(terminalObserver));
         return operation;

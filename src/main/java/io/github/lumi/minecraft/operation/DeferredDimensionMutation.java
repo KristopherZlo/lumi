@@ -10,6 +10,7 @@ public final class DeferredDimensionMutation implements DimensionMutation {
     private final Activation activation;
     private final Factory factory;
     private final boolean initialFreeze;
+    private final Admission admission;
     private DimensionMutation delegate;
     private Throwable failure;
     private boolean cancelled;
@@ -28,9 +29,19 @@ public final class DeferredDimensionMutation implements DimensionMutation {
 
     public DeferredDimensionMutation(
             boolean initialFreeze, Activation activation, Factory factory) {
+        this(initialFreeze, activation, factory, () -> true);
+    }
+
+    private DeferredDimensionMutation(
+            boolean initialFreeze, Activation activation, Factory factory, Admission admission) {
         this.initialFreeze = initialFreeze;
         this.activation = Objects.requireNonNull(activation, "activation");
         this.factory = Objects.requireNonNull(factory, "factory");
+        this.admission = Objects.requireNonNull(admission, "admission");
+    }
+
+    public static DeferredDimensionMutation awaitingAdmission(Admission admission, Factory factory) {
+        return new DeferredDimensionMutation(true, () -> { }, factory, admission);
     }
 
     @Override
@@ -45,6 +56,7 @@ public final class DeferredDimensionMutation implements DimensionMutation {
         }
         if (delegate == null) {
             try {
+                if (!admission.awaitReady()) return;
                 activation.validate();
                 delegate = Objects.requireNonNull(factory.create(), "deferred mutation");
             } catch (IOException | RuntimeException failed) {
@@ -139,6 +151,11 @@ public final class DeferredDimensionMutation implements DimensionMutation {
                 next.validate();
             };
         }
+    }
+
+    @FunctionalInterface
+    public interface Admission {
+        boolean awaitReady() throws IOException;
     }
 
     @FunctionalInterface
