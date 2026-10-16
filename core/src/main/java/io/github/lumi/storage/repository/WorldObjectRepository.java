@@ -47,6 +47,11 @@ public final class WorldObjectRepository {
         return store.write(sectionCodec.encode(section));
     }
 
+    /** Identifies canonical section content without reading or publishing stored objects. */
+    public ObjectId identify(SectionBlob section) throws IOException {
+        return ObjectId.hash(sectionCodec.encode(section));
+    }
+
     /** Hold until reused objects have a durable origin or commit root. */
     public RepositoryMaintenance.Publication beginPublication() {
         return maintenance.beginPublication();

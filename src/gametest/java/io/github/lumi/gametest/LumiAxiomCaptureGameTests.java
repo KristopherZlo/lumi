@@ -40,6 +40,60 @@ public final class LumiAxiomCaptureGameTests {
         new Scenario(helper, true).run();
     }
 
+    @GameTest(maxTicks = 300000)
+    public void axiomNoOpAboveCaptureLimitDoesNotCreateBuilderChanges(GameTestHelper helper) {
+        unchangedAboveLimit(helper, false);
+    }
+
+    @GameTest(maxTicks = 300000)
+    public void axiomDeniedNbtAboveCaptureLimitDoesNotCreateBuilderChanges(GameTestHelper helper) {
+        unchangedAboveLimit(helper, true);
+    }
+
+    private static void unchangedAboveLimit(GameTestHelper helper, boolean deniedNbt) {
+        UUID lease = UUID.randomUUID();
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, lease))
+                .thenExecute(() -> {
+                    var runtime = LumiMod.serverRuntime().find(helper.getLevel()).orElseThrow();
+                    var player = helper.makeMockServerPlayerInLevel();
+                    BlockPos position = helper.absolutePos(new BlockPos(2, 2, 2));
+                    helper.getLevel().setBlockAndUpdate(position,
+                            (deniedNbt ? Blocks.CHEST : Blocks.STONE).defaultBlockState());
+                    try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), player.getUUID())) {
+                        helper.getLevel().setBlockAndUpdate(position.east(2), Blocks.GOLD_BLOCK.defaultBlockState());
+                    }
+                    var undoBefore = runtime.liveActions().prepareUndo(player.getUUID());
+                    helper.assertTrue(undoBefore.isPresent(), "Missing earlier live action");
+                    var before = runtime.mutations().builderSnapshot();
+                    BlockBuffer buffer = new BlockBuffer() {
+                        @Override public int estimateSizeInRAM() { return (64 << 20) + 1; }
+                    };
+                    buffer.set(position.getX(), position.getY(), position.getZ(), helper.getLevel().getBlockState(position));
+                    if (deniedNbt) {
+                        helper.assertFalse(com.moulberry.axiom.AxiomServer.canUseAxiom(player,
+                                        com.moulberry.axiom.restrictions.AxiomPermission.BUILD_NBT),
+                                "Denied fixture unexpectedly has Axiom NBT permission");
+                        var chest = (ChestBlockEntity) helper.getLevel().getBlockEntity(position);
+                        var tag = chest.saveWithFullMetadata(helper.getLevel().registryAccess());
+                        tag.putString("CustomName", "{\"text\":\"Denied edit\"}");
+                        buffer.putBlockEntity(position.getX(), position.getY(), position.getZ(),
+                                com.moulberry.axiom.world_modification.CompressedBlockEntity.compress(
+                                        tag, new java.io.ByteArrayOutputStream()));
+                    }
+                    AxiomServerboundSetBuffer.applyBlockBufferServer(buffer, helper.getLevel(), null, player);
+                    helper.assertValueEqual(before, runtime.mutations().builderSnapshot(),
+                            "No-op capture fallback created a false builder change");
+                    helper.assertTrue(runtime.liveActions().lastUnavailableReason(player.getUUID()).isEmpty(),
+                            "No-op capture fallback disabled live Undo");
+                    helper.assertValueEqual(undoBefore, runtime.liveActions().prepareUndo(player.getUUID()),
+                            "Unchanged fallback invalidated an earlier live action");
+                    helper.getLevel().getServer().getPlayerList().remove(player);
+                    LumiGameTestLease.release(lease);
+                })
+                .thenSucceed();
+    }
+
     private static final class Scenario {
         private final GameTestHelper helper;
         private final FabricDimensionRuntime runtime;

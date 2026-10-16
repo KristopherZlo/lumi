@@ -8,11 +8,13 @@ import com.moulberry.axiom.world_modification.BlockBuffer;
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.BlockSnapshot;
+import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
 import io.github.lumi.minecraft.runtime.AxiomBufferDispatchContext;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
 import io.github.lumi.minecraft.world.MinecraftSectionCapture;
+import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -52,17 +54,18 @@ abstract class AxiomSetBufferMixin {
             AxiomBufferDispatchContext.current(player).ifPresent(dispatch -> runtime.axiomBufferActions()
                     .attach(player.connection, player.getUUID(), dispatch, action));
             boolean exactCapture = captureBefore(
-                    buffer, runtime, action, before, sections);
+                    buffer, runtime, before, sections);
             Map<SectionKey, Long> generations =
                     registerDurability(level, runtime, sections);
+            Map<SectionKey, ObjectId> fallbackBefore = exactCapture
+                    ? Map.of() : captureSectionIds(level, runtime, sections);
             try {
                 original.call(buffer, level, changedRegion, player);
             } finally {
                 if (exactCapture) {
                     recordAfter(runtime, action, before, generations);
                 } else {
-                    rebaseLiveBlocks(level, runtime, sections);
-                    generations.keySet().forEach(runtime.mutations()::markBuilderMutation);
+                    recordFallback(level, runtime, action, fallbackBefore);
                 }
             }
         }
@@ -71,15 +74,10 @@ abstract class AxiomSetBufferMixin {
     private static boolean captureBefore(
             BlockBuffer buffer,
             FabricDimensionRuntime runtime,
-            UUID action,
             Map<BlockPosition, BlockSnapshot> before,
             Set<SectionKey> sections) {
         long[] retainedBytes = {0};
         boolean[] available = {buffer.estimateSizeInRAM() <= LUMI_MAX_CAPTURE_BYTES};
-        if (!available[0]) {
-            runtime.liveActions().makeUnavailable(
-                    action, "Axiom edit exceeded its live capture limit");
-        }
         buffer.forEach((x, y, z, state) -> {
             if (state == BlockBuffer.EMPTY_STATE) {
                 return;
@@ -94,8 +92,6 @@ abstract class AxiomSetBufferMixin {
                     if (retainedBytes[0] + bytes > LUMI_MAX_CAPTURE_BYTES) {
                         available[0] = false;
                         before.clear();
-                        runtime.liveActions().makeUnavailable(
-                                action, "Axiom edit exceeded its live capture limit");
                     } else {
                         retainedBytes[0] += bytes;
                         before.put(position, snapshot);
@@ -148,17 +144,46 @@ abstract class AxiomSetBufferMixin {
         });
     }
 
-    private static void rebaseLiveBlocks(
+    private static Map<SectionKey, ObjectId> captureSectionIds(
             ServerLevel level,
             FabricDimensionRuntime runtime,
             Set<SectionKey> sections) {
+        var objects = new WorldObjectRepository(runtime.repository());
+        Map<SectionKey, ObjectId> before = new LinkedHashMap<>();
         for (SectionKey key : sections) {
             try {
-                runtime.liveBlocks().rebase(key, LUMI_SECTIONS.capture(
-                        level, level.getChunk(key.chunkX(), key.chunkZ()), key.sectionY()));
+                before.put(key, objects.identify(LUMI_SECTIONS.capture(
+                        level, level.getChunk(key.chunkX(), key.chunkZ()), key.sectionY())));
             } catch (IOException failed) {
-                throw new UncheckedIOException(
-                        "Cannot rebase Axiom block entity state", failed);
+                throw new UncheckedIOException("Cannot identify Axiom section before mutation", failed);
+            }
+        }
+        return before;
+    }
+
+    private static void recordFallback(
+            ServerLevel level,
+            FabricDimensionRuntime runtime,
+            UUID action,
+            Map<SectionKey, ObjectId> before) {
+        var objects = new WorldObjectRepository(runtime.repository());
+        boolean unavailable = false;
+        for (SectionKey key : before.keySet()) {
+            try {
+                var visible = LUMI_SECTIONS.capture(
+                        level, level.getChunk(key.chunkX(), key.chunkZ()), key.sectionY());
+                if (!before.get(key).equals(objects.identify(visible))) {
+                    if (!unavailable) {
+                        runtime.liveActions().makeUnavailable(action, "Axiom edit exceeded its live capture limit");
+                        unavailable = true;
+                    }
+                    runtime.mutations().markBuilderMutation(key);
+                }
+                runtime.liveBlocks().rebase(key, visible);
+            } catch (IOException failed) {
+                runtime.liveActions().makeUnavailable(action, "Cannot verify the Axiom edit after mutation");
+                before.keySet().forEach(runtime.mutations()::markBuilderMutation);
+                throw new UncheckedIOException("Cannot verify Axiom block entity state", failed);
             }
         }
     }

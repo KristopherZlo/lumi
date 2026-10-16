@@ -1,6 +1,7 @@
 package io.github.lumi.storage.repository;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import io.github.lumi.domain.model.ChunkTree;
 import io.github.lumi.domain.model.DimensionTree;
@@ -21,6 +22,16 @@ import org.junit.jupiter.api.io.TempDir;
 class WorldObjectRepositoryTest {
     @TempDir
     Path repositoryRoot;
+
+    @Test
+    void identifiesSectionContentWithoutPublishingIt() throws IOException {
+        var repository = new WorldObjectRepository(repositoryRoot);
+        var section = new SectionBlob(Collections.nCopies(SectionBlob.BLOCK_COUNT, "minecraft:air"), Map.of());
+        var id = repository.identify(section);
+        assertFalse(Files.exists(repositoryRoot.resolve("objects")));
+        assertEquals(id, repository.write(section));
+        assertEquals(section, repository.readSection(id));
+    }
 
     @Test
     void persistsTypedWorldAndMerkleObjects() throws IOException {
