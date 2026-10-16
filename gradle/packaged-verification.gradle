@@ -274,7 +274,7 @@ def requestedClientSuite = System.getProperty('lumi.gametest.suite', 'SMOKE').to
         }
         doLast {
             evidence.verifyClient(completion.get().toPath(), artifact.singleFile.toPath(), record.artifact.sha256, clientSuite)
-            record.cases = evidence.verifyClientCases(completion.get().toPath(), clientSuite)
+            record.cases = evidence.verifyClientCases(completion.get().toPath(), clientSuite, builderTools)
             record.status = 'passed'
             clientManifest.get().text = JsonOutput.prettyPrint(JsonOutput.toJson(record)) + '\n'
             logger.lifecycle("Packaged client ${game}/${clientSuite}: passed; evidence: ${clientManifest.get()}")

@@ -44,6 +44,23 @@ class PackagedGameTestEvidenceTest {
         assertThrows(IOException.class, () -> evidence.verifyClient(completion, artifact, hash, "EXACT"));
     }
 
+    @Test void axiomToolEvidenceRequiresBothNativeBiomeAndEntityScenarios() throws Exception {
+        var evidence = new PackagedGameTestEvidence();
+        Path completion = directory.resolve("client.completed");
+        Path log = directory.resolve("logs/latest.log");
+        Files.createDirectories(log.getParent());
+        Files.writeString(log, "Behavior gate builder_tools_reopen: succeeded (0 ticks)\n");
+        assertEquals(1, evidence.verifyClientCases(completion, "BUILDER_TOOLS", "worldedit").size());
+        assertThrows(IOException.class, () -> evidence.verifyClientCases(completion, "BUILDER_TOOLS", "axiom"));
+        Files.writeString(log, "Behavior gate axiom_integrated_biomes: succeeded (0 ticks)\n",
+                java.nio.file.StandardOpenOption.APPEND);
+        assertThrows(IOException.class, () -> evidence.verifyClientCases(completion, "BUILDER_TOOLS", "both"));
+        Files.writeString(log, "Behavior gate axiom_entity_client_history: succeeded (0 ticks)\n",
+                java.nio.file.StandardOpenOption.APPEND);
+        assertEquals(3, evidence.verifyClientCases(completion, "BUILDER_TOOLS", "axiom").size());
+        assertThrows(IOException.class, () -> evidence.verifyClientCases(completion, "ALL", "both"));
+    }
+
     @Test
     void certifiesOnlyNonemptyPassingTestsOfAnUnchangedArtifact() throws Exception {
         var evidence = new PackagedGameTestEvidence();

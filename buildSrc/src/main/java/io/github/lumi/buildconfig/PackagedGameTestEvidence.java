@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.ArrayList;
 import java.util.List;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
@@ -14,7 +15,11 @@ import javax.xml.stream.XMLStreamException;
 /** Refuses empty, failed, skipped, or artifact-changing production runs. */
 public final class PackagedGameTestEvidence {
     public List<String> verifyClientCases(Path completion, String suite) throws IOException {
-        List<String> expected = switch (suite) {
+        return verifyClientCases(completion, suite, "none");
+    }
+
+    public List<String> verifyClientCases(Path completion, String suite, String builderTools) throws IOException {
+        List<String> expected = new ArrayList<>(switch (suite) {
             case "ALL" -> List.of("gate exact_restore", "gate exact_restore_reopen", "gate recovery_reopen");
             case "EXACT" -> List.of("gate exact_restore", "gate exact_restore_reopen");
             case "RECOVERY" -> List.of("gate recovery_reopen");
@@ -22,7 +27,16 @@ public final class PackagedGameTestEvidence {
             case "BUILDER_TOOLS" -> List.of("gate builder_tools_reopen");
             case "INTERACTION" -> List.of("gate single_click_interactions");
             default -> List.of();
-        };
+        });
+        if (suite.equals("ALL") || suite.equals("BUILDER_TOOLS")) {
+            if (!builderTools.equals("none") && !expected.contains("gate builder_tools_reopen")) {
+                expected.add("gate builder_tools_reopen");
+            }
+            if (builderTools.equals("axiom") || builderTools.equals("both")) {
+                expected.add("gate axiom_integrated_biomes");
+                expected.add("gate axiom_entity_client_history");
+            }
+        }
         if (!expected.isEmpty()) {
             String log = Files.readString(completion.resolveSibling("logs/latest.log"));
             for (String name : expected) {
@@ -31,7 +45,7 @@ public final class PackagedGameTestEvidence {
                 }
             }
         }
-        return expected;
+        return List.copyOf(expected);
     }
 
     public void verifyClient(Path completion, Path artifact, String expectedHash, String suite) throws IOException {
