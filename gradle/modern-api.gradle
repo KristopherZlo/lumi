@@ -85,9 +85,9 @@ stonecutter.replacements {
             replace('Minecraft\\.getInstance\\(\\)\\.setScreen\\(', 'Minecraft.getInstance().gui.setScreen(', 'Minecraft\\.getInstance\\(\\)\\.gui\\.setScreen\\(', 'Minecraft.getInstance().setScreen(')
         }
         regex(true, '!native262-entity-types') {
-            replace('(?<![\\w.])(?:net\\.minecraft\\.world\\.entity\\.)?EntityType\\.(TNT|ITEM|ARMOR_STAND|FALLING_BLOCK|PIG|CHEST_MINECART|ARROW|END_CRYSTAL)\\b',
+            replace('(?<![\\w.])(?:net\\.minecraft\\.world\\.entity\\.)?EntityType\\.(TNT|ITEM|ARMOR_STAND|FALLING_BLOCK|PIG|CHEST_MINECART|ARROW|END_CRYSTAL|MARKER)\\b',
                     'net.minecraft.world.entity.EntityTypes.$1',
-                    'net\\.minecraft\\.world\\.entity\\.EntityTypes\\.(TNT|ITEM|ARMOR_STAND|FALLING_BLOCK|PIG|CHEST_MINECART|ARROW|END_CRYSTAL)\\b',
+                    'net\\.minecraft\\.world\\.entity\\.EntityTypes\\.(TNT|ITEM|ARMOR_STAND|FALLING_BLOCK|PIG|CHEST_MINECART|ARROW|END_CRYSTAL|MARKER)\\b',
                     'net.minecraft.world.entity.EntityType.$1')
         }
         regex(true, '!native262-block-entity-types') {

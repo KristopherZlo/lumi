@@ -2,6 +2,8 @@ package io.github.lumi.gametest;
 
 import com.moulberry.axiom.packets.AxiomServerboundManipulateEntity;
 import com.moulberry.axiom.packets.AxiomServerboundDeleteEntity;
+import com.moulberry.axiom.packets.AxiomServerboundSpawnEntity;
+import com.moulberry.axiom.packets.AxiomServerboundSpawnEntity.SpawnEntry;
 import com.moulberry.axiom.utils.EntityDataUtils;
 import com.moulberry.axiom.packets.AxiomServerboundManipulateEntity.ManipulateEntry;
 import com.moulberry.axiom.packets.AxiomServerboundManipulateEntity.PassengerManipulation;
@@ -188,6 +190,81 @@ public final class LumiAxiomEntityGameTests {
                     LumiGameTestLease.release(test);
                 })
                 .thenSucceed();
+    }
+
+    @GameTest(maxTicks = 300000)
+    public void axiomCopySpawnHonorsFreezeAndDuplicateUuid(GameTestHelper helper) {
+        var runtime = LumiMod.serverRuntime().find(helper.getLevel()).orElseThrow();
+        UUID test = UUID.randomUUID();
+        UUID copy = UUID.randomUUID();
+        AtomicReference<ServerPlayer> player = new AtomicReference<>();
+        AtomicReference<UUID> source = new AtomicReference<>();
+        AtomicReference<Vec3> target = new AtomicReference<>();
+        AtomicReference<DimensionMutation> operation = new AtomicReference<>();
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
+                .thenExecute(() -> {
+                    player.set(helper.makeMockServerPlayerInLevel());
+                    helper.getLevel().getServer().getPlayerList().op(player.get().nameAndId(),
+                            Optional.of(LevelBasedPermissionSet.OWNER), Optional.empty());
+                    LumiAxiomGameTests.activateAxiom(player.get());
+                    Entity entity = helper.spawn(EntityType.MARKER, new BlockPos(2, 2, 2));
+                    source.set(entity.getUUID());
+                    target.set(entity.position().add(8, 0, 0));
+                    var nbt = EntityDataUtils.saveWithoutId(entity);
+                    var data = new CompoundTag();
+                    data.putInt("counter", 42);
+                    nbt.put("data", data);
+                    EntityDataUtils.load(entity, nbt);
+                    var packet = new AxiomServerboundSpawnEntity(List.of(
+                            new SpawnEntry(copy, target.get(), 45, 10, source.get(), null)));
+                    var before = runtime.mutations().builderSnapshot();
+                    var freeze = runtime.freeze().acquire();
+                    try {
+                        packet.handle(helper.getLevel().getServer(), player.get());
+                        helper.assertTrue(helper.getLevel().getEntity(copy) == null, "Frozen Axiom copy was spawned");
+                        helper.assertValueEqual(before, runtime.mutations().builderSnapshot(), "Rejected spawn dirtied the builder draft");
+                    } finally {
+                        freeze.release();
+                    }
+                    packet.handle(helper.getLevel().getServer(), player.get());
+                    assertCopiedMarker(helper, copy, source.get(), target.get());
+                    var beforeDuplicate = runtime.mutations().builderSnapshot();
+                    packet.handle(helper.getLevel().getServer(), player.get());
+                    helper.assertValueEqual(beforeDuplicate, runtime.mutations().builderSnapshot(),
+                            "Duplicate UUID spawn advanced builder generations");
+                    operation.set(runtime.startLiveAction(player.get().getUUID(),
+                            LiveActionJournal.Direction.UNDO, ignored -> { }));
+                })
+                .thenWaitUntil(() -> helper.assertFalse(runtime.operations().hasActiveOperation(), "Copy Undo is active"))
+                .thenExecute(() -> {
+                    helper.assertValueEqual(MutationTerminalState.SUCCEEDED, operation.get().terminalState(), "Axiom copy Undo failed");
+                    helper.assertTrue(helper.getLevel().getEntity(copy) == null
+                            && helper.getLevel().getEntity(source.get()) != null, "Copy Undo changed the source or retained the copy");
+                    operation.set(runtime.startLiveAction(player.get().getUUID(),
+                            LiveActionJournal.Direction.REDO, ignored -> { }));
+                })
+                .thenWaitUntil(() -> helper.assertFalse(runtime.operations().hasActiveOperation(), "Copy Redo is active"))
+                .thenExecute(() -> {
+                    helper.assertValueEqual(MutationTerminalState.SUCCEEDED, operation.get().terminalState(), "Axiom copy Redo failed");
+                    assertCopiedMarker(helper, copy, source.get(), target.get());
+                    helper.getLevel().getEntity(copy).discard();
+                    helper.getLevel().getEntity(source.get()).discard();
+                    LumiAxiomGameTests.deactivateAxiom(player.get());
+                    helper.getLevel().getServer().getPlayerList().deop(player.get().nameAndId());
+                    helper.getLevel().getServer().getPlayerList().remove(player.get());
+                    LumiGameTestLease.release(test);
+                })
+                .thenSucceed();
+    }
+
+    private static void assertCopiedMarker(GameTestHelper helper, UUID copy, UUID source, Vec3 position) {
+        Entity entity = helper.getLevel().getEntity(copy);
+        helper.assertTrue(entity != null && entity.getType() == EntityType.MARKER, "Axiom copy identity/type differs");
+        helper.assertValueEqual(position, entity.position(), "Axiom copy position differs");
+        helper.assertTrue(EntityDataUtils.saveWithoutId(entity).getCompoundOrEmpty("data").getIntOr("counter", -1) == 42,
+                "Axiom copy lost source marker NBT");
+        helper.assertTrue(helper.getLevel().getEntity(source) != null, "Axiom copy removed its source");
     }
 
     private record MarkerFixture(UUID id, Vec3 position, float yaw, float pitch) {
