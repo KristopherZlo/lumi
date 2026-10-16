@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "lumi-observation",
+  "version": "1.0.0",
+  "name": "Lumi ordinary client measurement (test only)",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["io.github.lumi.observation.OrdinaryClientObservation"]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.2",
+    "fabric-lifecycle-events-v1": "*",
+    "java": ">=${java_version}"
+  }
+}
