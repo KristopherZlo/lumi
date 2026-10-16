@@ -4,6 +4,7 @@ import com.moulberry.axiom.AxiomServer;
 import com.moulberry.axiom.packets.AxiomServerboundSetBuffer;
 import com.moulberry.axiom.packets.AxiomServerboundSetBlock;
 import com.moulberry.axiom.restrictions.AxiomPermission;
+import com.moulberry.axiom.render.regions.ChunkedBooleanRegion;
 import com.moulberry.axiom.world_modification.BlockBuffer;
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.service.LiveActionJournal;
@@ -202,6 +203,22 @@ public final class LumiAxiomGameTests {
                     player.set(helper.makeMockServerPlayerInLevel());
                     helper.setBlock(FIRST, Blocks.STONE);
                     helper.setBlock(SECOND, Blocks.STONE);
+                    var builderBefore = runtime.mutations().builderSnapshot();
+                    var freeze = runtime.freeze().acquire();
+                    try {
+                        applyBuffer(helper, null, FIRST, Blocks.GOLD_BLOCK.defaultBlockState());
+                        applyBuffer(helper, player.get(), SECOND,
+                                Blocks.GOLD_BLOCK.defaultBlockState());
+                        helper.assertBlockState(FIRST, Blocks.STONE.defaultBlockState());
+                        helper.assertBlockState(SECOND, Blocks.STONE.defaultBlockState());
+                    } finally {
+                        freeze.release();
+                    }
+                    applyBuffer(helper, null, FIRST, Blocks.GOLD_BLOCK.defaultBlockState());
+                    helper.assertBlockState(FIRST, Blocks.STONE.defaultBlockState());
+                    helper.assertValueEqual(builderBefore,
+                            runtime.mutations().builderSnapshot(),
+                            "Rejected Axiom buffers must not change builder generations");
                     applyBuffer(helper, player.get());
                     helper.assertBlockState(FIRST, Blocks.GOLD_BLOCK.defaultBlockState());
                     helper.assertBlockState(SECOND, Blocks.GOLD_BLOCK.defaultBlockState());
@@ -284,8 +301,17 @@ public final class LumiAxiomGameTests {
         BlockPos second = helper.absolutePos(SECOND);
         buffer.set(first.getX(), first.getY(), first.getZ(), Blocks.GOLD_BLOCK.defaultBlockState());
         buffer.set(second.getX(), second.getY(), second.getZ(), Blocks.GOLD_BLOCK.defaultBlockState());
-        AxiomServerboundSetBuffer.applyBlockBufferServer(
-                buffer, helper.getLevel(), null, player);
+        var changedRegion = new ChunkedBooleanRegion();
+        try {
+            AxiomServerboundSetBuffer.applyBlockBufferServer(
+                    buffer, helper.getLevel(), changedRegion, player);
+            helper.assertTrue(changedRegion.contains(first.getX(), first.getY(), first.getZ())
+                            && changedRegion.contains(second.getX(), second.getY(), second.getZ())
+                            && changedRegion.count() == 2,
+                    "Axiom must populate the initially empty output region");
+        } finally {
+            changedRegion.close();
+        }
     }
 
     private static void applyCurrentBuffer(GameTestHelper helper, ServerPlayer player) {

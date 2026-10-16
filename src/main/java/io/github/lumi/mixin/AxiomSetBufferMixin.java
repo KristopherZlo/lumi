@@ -35,15 +35,15 @@ abstract class AxiomSetBufferMixin {
     private static void lumi$trackBuffer(
             BlockBuffer buffer,
             ServerLevel level,
-            ChunkedBooleanRegion mask,
+            ChunkedBooleanRegion changedRegion,
             ServerPlayer player,
             Operation<Void> original) {
         FabricDimensionRuntime runtime = LumiMod.serverRuntime().find(level).orElse(null);
-        if (runtime == null || player == null) {
-            original.call(buffer, level, mask, player);
+        if (runtime == null) {
+            original.call(buffer, level, changedRegion, player);
             return;
         }
-        if (!runtime.freeze().isMutationAllowed()) {
+        if (player == null || !runtime.freeze().isMutationAllowed()) {
             return;
         }
         Map<BlockPosition, BlockSnapshot> before = new LinkedHashMap<>();
@@ -52,11 +52,11 @@ abstract class AxiomSetBufferMixin {
                 runtime.liveActions(), player.getUUID())) {
             UUID action = DirectLiveActionContext.current(runtime.liveActions()).orElseThrow();
             boolean exactCapture = captureBefore(
-                    buffer, mask, runtime, action, before, sections);
+                    buffer, runtime, action, before, sections);
             Map<SectionKey, Long> generations =
                     registerDurability(level, runtime, sections);
             try {
-                original.call(buffer, level, mask, player);
+                original.call(buffer, level, changedRegion, player);
             } finally {
                 if (exactCapture) {
                     recordAfter(runtime, action, before, generations);
@@ -70,7 +70,6 @@ abstract class AxiomSetBufferMixin {
 
     private static boolean captureBefore(
             BlockBuffer buffer,
-            ChunkedBooleanRegion mask,
             FabricDimensionRuntime runtime,
             UUID action,
             Map<BlockPosition, BlockSnapshot> before,
@@ -82,7 +81,7 @@ abstract class AxiomSetBufferMixin {
                     action, "Axiom edit exceeded its live capture limit");
         }
         buffer.forEach((x, y, z, state) -> {
-            if (state == BlockBuffer.EMPTY_STATE || mask != null && !mask.contains(x, y, z)) {
+            if (state == BlockBuffer.EMPTY_STATE) {
                 return;
             }
             BlockPosition position = new BlockPosition(x, y, z);
