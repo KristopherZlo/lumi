@@ -84,6 +84,12 @@ public final class LumiServerNetworking {
     private LumiServerNetworking() { }
 
     public static void register() {
+        PayloadTypeRegistry.playS2C().register(BuilderToolBarrierPayload.TYPE, BuilderToolBarrierPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(BuilderToolBarrierPayload.TYPE, BuilderToolBarrierPayload.CODEC);
+        ServerPlayNetworking.registerGlobalReceiver(BuilderToolBarrierPayload.TYPE, (payload, context) ->
+                context.server().execute(() -> LumiMod.serverRuntime().find(context.player().level())
+                        .flatMap(FabricDimensionRuntime::axiomBarrier)
+                        .ifPresent(barrier -> barrier.acknowledge(context.player(), payload))));
         PayloadTypeRegistry.playC2S().register(
                 HistoryCommandPayload.TYPE, HistoryCommandPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(

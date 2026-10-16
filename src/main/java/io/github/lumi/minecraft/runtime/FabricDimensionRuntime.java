@@ -165,6 +165,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final ServerLevel level;
     private final Path repository;
     private final DimensionFreezeState freeze;
+    private final MinecraftAxiomWorldBarrier axiomBarrier;
     private final DimensionOperationCoordinator operations;
     private final MutationDurabilityTracker mutations;
     private final EntityChunkDurabilityGate entityDurability;
@@ -243,6 +244,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.level = level;
         this.repository = repository;
         this.freeze = freeze;
+        axiomBarrier = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom")
+                ? new MinecraftAxiomWorldBarrier(level) : null;
+        if (axiomBarrier != null) freeze.replacementBarrier(axiomBarrier);
         this.operations = operations;
         this.mutations = mutations;
         this.saves = saves;
@@ -2328,6 +2332,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public ServerLevel level() { return level; }
     public Path repository() { return repository; }
     public DimensionFreezeState freeze() { return freeze; }
+    public Optional<MinecraftAxiomWorldBarrier> axiomBarrier() { return Optional.ofNullable(axiomBarrier); }
     public DimensionOperationCoordinator operations() { return operations; }
     public MutationDurabilityTracker mutations() { return mutations; }
     public SavePreparation savePreparation() { return savePreparation; }
