@@ -19,6 +19,7 @@ final class LumiMultiplayerPeer {
     private final LumiMultiplayerMailbox mailbox;
     private String address;
     private LumiAxiomDispatchTestDriver axiom;
+    private LumiAxiomRemotePendingWork pending;
 
     LumiMultiplayerPeer(ClientGameTestContext context, LumiMultiplayerMailbox mailbox) {
         this.context = context;
@@ -46,6 +47,10 @@ final class LumiMultiplayerPeer {
 
     private void execute(String action, String argument, Properties reply) {
         switch (action) {
+            case "axiom-pending" -> pending = new LumiAxiomRemotePendingWork(context);
+            case "axiom-pending-held" -> pending.awaitHeld();
+            case "axiom-pending-release" -> pending.release();
+            case "axiom-pending-check" -> { pending.assertDrained(); pending.close(); pending = null; }
             case "undo" -> reply.setProperty("request", context.computeOnClient(
                     client -> LumiClient.networking().undo()).toString());
             case "redo" -> reply.setProperty("request", context.computeOnClient(
@@ -81,6 +86,7 @@ final class LumiMultiplayerPeer {
                 reply.setProperty("head", argument);
             }
             case "disconnect", "stop" -> {
+                if (pending != null) { pending.close(); pending = null; }
                 axiom = null;
                 context.runOnClient(client -> client.disconnect(new TitleScreen(), false));
             }

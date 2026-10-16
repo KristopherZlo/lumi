@@ -107,7 +107,7 @@ final class LumiAxiomMultiplayerScenario {
         movePeer("minecraft:the_nether");
         tickPeer();
         // READY must route to the original dimension even though its participant moved.
-        operations.restore("axiom_tcp_handoff", baseline);
+        restore(baseline);
         mailbox.request(context, "axiom-ready", "minecraft:the_nether");
         tickPeer();
         peerAction("undo", false); // A server reply fences the preceding old-dimension TCP packet.
@@ -131,7 +131,7 @@ final class LumiAxiomMultiplayerScenario {
                 throw new AssertionError("Disconnected native producer retained its hold");
             }
         });
-        operations.restore("axiom_tcp_disconnect", baseline);
+        restore(baseline);
         mailbox.request(context, "connect", "");
         mailbox.request(context, "axiom-ready", "minecraft:overworld");
         beginPeer(PEER);
@@ -142,6 +142,27 @@ final class LumiAxiomMultiplayerScenario {
         operations.awaitDurability("axiom_tcp_complete");
         report.event("gate", "axiom_tcp_handoff_reconnect", "succeeded", 0, 0,
                 "moved participant ACK; old-dimension packets refused; disconnect releases hold; new connection edits and Undo");
+
+        local.begin(OWNER, Blocks.GOLD_BLOCK.defaultBlockState());
+        for (int packet = 1; packet <= 3; packet++) { local.tick(); awaitPackets(OWNER, Blocks.GOLD_BLOCK, packet); }
+        awaitComplete();
+        mailbox.request(context, "axiom-pending", "");
+        UUID replacing = context.computeOnClient(client -> LumiClient.networking().restore(baseline));
+        mailbox.request(context, "axiom-pending-held", "");
+        server.runOnServer(minecraft -> {
+            var runtime = runtime(minecraft);
+            if (!runtime.freeze().isFrozen() || !runtime.operations().hasActiveOperation()
+                    || runtime.recoveryJournal().isPresent()
+                    || !minecraft.overworld().getBlockState(OWNER).is(Blocks.GOLD_BLOCK)) {
+                throw new AssertionError("Remote worker did not hold admission before journal creation/world writes");
+            }
+        });
+        mailbox.request(context, "axiom-pending-release", "");
+        succeeded(replacing);
+        mailbox.request(context, "axiom-pending-check", "");
+        snapshot("axiom_tcp_pending").assertMatches(before, "Remote stale calculation changed completed Restore");
+        report.event("gate", "axiom_tcp_pending_work", "succeeded", 0, 0,
+                "remote native worker ignores cancellation; admission held before writes; late tails before/after READY drained; history invalidated");
     }
 
     private void beginPeer(BlockPos origin) throws IOException {
@@ -167,10 +188,23 @@ final class LumiAxiomMultiplayerScenario {
     }
 
     private void reset(CommitId baseline, LumiWorldSnapshot before) throws IOException {
-        operations.restore("axiom_tcp_reset", baseline);
+        restore(baseline);
         snapshot("axiom_tcp_reset").assertMatches(before, "TCP fixture reset was inexact");
         new LumiAxiomDispatchTestDriver(context).ready("minecraft:overworld");
         mailbox.request(context, "axiom-ready", "minecraft:overworld");
+    }
+
+    private void restore(CommitId target) {
+        // These fixture resets qualify TCP admission; UI interaction has a separate gate.
+        succeeded(context.computeOnClient(client -> LumiClient.networking().restore(target)));
+    }
+
+    private void succeeded(UUID request) {
+        context.waitFor(client -> terminal(LumiClient.history().state().events().get(request)), 2400);
+        var event = context.computeOnClient(client -> LumiClient.history().state().events().get(request));
+        if (event.state() != OperationEventPayload.State.SUCCEEDED) throw new AssertionError(event.toString());
+        await(() -> server.computeOnServer(minecraft -> !runtime(minecraft).operations().hasActiveOperation()
+                && !runtime(minecraft).freeze().isFrozen()), "TCP operation did not release its dimension");
     }
 
     private void assertArriving(UUID actor) {

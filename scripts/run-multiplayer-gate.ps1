@@ -120,7 +120,7 @@ try {
             throw "Clients exited without the multiplayer gate: $taskRun"
         }
         if (@($taskLaunch.mods | Where-Object { $_ -match '-gametest-(axiom|both)\.jar$' }).Count) {
-            foreach ($taskGate in @('axiom_tcp_split_dispatch', 'axiom_tcp_overlap', 'axiom_tcp_handoff_reconnect')) {
+            foreach ($taskGate in @('axiom_tcp_split_dispatch', 'axiom_tcp_overlap', 'axiom_tcp_handoff_reconnect', 'axiom_tcp_pending_work')) {
                 if (-not (Select-String -LiteralPath (Join-Path $taskRun 'owner/stdout.log') -SimpleMatch "Behavior gate ${taskGate}: succeeded (" -Quiet)) {
                     throw "Clients exited without the native Axiom TCP assertion ${taskGate}: $taskRun"
                 }

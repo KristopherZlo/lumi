@@ -57,6 +57,11 @@ final class LumiAxiomPendingWork implements AutoCloseable {
     private Thread controller;
 
     LumiAxiomPendingWork(ClientGameTestContext context, FabricDimensionRuntime runtime, BlockPos ghost) {
+        this(context, () -> runtime.freeze().isFrozen() && runtime.operations().hasActiveOperation(), ghost, () -> { });
+    }
+
+    LumiAxiomPendingWork(ClientGameTestContext context, java.util.function.BooleanSupplier admissionHeld,
+            BlockPos ghost, Runnable beforeRelease) {
         this.context = context;
         context.runOnClient(client -> {
             try {
@@ -117,9 +122,10 @@ final class LumiAxiomPendingWork implements AutoCloseable {
                         });
                         await(queued, "Stale native queue tail was not injected");
                         if (release.await(200, TimeUnit.MILLISECONDS)) throw new AssertionError("Fixture released too early");
-                        if (!runtime.freeze().isFrozen() || !runtime.operations().hasActiveOperation()) {
+                        if (!admissionHeld.getAsBoolean()) {
                             throw new AssertionError("World replacement ended before the cancelled worker actually stopped");
                         }
+                        beforeRelease.run();
                     } catch (Throwable failed) {
                         failure.set(failed);
                     } finally {
