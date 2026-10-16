@@ -47,6 +47,7 @@ foreach ($taskTarget in $taskCatalog.targets) {
 }
 New-Item -ItemType Directory -Path $taskOutput | Out-Null
 $taskMatrix = [ordered]@{ schema = 1; status = 'running'; candidate = $taskCandidate; routes = @() }
+$taskMatrix | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $taskOutput 'matrix.json') -Encoding UTF8
 Push-Location $taskRepo
 try {
     for ($taskTargetIndex = 1; $taskTargetIndex -lt $taskGames.Count; $taskTargetIndex++) {

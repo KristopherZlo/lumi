@@ -202,6 +202,7 @@ def requestedClientSuite = System.getProperty('lumi.gametest.suite', 'SMOKE').to
         description = 'Runs the distributable JAR through the production client launcher and certifies its loaded origin'
         javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(target.javaVersion()) }
         runDir = clientDirectory
+        jvmArgs.add(clientDirectory.map { "-XX:ErrorFile=${it.file('hs_err_pid%p.log').asFile.absolutePath}" })
         mods.setFrom(artifact, configurations.packagedTestMods, testApi, configurations.packagedClientGameTestApi, productionTestJar)
         jvmArgs.addAll(benchmark ? '-Xmx' + System.getProperty('lumi.benchmark.heap', '2G') : '-Xmx2G', '-Dfabric.client.gametest', '-Dfabric.client.gametest.disableNetworkSynchronizer=true')
         System.properties.findAll { name, ignored -> name.toString().startsWith('lumi.') }.each { name, value ->
@@ -301,6 +302,7 @@ tasks.register('runVanillaReopenGameTest', lumiClientProductionRunTaskType) {
     description = 'Opens a completed Restore without Lumi and compares it with an independent vanilla world'
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(target.javaVersion()) }
     runDir = vanillaDirectory
+    jvmArgs.add(vanillaDirectory.map { "-XX:ErrorFile=${it.file('hs_err_pid%p.log').asFile.absolutePath}" })
     mods.setFrom(configurations.vanillaReopenMods, testApi, configurations.packagedClientGameTestApi, vanillaProductionJar)
     def fixture = System.getProperty('lumi.gametest.upgrade.fixture', '')
     jvmArgs.addAll('-Xmx2G', '-Dfabric.client.gametest', '-Dfabric.client.gametest.disableNetworkSynchronizer=true',

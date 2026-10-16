@@ -18,6 +18,7 @@ $taskGames = @($taskCatalog.targets.minecraftVersions | Sort-Object { [version]$
 if ($taskGames.Count -lt 2) { throw 'An upgrade chain requires at least two games.' }
 New-Item -ItemType Directory -Path $taskOutput | Out-Null
 $taskChain = [ordered]@{ schema = 1; status = 'running'; candidate = $taskCandidate; games = $taskGames; steps = @() }
+$taskChain | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $taskOutput 'chain.json') -Encoding UTF8
 Push-Location $taskRepo
 try {
     for ($taskIndex = 1; $taskIndex -lt $taskGames.Count; $taskIndex++) {
