@@ -11,6 +11,12 @@ $ErrorActionPreference = 'Stop'
 if (-not $RunMinecraft) {
     throw 'No tests started. This gate opens Minecraft windows and uses CPU/GPU. Pass -RunMinecraft only when the computer is available for testing.'
 }
+$taskHost = [Diagnostics.Process]::GetCurrentProcess()
+$taskHost.ProcessorAffinity = [IntPtr]3
+$taskHost.PriorityClass = 'BelowNormal'
+if ((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory -lt 4GB/1KB) {
+    throw 'Multiplayer gate needs at least 4 GiB free physical memory; no clients started.'
+}
 . (Join-Path $PSScriptRoot 'CrashMatrixDefinition.ps1')
 . (Join-Path $PSScriptRoot 'MinecraftVerificationTarget.ps1')
 $taskRepo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -26,6 +32,9 @@ try {
     & (Join-Path $taskRepo 'gradlew.bat') @taskPrepare --no-daemon
     $ErrorActionPreference = 'Stop'
     if ($LASTEXITCODE -ne 0) { throw 'Multiplayer launch preparation failed.' }
+    if ((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory -lt 4GB/1KB) {
+        throw 'Multiplayer gate needs at least 4 GiB free physical memory; no clients started.'
+    }
     $taskLaunch = Get-Content -LiteralPath (Join-Path $taskBuild 'multiplayer-launch.inputs.json') -Raw | ConvertFrom-Json
     if (-not $Java) { $Java = $taskLaunch.javaExecutable }
     if (-not $Java -or -not (Test-Path -LiteralPath $Java)) { throw "A JDK $($taskProfile[0].javaVersion) java.exe is required." }
@@ -49,6 +58,7 @@ try {
         dirty = [bool](& git status --porcelain)
         buildProperties = @((Get-Content -LiteralPath (Join-Path $taskRepo 'gradle.properties')) | ForEach-Object { [string]$_ })
         minecraftTarget = $taskLaunch.target; artifact = $taskLaunch.artifact; inputFingerprint = $taskFingerprint
+        resourceBudget = @{ processors = 2; clientHeap = '1G'; priority = 'BelowNormal'; abortFreeMemory = '1GiB' }
     }
     $taskManifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $taskRun 'manifest.json') -Encoding UTF8
     $taskProcesses = @()
@@ -63,8 +73,10 @@ try {
             New-Item -ItemType Directory -Path $taskTempDirectory | Out-Null
             # The project already accepts the test-server EULA in fabricApi.configureTests.
             [IO.File]::WriteAllText((Join-Path $taskGameDirectory 'eula.txt'), "eula=true`n")
-            $taskArguments = Get-Content -LiteralPath (Join-Path $taskBuild 'multiplayer-launch.args')
-            $taskExtra = @(('-Djava.io.tmpdir=' + $taskTempDirectory), '-Dlumi.gametest.suite=MULTIPLAYER',
+            $taskArguments = @(Get-Content -LiteralPath (Join-Path $taskBuild 'multiplayer-launch.args') |
+                Where-Object { $_ -notmatch '^"?-Xmx' })
+            $taskExtra = @('-Xmx1G', '-XX:ActiveProcessorCount=2',
+                ('-Djava.io.tmpdir=' + $taskTempDirectory), '-Dlumi.gametest.suite=MULTIPLAYER',
                 ('-Dlumi.multiplayer.role=' + $taskRole),
                 ('-Dlumi.multiplayer.mailbox=' + $taskMailbox))
             if ($taskProduction) {
@@ -85,6 +97,9 @@ try {
         }
         $taskDeadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
         while ($true) {
+            if ((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory -lt 1GB/1KB) {
+                throw "Resource abort: less than 1 GiB free physical memory: $taskRun"
+            }
             foreach ($taskLog in $taskLogs) {
                 if (Select-String -LiteralPath $taskLog -SimpleMatch 'Client gametests failed with an exception' -Quiet) {
                     throw "Client GameTest failed: $taskLog"
@@ -103,6 +118,13 @@ try {
         }
         if (-not (Select-String -LiteralPath (Join-Path $taskRun 'owner/stdout.log') -SimpleMatch 'multiplayer_shared_history: succeeded' -Quiet)) {
             throw "Clients exited without the multiplayer gate: $taskRun"
+        }
+        if (@($taskLaunch.mods | Where-Object { $_ -match '-gametest-(axiom|both)\.jar$' }).Count) {
+            foreach ($taskGate in @('axiom_tcp_split_dispatch', 'axiom_tcp_overlap', 'axiom_tcp_handoff_reconnect')) {
+                if (-not (Select-String -LiteralPath (Join-Path $taskRun 'owner/stdout.log') -SimpleMatch "Behavior gate ${taskGate}: succeeded (" -Quiet)) {
+                    throw "Clients exited without the native Axiom TCP assertion ${taskGate}: $taskRun"
+                }
+            }
         }
         if ($taskProduction) {
             foreach ($taskRole in @('owner', 'peer')) {
@@ -123,7 +145,7 @@ try {
     } finally {
         foreach ($taskProcess in $taskProcesses) {
             $taskProcess.Refresh()
-            if (-not $taskProcess.HasExited) { Stop-Process -Id $taskProcess.Id -Force }
+            if (-not $taskProcess.HasExited) { $taskProcess.Kill(); $taskProcess.WaitForExit() }
         }
         $taskManifest.finishedUtc = [DateTime]::UtcNow.ToString('o')
         $taskManifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $taskRun 'manifest.json') -Encoding UTF8
