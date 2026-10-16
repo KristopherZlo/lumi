@@ -12,7 +12,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Blocks;
 
-/** Real client tool packets followed by exact history operations and native reopen. */
+/** Real client tool entry points followed by exact history operations and native reopen. */
 @SuppressWarnings("UnstableApiUsage")
 public final class LumiBuilderToolsClientGameTest implements FabricClientGameTest {
     private BlockPos origin;
@@ -49,6 +49,9 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
         });
         area = List.of(new BlockBox(origin.getX(), origin.getY(), origin.getZ(),
                 origin.getX() + 5, origin.getY(), origin.getZ()));
+        var operations = new LumiBehaviorOperations(context, server, report);
+        operations.awaitDurability("tools_fixture");
+        operations.save("tools-baseline", area);
         if (loaded("worldedit")) {
             exerciseTool(context, world, report, "worldedit", origin, () -> {
                 context.runOnClient(client -> {
@@ -61,7 +64,7 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
         if (loaded("axiom")) {
             BlockPos target = origin.offset(4, 0, 0);
             exerciseTool(context, world, report, "axiom", target,
-                    () -> context.runOnClient(client -> AxiomPackets.send(client, target)));
+                    () -> context.runOnClient(client -> AxiomClientEdits.apply(target)));
         }
         expected = new LumiBehaviorChecks(context, world, report).snapshot("tools_final", area);
         report.assertNoRuntimeFailures();
@@ -73,7 +76,11 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
         var operations = new LumiBehaviorOperations(context, server, report);
         var checks = new LumiBehaviorChecks(context, world, report);
         operations.awaitDurability(tool + "_baseline");
-        var baseline = operations.save(tool + "-before", area);
+        if (operations.pendingBuilderKeyCount() != 0) {
+            throw new AssertionError(tool + " baseline has unsaved builder edits");
+        }
+        var baseline = new LumiBehaviorOperations.SavedBoundary(
+                operations.activeCommit(), checks.snapshot(tool + "_baseline", area));
         edit.run();
         for (int tick = 0; ; tick++) {
             if (server.computeOnServer(minecraft -> {
@@ -105,7 +112,7 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
         checks.assertSnapshot(tool + "_restore_after", area, edited.snapshot());
         checks.finish();
         report.event("gate", tool + "_client_history", "succeeded", 0, 0,
-                "client packets;2 blocks;Compare;Undo;Redo;Save;Restore");
+                "client tool entry point;2 blocks;Compare;Undo;Redo;Save;Restore");
     }
 
     private void reopened(ClientGameTestContext context, TestSingleplayerContext world,
@@ -126,13 +133,12 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
     }
 
     /** Keeps Axiom linkage out of a WorldEdit-only JVM. */
-    private static final class AxiomPackets {
-        private static void send(net.minecraft.client.Minecraft client, BlockPos position) {
+    private static final class AxiomClientEdits {
+        private static void apply(BlockPos position) {
             var buffer = new com.moulberry.axiom.world_modification.BlockBuffer();
             for (int x = 0; x < 2; x++) buffer.set(position.getX() + x,
                     position.getY(), position.getZ(), Blocks.GOLD_BLOCK.defaultBlockState());
-            new com.moulberry.axiom.packets.AxiomServerboundSetBuffer(
-                    client.level.dimension(), buffer, 0).send();
+            com.moulberry.axiom.world_modification.Dispatcher.applyBlockBuffer(buffer, false);
         }
     }
 }
