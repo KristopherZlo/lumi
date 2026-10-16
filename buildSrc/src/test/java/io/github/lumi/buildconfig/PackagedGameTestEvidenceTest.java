@@ -66,7 +66,10 @@ class PackagedGameTestEvidenceTest {
         assertThrows(IOException.class, () -> evidence.verifyClientCases(completion, "BUILDER_TOOLS", "axiom"));
         Files.writeString(log, "Behavior gate axiom_editor_ui: succeeded (0 ticks)\n",
                 java.nio.file.StandardOpenOption.APPEND);
-        assertEquals(6, evidence.verifyClientCases(completion, "BUILDER_TOOLS", "axiom").size());
+        assertThrows(IOException.class, () -> evidence.verifyClientCases(completion, "BUILDER_TOOLS", "axiom"));
+        Files.writeString(log, "Behavior gate axiom_editor_depth: succeeded (0 ticks)\n",
+                java.nio.file.StandardOpenOption.APPEND);
+        assertEquals(7, evidence.verifyClientCases(completion, "BUILDER_TOOLS", "axiom").size());
         assertThrows(IOException.class, () -> evidence.verifyClientCases(completion, "ALL", "both"));
     }
 
@@ -78,7 +81,10 @@ class PackagedGameTestEvidenceTest {
         Files.writeString(log, "Behavior gate builder_tools_reopen: succeeded (0 ticks)\n");
         assertThrows(IOException.class, () -> evidence.verifyClientCases(completion, "AXIOM_EDITOR", "axiom"));
         Files.writeString(log, "Behavior gate axiom_editor_ui: succeeded (0 ticks)\n");
-        assertEquals(1, evidence.verifyClientCases(completion, "AXIOM_EDITOR", "axiom").size());
+        assertThrows(IOException.class, () -> evidence.verifyClientCases(completion, "AXIOM_EDITOR", "axiom"));
+        Files.writeString(log, "Behavior gate axiom_editor_depth: succeeded (0 ticks)\n",
+                java.nio.file.StandardOpenOption.APPEND);
+        assertEquals(2, evidence.verifyClientCases(completion, "AXIOM_EDITOR", "axiom").size());
         assertThrows(IOException.class, () -> evidence.verifyClientCases(completion, "BUILDER_TOOLS", "axiom"));
     }
 

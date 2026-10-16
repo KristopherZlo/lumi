@@ -25,7 +25,7 @@ public final class PackagedGameTestEvidence {
             case "RECOVERY" -> List.of("gate recovery_reopen");
             case "SMOKE" -> List.of("gate first_minute", "gate first_minute_reopen");
             case "BUILDER_TOOLS" -> List.of("gate builder_tools_reopen");
-            case "AXIOM_EDITOR" -> List.of("gate axiom_editor_ui");
+            case "AXIOM_EDITOR" -> List.of("gate axiom_editor_ui", "gate axiom_editor_depth");
             case "INTERACTION" -> List.of("gate single_click_interactions");
             default -> List.of();
         });
@@ -39,6 +39,7 @@ public final class PackagedGameTestEvidence {
                 expected.add("gate axiom_pending_work");
                 expected.add("gate axiom_split_dispatch");
                 expected.add("gate axiom_editor_ui");
+                expected.add("gate axiom_editor_depth");
             }
         }
         if (!expected.isEmpty()) {

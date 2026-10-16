@@ -38,18 +38,9 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
     @Override
     public void runTest(ClientGameTestContext context) {
         if (!"COMPARE_RENDER".equalsIgnoreCase(System.getProperty("lumi.gametest.suite"))) return;
-        WorldRenderEvents.END_MAIN.register(this::render);
-        //? if >=26.1 {
-        /*WorldRenderEvents.END_EXTRACTION.register(extracted ->
-                renderer.setFrustum(extracted.levelState().cameraRenderState.cullFrustum));
-        *///?} else {
-        WorldRenderEvents.END_EXTRACTION.register(extracted -> renderer.setFrustum(extracted.frustum()));
-        //?}
+        initialize(context);
         int previousLimit = context.computeOnClient(client -> client.options.framerateLimit().get());
         Path denseXrayScreenshot = null;
-        context.runOnClient(client -> {
-            benchmarkFog = new FogRenderer();
-        });
         try (var world = context.worldBuilder().adjustSettings(settings -> {
             settings.setName("Lumi Compare render benchmark");
             settings.setSeed("710");
@@ -124,14 +115,8 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
                 if (renderer.cachedBytes() != 0) throw new AssertionError("Compare exceeded its zero-byte cache budget");
             });
         } finally {
-            context.runOnClient(client -> {
-                active = false;
-                pending.forEach(sample -> sample.query().close());
-                pending.clear();
-                benchmarkFog.close();
-                renderer.close();
-                client.options.framerateLimit().set(previousLimit);
-            });
+            close(context);
+            context.runOnClient(client -> client.options.framerateLimit().set(previousLimit));
         }
         try {
             Path output = FabricLoader.getInstance().getGameDir()
@@ -153,6 +138,38 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
         } catch (Exception failed) {
             throw new IllegalStateException("Cannot write Compare render measurements", failed);
         }
+    }
+
+    /** Runs only the existing controlled-wall regression in the caller's world. */
+    public void verifyDepth(ClientGameTestContext context,
+            net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext world) {
+        initialize(context);
+        try {
+            assertDepthOcclusion(context, world);
+        } finally {
+            close(context);
+        }
+    }
+
+    private void initialize(ClientGameTestContext context) {
+        WorldRenderEvents.END_MAIN.register(this::render);
+        //? if >=26.1 {
+        /*WorldRenderEvents.END_EXTRACTION.register(extracted ->
+                renderer.setFrustum(extracted.levelState().cameraRenderState.cullFrustum));
+        *///?} else {
+        WorldRenderEvents.END_EXTRACTION.register(extracted -> renderer.setFrustum(extracted.frustum()));
+        //?}
+        context.runOnClient(client -> benchmarkFog = new FogRenderer());
+    }
+
+    private void close(ClientGameTestContext context) {
+        context.runOnClient(client -> {
+            active = false;
+            pending.forEach(sample -> sample.query().close());
+            pending.clear();
+            benchmarkFog.close();
+            renderer.close();
+        });
     }
 
     private void render(WorldRenderContext context) {

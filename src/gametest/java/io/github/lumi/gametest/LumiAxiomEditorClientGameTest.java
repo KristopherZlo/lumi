@@ -1,14 +1,18 @@
 package io.github.lumi.gametest;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.moulberry.axiom.editor.EditorUI;
+import io.github.lumi.client.LumiCompareRenderClientGameTest;
 import io.github.lumi.client.ui.LumiHotkeyScreen;
 import io.github.lumi.client.ui.LumiUiScale;
 import java.util.Arrays;
 import java.util.List;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
+import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Exercises native mouse routing with Axiom's actual editor viewport enabled. */
@@ -21,12 +25,12 @@ public final class LumiAxiomEditorClientGameTest implements FabricClientGameTest
         try (var ignored = LumiUiScaleTestScope.readableViewport()) {
             LumiClientBehaviorWorld.run(context, "axiom-editor", (client, world, report) -> {
                 new LumiUiTestDriver(client).completeOnboardingIfShown();
-                run(client, report);
+                run(client, world, report);
             });
         }
     }
 
-    void run(ClientGameTestContext context, LumiBehaviorReport report) {
+    void run(ClientGameTestContext context, TestSingleplayerContext world, LumiBehaviorReport report) {
         int previousScale = context.computeOnClient(client -> client.options.guiScale().get());
         int[] previousSize = context.computeOnClient(client -> new int[] {
                 client.getWindow().getWidth(), client.getWindow().getHeight() });
@@ -51,10 +55,7 @@ public final class LumiAxiomEditorClientGameTest implements FabricClientGameTest
                                 throw new AssertionError("Lumi screen or actual Axiom editor state changed");
                             }
                             var screen = client.screen;
-                            String label = Component.translatable("luma.action.close").getString();
-                            Button close = screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast)
-                                    .filter(button -> button.active && button.visible && button.getMessage().getString().equals(label))
-                                    .findFirst().orElseThrow(() -> new AssertionError("Missing visible close control"));
+                            Button close = closeButton(screen);
                             int x = close.getX() + close.getWidth() / 2;
                             int y = close.getY() + close.getHeight() / 2;
                             if (x < 0 || y < 0 || x >= screen.width || y >= screen.height) {
@@ -68,9 +69,19 @@ public final class LumiAxiomEditorClientGameTest implements FabricClientGameTest
                         previous = layout;
                         String name = "axiom-editor-" + editor + "-" + size[0] + "x" + size[1] + "-gui" + scale;
                         context.takeScreenshot(name);
-                        int targetScale = LumiUiScale.current().targetGuiScale();
-                        context.getInput().setCursorPos(layout[2] * targetScale, layout[3] * targetScale);
-                        context.getInput().pressMouse(0);
+                        double[] cursor = context.computeOnClient(client -> {
+                            var window = client.getWindow();
+                            float renderScale = LumiUiScale.current().renderScale(window.getGuiScale());
+                            return new double[] {
+                                    layout[2] * renderScale * window.getScreenWidth() / window.getGuiScaledWidth(),
+                                    layout[3] * renderScale * window.getScreenHeight() / window.getGuiScaledHeight()};
+                        });
+                        context.getInput().setCursorPos(cursor[0], cursor[1]);
+                        context.waitTicks(2);
+                        if (!context.computeOnClient(client -> closeButton(client.screen).isHovered())) {
+                            throw new AssertionError("Native mouse hover missed " + name);
+                        }
+                        context.getInput().pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
                         context.waitFor(client -> client.screen == null, 200);
                         if (!context.computeOnClient(client -> EditorUI.isActive() == editor)) {
                             throw new AssertionError("Closing Lumi changed the Axiom editor state");
@@ -82,6 +93,12 @@ public final class LumiAxiomEditorClientGameTest implements FabricClientGameTest
             }
             report.event("gate", "axiom_editor_ui", "succeeded", 0, 0,
                     "editor enabled/disabled;two virtual sizes;GUI scales 1/2/4;12 actual mouse clicks;screenshots");
+            new LumiCompareRenderClientGameTest().verifyDepth(context, world);
+            if (!context.computeOnClient(client -> EditorUI.isActive())) {
+                throw new AssertionError("Axiom editor stopped during Compare depth checks");
+            }
+            report.event("gate", "axiom_editor_depth", "succeeded", 0, 0,
+                    "actual editor;controlled opaque wall;normal occlusion;visible X-ray");
         } finally {
             context.setScreen(() -> null);
             context.runOnClient(client -> {
@@ -90,5 +107,12 @@ public final class LumiAxiomEditorClientGameTest implements FabricClientGameTest
             });
             context.getInput().resizeWindow(previousSize[0], previousSize[1]);
         }
+    }
+
+    private static Button closeButton(Screen screen) {
+        String label = Component.translatable("luma.action.close").getString();
+        return screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast)
+                .filter(button -> button.active && button.visible && button.getMessage().getString().equals(label))
+                .findFirst().orElseThrow(() -> new AssertionError("Missing visible close control"));
     }
 }
