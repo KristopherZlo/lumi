@@ -6,12 +6,14 @@ import com.moulberry.axiom.packets.AxiomServerboundSetBlock;
 import com.moulberry.axiom.restrictions.AxiomPermission;
 import com.moulberry.axiom.render.regions.ChunkedBooleanRegion;
 import com.moulberry.axiom.world_modification.BlockBuffer;
+import com.moulberry.axiom.world_modification.CompressedBlockEntity;
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.operation.DimensionMutation;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
+import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -28,8 +30,12 @@ import net.minecraft.server.permissions.LevelBasedPermissionSet;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.item.PrimedTnt;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -293,6 +299,98 @@ public final class LumiAxiomGameTests {
                     releasePlayer(helper, player.get(), test);
                 })
                 .thenSucceed();
+    }
+
+    @GameTest(maxTicks = 300000)
+    public void axiomBufferNbtOnlySpansSectionsAndHonorsPermissions(GameTestHelper helper) {
+        FabricDimensionRuntime runtime = runtime(helper);
+        UUID test = UUID.randomUUID();
+        AtomicReference<ServerPlayer> player = new AtomicReference<>();
+        AtomicReference<DimensionMutation> undo = new AtomicReference<>();
+        AtomicReference<DimensionMutation> redo = new AtomicReference<>();
+        List<BlockPos> positions = List.of(FIRST, FIRST.above(16));
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
+                .thenExecute(() -> {
+                    player.set(helper.makeMockServerPlayerInLevel());
+                    for (BlockPos position : positions) {
+                        helper.setBlock(position, Blocks.CHEST);
+                        ((ChestBlockEntity) helper.getLevel().getBlockEntity(helper.absolutePos(position)))
+                                .setItem(0, new ItemStack(Items.GOLD_BLOCK, 3));
+                    }
+                    var beforeDenied = runtime.mutations().builderSnapshot();
+                    helper.assertFalse(AxiomServer.canUseAxiom(player.get(), AxiomPermission.BUILD_NBT),
+                            "Denied fixture must lack Axiom NBT permission");
+                    applyChestNbt(helper, player.get(), positions);
+                    assertChestItems(helper, positions, Items.GOLD_BLOCK, 3);
+                    helper.assertValueEqual(beforeDenied, runtime.mutations().builderSnapshot(),
+                            "Denied NBT-only buffer must not advance builder generations");
+                    helper.getLevel().getServer().getPlayerList().op(player.get().nameAndId(),
+                            Optional.of(LevelBasedPermissionSet.OWNER), Optional.empty());
+                    activateAxiom(player.get());
+                    helper.assertTrue(AxiomServer.canUseAxiom(player.get(), AxiomPermission.BUILD_NBT),
+                            "Allowed fixture must have Axiom NBT permission");
+                    applyChestNbt(helper, player.get(), positions);
+                    assertChestItems(helper, positions, Items.DIAMOND, 5);
+                    helper.assertFalse(beforeDenied.equals(runtime.mutations().builderSnapshot()),
+                            "NBT-only Axiom changes must advance builder generations");
+                    undo.set(runtime.startLiveAction(player.get().getUUID(),
+                            LiveActionJournal.Direction.UNDO, ignored -> { }));
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> {
+                    helper.assertValueEqual(MutationTerminalState.SUCCEEDED, undo.get().terminalState(),
+                            "NBT-only Axiom Undo must succeed");
+                    assertChestItems(helper, positions, Items.GOLD_BLOCK, 3);
+                    redo.set(runtime.startLiveAction(player.get().getUUID(),
+                            LiveActionJournal.Direction.REDO, ignored -> { }));
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> {
+                    helper.assertValueEqual(MutationTerminalState.SUCCEEDED, redo.get().terminalState(),
+                            "NBT-only Axiom Redo must succeed");
+                    assertChestItems(helper, positions, Items.DIAMOND, 5);
+                    deactivateAxiom(player.get());
+                    helper.getLevel().getServer().getPlayerList().deop(player.get().nameAndId());
+                    releasePlayer(helper, player.get(), test);
+                })
+                .thenSucceed();
+    }
+
+    private static void applyChestNbt(GameTestHelper helper, ServerPlayer player, List<BlockPos> positions) {
+        BlockBuffer buffer = new BlockBuffer();
+        for (BlockPos relative : positions) {
+            BlockPos position = helper.absolutePos(relative);
+            var chest = (ChestBlockEntity) helper.getLevel().getBlockEntity(position);
+            var tag = chest.saveWithFullMetadata(helper.getLevel().registryAccess());
+            var item = tag.getListOrEmpty("Items").getCompoundOrEmpty(0);
+            item.putString("id", "minecraft:diamond");
+            item.putInt("count", 5);
+            buffer.set(position.getX(), position.getY(), position.getZ(), helper.getLevel().getBlockState(position));
+            buffer.putBlockEntity(position.getX(), position.getY(), position.getZ(),
+                    CompressedBlockEntity.compress(tag, new ByteArrayOutputStream()));
+        }
+        var region = new ChunkedBooleanRegion();
+        try {
+            AxiomServerboundSetBuffer.applyBlockBufferServer(buffer, helper.getLevel(), region, player);
+            for (BlockPos relative : positions) {
+                BlockPos position = helper.absolutePos(relative);
+                helper.assertTrue(region.contains(position.getX(), position.getY(), position.getZ()),
+                        "NBT-only output region omitted an affected section");
+            }
+            helper.assertTrue(region.count() == positions.size(), "Unexpected NBT-only output region size");
+        } finally {
+            region.close();
+        }
+    }
+
+    private static void assertChestItems(GameTestHelper helper, List<BlockPos> positions, Item item, int count) {
+        for (BlockPos position : positions) {
+            helper.assertBlockState(position, Blocks.CHEST.defaultBlockState());
+            var chest = (ChestBlockEntity) helper.getLevel().getBlockEntity(helper.absolutePos(position));
+            helper.assertTrue(chest.getItem(0).is(item) && chest.getItem(0).getCount() == count,
+                    "Unexpected Axiom chest inventory at " + position + ": " + chest.getItem(0));
+        }
     }
 
     private static void applyBuffer(GameTestHelper helper, ServerPlayer player) {

@@ -38,11 +38,8 @@ abstract class AxiomSetBufferMixin {
             ChunkedBooleanRegion changedRegion,
             ServerPlayer player,
             Operation<Void> original) {
-        FabricDimensionRuntime runtime = LumiMod.serverRuntime().find(level).orElse(null);
-        if (runtime == null) {
-            original.call(buffer, level, changedRegion, player);
-            return;
-        }
+        FabricDimensionRuntime runtime = LumiMod.serverRuntime().find(level)
+                .orElseThrow(() -> new IllegalStateException("Lumi dimension runtime is not loaded"));
         if (player == null || !runtime.freeze().isMutationAllowed()) {
             return;
         }
