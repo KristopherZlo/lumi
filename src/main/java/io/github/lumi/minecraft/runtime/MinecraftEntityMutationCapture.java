@@ -24,9 +24,12 @@ public final class MinecraftEntityMutationCapture implements AutoCloseable {
         for (Entity target : targets) {
             Entity root = target.getRootVehicle();
             if (before.containsKey(root.getUUID()) || !MinecraftEntityChunkCapture.isDurableRoot(root)) continue;
-            root.getSelfAndPassengers().forEach(members::add);
-            runtime.entityRemoving(root);
-            runtime.liveEntities().begin(root).ifPresent(pending -> before.put(root.getUUID(), pending));
+            runtime.entityChanging(root);
+            for (Entity member : root.getSelfAndPassengers().toList()) {
+                members.add(member);
+                runtime.liveEntities().beginGraphMember(member)
+                        .ifPresent(pending -> before.put(member.getUUID(), pending));
+            }
         }
     }
 
@@ -36,12 +39,15 @@ public final class MinecraftEntityMutationCapture implements AutoCloseable {
             Entity root = member.getRootVehicle();
             if (!root.isRemoved() && MinecraftEntityChunkCapture.isDurableRoot(root)) roots.add(root);
         }
+        for (Entity root : roots) {
+            var pending = before.get(root.getUUID());
+            if (pending == null || pending.observedBefore().isEmpty()) {
+                runtime.entityAdded(root);
+            }
+        }
         for (var pending : before.values()) runtime.liveEntities().finish(pending);
         for (Entity root : roots) {
-            if (!before.containsKey(root.getUUID())) {
-                runtime.entityAdded(root);
-                runtime.liveEntities().added(root);
-            }
+            if (!before.containsKey(root.getUUID())) runtime.liveEntities().added(root);
         }
     }
 }

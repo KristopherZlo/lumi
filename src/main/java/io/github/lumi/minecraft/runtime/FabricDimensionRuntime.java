@@ -724,6 +724,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     public void entityRemoving(Entity entity) throws IOException {
+        entityChanging(entity);
+    }
+
+    public void entityChanging(Entity entity) throws IOException {
         registerEntityLifecycleMutation(entity, false);
     }
 

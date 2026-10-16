@@ -43,6 +43,15 @@ public final class MinecraftLiveEntityTracker {
     }
 
     public Optional<Pending> begin(Entity entity) throws IOException {
+        return begin(entity, false);
+    }
+
+    /** Seeds passengers as absent roots before a native batch can detach or remove them. */
+    public Optional<Pending> beginGraphMember(Entity entity) throws IOException {
+        return begin(entity, true);
+    }
+
+    private Optional<Pending> begin(Entity entity, boolean graphMember) throws IOException {
         Optional<UUID> action = DirectLiveActionContext.current(journal);
         if (action.isEmpty()) {
             return Optional.empty();
@@ -50,7 +59,7 @@ public final class MinecraftLiveEntityTracker {
         UUID actionId = action.orElseThrow();
         UUID entityId = entity.getUUID();
         Optional<EntityState> observedBefore = world.capture(entity);
-        if (observedBefore.isEmpty()) {
+        if (observedBefore.isEmpty() && !(graphMember && entity.isPassenger())) {
             return Optional.empty();
         }
         Map<UUID, Owned> entities = owned.get(actionId);
