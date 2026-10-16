@@ -14,6 +14,22 @@ import org.junit.jupiter.api.Test;
 
 class MinecraftBuildMetadataTest {
     @Test
+    void everyAdapterStopsFailedGameTestSequencesAndTheServerRun() throws Exception {
+        var targets = JsonParser.parseString(Files.readString(Path.of("gradle/minecraft-targets.json")))
+                .getAsJsonObject().getAsJsonArray("targets");
+        for (var value : targets) {
+            var target = value.getAsJsonObject();
+            Path source = target.get("javaVersion").getAsInt() == 21 ? Path.of("src/gametest/resources")
+                    : Path.of("versions", target.get("id").getAsString(), "src/gametest/resources");
+            var names = JsonParser.parseString(Files.readString(source.resolve("lumi-gametest.mixins.json")))
+                    .getAsJsonObject().getAsJsonArray("mixins").asList().stream()
+                    .map(element -> element.getAsString()).toList();
+            assertTrue(names.contains("GameTestServerFailFastMixin"), source.toString());
+            assertTrue(names.contains("GameTestSequenceFailureMixin"), source.toString());
+        }
+    }
+
+    @Test
     void artifactDependenciesMatchTheSelectedGroupWithoutFutureVersionRanges() throws Exception {
         JsonObject catalog = JsonParser.parseString(Files.readString(
                 Path.of("gradle/minecraft-targets.json"))).getAsJsonObject();

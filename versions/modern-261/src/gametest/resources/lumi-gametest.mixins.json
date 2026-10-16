@@ -20,6 +20,7 @@
     "HistoryUpgradeCrashMixin",
     "ClosingServerExecutionMixin",
     "GameTestServerFailFastMixin",
+    "GameTestSequenceFailureMixin",
     "GameTestServerPositionMixin"
   ],
   "client": [

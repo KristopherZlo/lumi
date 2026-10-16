@@ -5,7 +5,7 @@
   "mixins": ["InteractionTimingMixin", "ServerUsePacketTimingMixin",
     "SavePublicationPauseMixin", "RestoreMutationPauseMixin", "PackCrashMixin",
     "IndexCrashMixin", "AtomicRefCrashMixin", "CommitCrashMixin", "JournalCrashMixin",
-    "RefCrashMixin", "WorkingIndexCrashMixin", "PreviewCrashMixin",
+    "RefCrashMixin", "WorkingIndexCrashMixin", "PreviewCrashMixin", "GameTestSequenceFailureMixin",
     "MergeObjectCrashMixin", "MergeApplyCrashMixin", "HistoryUpgradeCrashMixin", "ClosingServerExecutionMixin", "GameTestServerFailFastMixin", "GameTestServerPositionMixin"],
   "client": ["ClientInteractionTimingMixin", "ClientUseTimingMixin", "WindowFocusAccessor", "ClientGameTestStartupMixin", "ClientGameTestWorldCloseMixin"],
   "injectors": {"defaultRequire": 1}
