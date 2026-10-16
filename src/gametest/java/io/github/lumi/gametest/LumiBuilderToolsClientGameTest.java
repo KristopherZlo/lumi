@@ -52,6 +52,24 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
         var operations = new LumiBehaviorOperations(context, server, report);
         operations.awaitDurability("tools_fixture");
         operations.save("tools-baseline", area);
+        for (int attempt = 0; ; attempt++) {
+            context.waitTicks(20);
+            operations.awaitDurability("tools_settled_" + attempt);
+            if (operations.pendingKeyCount() == 0) break;
+            if (attempt == 3) throw new AssertionError("Tool fixture did not reach a clean world baseline");
+            // Chunk post-processing can finish after the first frozen Save releases its capture.
+            // A fixture-only edit keeps this Save eligible when the remaining changes are unowned.
+            int current = attempt;
+            server.runOnServer(minecraft -> {
+                var player = minecraft.getPlayerList().getPlayers().getFirst();
+                var runtime = LumiMod.serverRuntime().find(player.level()).orElseThrow();
+                try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), player.getUUID())) {
+                    player.level().setBlockAndUpdate(origin.offset(3, 0, 0),
+                            (current % 2 == 0 ? Blocks.DIRT : Blocks.STONE).defaultBlockState());
+                }
+            });
+            operations.save("tools-settled-" + attempt, area);
+        }
         if (loaded("worldedit")) {
             exerciseTool(context, world, report, "worldedit", origin, () -> {
                 context.runOnClient(client -> {
@@ -76,8 +94,8 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
         var operations = new LumiBehaviorOperations(context, server, report);
         var checks = new LumiBehaviorChecks(context, world, report);
         operations.awaitDurability(tool + "_baseline");
-        if (operations.pendingBuilderKeyCount() != 0) {
-            throw new AssertionError(tool + " baseline has unsaved builder edits");
+        if (operations.pendingKeyCount() != 0) {
+            throw new AssertionError(tool + " baseline has unsaved world mutations");
         }
         var baseline = new LumiBehaviorOperations.SavedBoundary(
                 operations.activeCommit(), checks.snapshot(tool + "_baseline", area));
