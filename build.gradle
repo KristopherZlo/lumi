@@ -309,6 +309,7 @@ tasks.named('sourcesJar', Jar) {
 }
 
 apply from: 'gradle/packaged-verification.gradle'
+apply from: 'gradle/ordinary-observation.gradle'
 
 abstract class LumiPreparedClientLaunch extends net.fabricmc.loom.task.prod.ClientProductionRunTask {
     @org.gradle.api.tasks.OutputFile

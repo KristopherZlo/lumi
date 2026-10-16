@@ -17,8 +17,9 @@ import net.minecraft.client.Minecraft;
 /** Opt-in ordinary-client measurement, packaged without GameTest APIs or mixins. */
 public final class OrdinaryClientObservation implements ClientModInitializer {
     private volatile RuntimeObservation.ClientState state =
-            new RuntimeObservation.ClientState(0, false, false);
+            new RuntimeObservation.ClientState(0, false, false, "startup", false);
     private final AtomicLong serverTicks = new AtomicLong();
+    private volatile boolean simulationFrozen;
 
     @Override
     public void onInitializeClient() {
@@ -34,8 +35,12 @@ public final class OrdinaryClientObservation implements ClientModInitializer {
                     new RuntimeObservation.ClientState(ticking.getFps(),
                             ticking.level != null && ticking.player != null
                                     && ticking.getSingleplayerServer() != null,
-                            ticking.isPaused()));
-            ServerTickEvents.END_SERVER_TICK.register(server -> serverTicks.incrementAndGet());
+                            ticking.isPaused(), ticking.screen == null ? "none" : ticking.screen.getClass().getName(),
+                            simulationFrozen));
+            ServerTickEvents.END_SERVER_TICK.register(server -> {
+                serverTicks.incrementAndGet();
+                simulationFrozen = server.tickRateManager().isFrozen();
+            });
             observation.start();
         } catch (IOException | NoSuchAlgorithmException failed) {
             throw new IllegalStateException("Cannot start ordinary observation", failed);
@@ -46,7 +51,7 @@ public final class OrdinaryClientObservation implements ClientModInitializer {
         FabricLoader loader = FabricLoader.getInstance();
         boolean expected = Boolean.parseBoolean(System.getProperty("lumi.observation.lumi"));
         if (loader.isModLoaded("lumi") != expected || loader.isModLoaded("lumi-gametest")
-                || loader.isModLoaded("fabric-client-gametest-api-v1")) {
+                || loader.isModLoaded("fabric-client-gametest-api-v1") || loader.isModLoaded("fabric-gametest-api-v1")) {
             throw new IllegalStateException("Ordinary observation loaded unexpected Lumi/GameTest mods");
         }
         Properties metadata = new Properties();

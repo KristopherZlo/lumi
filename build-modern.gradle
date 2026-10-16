@@ -152,6 +152,7 @@ apply from: new File(repositoryRoot, 'gradle/modern-api.gradle')
 apply from: new File(repositoryRoot, 'gradle/artifact-manifest.gradle')
 apply from: new File(repositoryRoot, 'gradle/packaged-verification.gradle')
 apply from: new File(repositoryRoot, 'gradle/client-verification.gradle')
+apply from: new File(repositoryRoot, 'gradle/ordinary-observation.gradle')
 
 abstract class LumiPreparedClientLaunch extends net.fabricmc.loom.task.prod.ClientProductionRunTask {
     @org.gradle.api.tasks.OutputFile

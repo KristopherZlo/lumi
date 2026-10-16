@@ -1,0 +1,101 @@
+import groovy.json.JsonOutput
+import io.github.lumi.buildconfig.MinecraftArtifactVerifier
+import io.github.lumi.buildconfig.PackagedGameTestEvidence
+
+def target = lumiMinecraftTarget
+def game = project.findProperty('lumiVerificationGame') ?: target.minecraftVersion()
+def supplied = providers.gradleProperty('lumiArtifact')
+def player = supplied.isPresent() ? files(file(supplied.get())) : files()
+def enabled = providers.gradleProperty('lumiObservationLumi').getOrElse('true')
+def backend = providers.gradleProperty('lumiGraphicsBackend').orNull?.toLowerCase(Locale.ROOT)
+def evidence = new PackagedGameTestEvidence()
+
+def observationJar = tasks.register('ordinaryObservationJar', Jar) {
+    from(sourceSets.gametest.output) {
+        include 'io/github/lumi/observation/**', 'observation.mod.json'
+        filesMatching('observation.mod.json') {
+            expand(java_version: target.javaVersion())
+            name = 'fabric.mod.json'
+        }
+    }
+    archiveClassifier = target.javaVersion() == 21 ? 'observation-dev' : 'observation'
+}
+def distributable = observationJar
+if (target.javaVersion() == 21) {
+    distributable = tasks.register('remapOrdinaryObservationJar', lumiRemapJarTaskType) {
+        inputFile = observationJar.flatMap { it.archiveFile }
+        archiveClassifier = 'observation'
+        addNestedDependencies = false
+    }
+}
+def directory = layout.buildDirectory.dir("run/ordinary-client/${target.id()}/${game}/${UUID.randomUUID()}")
+tasks.register('runOrdinaryClientObservation', lumiClientProductionRunTaskType) {
+    group = 'verification'
+    description = 'Observes a copied world in the ordinary production client without GameTest synchronization'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(target.javaVersion()) }
+    runDir = directory
+    mods.setFrom(configurations.packagedTestMods, distributable, enabled == 'true' ? player : files())
+    jvmArgs.add('-Xmx' + System.getProperty('lumi.observation.heap', '2G'))
+    System.properties.findAll { name, ignored -> name.toString().startsWith('lumi.observation.') }.each { name, value ->
+        jvmArgs.add("-D${name}=${value}")
+    }
+    jvmArgs.addAll("-Dlumi.observation.game=${game}", "-Dlumi.observation.lumi=${enabled}")
+    jvmArgs.add(directory.map { "-Dlumi.observation.output=${it.dir('observation').asFile.absolutePath}" })
+    jvmArgs.add(directory.map { "-XX:ErrorFile=${it.file('hs_err_pid%p.log').asFile.absolutePath}" })
+    jvmArgs.add(providers.provider {
+        "-Dlumi.observation.artifactHash=${supplied.isPresent() ? evidence.hash(player.singleFile.toPath()) : ''}"
+    })
+    programArgs.addAll('--quickPlaySingleplayer', 'lumi-observation', '--username', 'Lumi-observe',
+            '--uuid', '8435139c-3ab9-3265-8c91-fbc790dd8121')
+    if (backend != null) programArgs.addAll('--graphicsBackend', backend.toUpperCase(Locale.ROOT))
+    def record = [:]
+    doFirst {
+        if (!Boolean.getBoolean('lumi.observation.enabled') || !supplied.isPresent() || !(enabled in ['true', 'false'])) {
+            throw new GradleException('Ordinary observation requires enablement, a frozen -PlumiArtifact and boolean lumiObservationLumi')
+        }
+        def requestedGame = providers.gradleProperty('lumiGameVersion').orNull
+        if (requestedGame != null && !target.minecraftVersions().contains(requestedGame)) {
+            throw new GradleException("${requestedGame} is outside target ${target.id()}")
+        }
+        if (backend != null && (target.id() != 'modern-263' || !(backend in ['opengl', 'vulkan']))) {
+            throw new GradleException('Explicit graphics backend requires modern-263 and opengl or vulkan')
+        }
+        def source = new File(System.getProperty('lumi.observation.worldSource', ''))
+        if (!source.isAbsolute() || !new File(source, 'level.dat').isFile()) {
+            throw new GradleException('Ordinary observation requires an absolute stopped-world source with level.dat')
+        }
+        new MinecraftArtifactVerifier().verify(player.singleFile.toPath(), target, project.version.toString())
+        def root = directory.get().asFile
+        if (new File(root, 'saves/lumi-observation').canonicalFile.toPath().startsWith(source.canonicalFile.toPath())) {
+            throw new GradleException('Ordinary observation output must be outside its source world')
+        }
+        copy { from source; exclude 'session.lock'; into new File(root, 'saves/lumi-observation') }
+        def config = new File(root, 'config')
+        config.mkdirs()
+        new File(config, 'lumi-onboarding').text = '1\n'
+        new File(config, 'lumi-telemetry.properties').text = 'enabled=false\nnoticeSeen=true\n'
+        new File(root, 'options.txt').text = 'lang:en_us\nrenderDistance:8\nsimulationDistance:5\nmaxFps:120\nenableVsync:false\npauseOnLostFocus:false\nfullscreen:false\n'
+        record.putAll([schema: 1, status: 'running', scope: 'ordinary-client-observation', game: game,
+                group: target.id(), lumi: enabled == 'true', graphicsBackend: backend ?: 'default',
+                source: source.absolutePath, artifact: [path: player.singleFile.absolutePath,
+                sha256: evidence.hash(player.singleFile.toPath())],
+                mods: mods.files.collect { [name: it.name, sha256: evidence.hash(it.toPath())] }])
+        new File(root, 'lumi-evidence.json').text = JsonOutput.prettyPrint(JsonOutput.toJson(record)) + '\n'
+    }
+    doLast {
+        def root = directory.get().asFile
+        def result = new Properties()
+        new File(root, 'observation/observation.properties').withReader('UTF-8') { result.load(it) }
+        if (result.getProperty('status') != 'passed' || result.getProperty('game') != game
+                || result.getProperty('lumi') != enabled || result.getProperty('pausedSamples') != '0'
+                || (enabled == 'true' && result.getProperty('artifactHash') != record.artifact.sha256)
+                || evidence.hash(player.singleFile.toPath()) != record.artifact.sha256) {
+            throw new GradleException('Ordinary client did not complete the selected unpaused observation')
+        }
+        record.status = 'passed'
+        record.observation = result
+        def output = new File(root, 'lumi-evidence.json')
+        output.text = JsonOutput.prettyPrint(JsonOutput.toJson(record)) + '\n'
+        logger.lifecycle("Ordinary client ${game}/${enabled}: completed; evidence: ${output}")
+    }
+}

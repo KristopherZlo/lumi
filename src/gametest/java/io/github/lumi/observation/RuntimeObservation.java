@@ -16,7 +16,7 @@ import java.util.function.Supplier;
 
 /** Writes bounded, wall-clock samples off both Minecraft tick threads. */
 final class RuntimeObservation {
-    record ClientState(int fps, boolean loaded, boolean paused) {}
+    record ClientState(int fps, boolean loaded, boolean paused, String screen, boolean simulationFrozen) {}
 
     private final Properties metadata;
     private final Supplier<ClientState> client;
@@ -46,7 +46,7 @@ final class RuntimeObservation {
         directory = Path.of(System.getProperty("lumi.observation.output"));
         Files.createDirectories(directory);
         samples = Files.newBufferedWriter(directory.resolve("samples.csv"), StandardOpenOption.CREATE_NEW);
-        samples.write("utc,elapsedNanos,phase,processCpuNanos,heapUsedBytes,heapCommittedBytes,fps,serverTicks,paused\n");
+        samples.write("utc,elapsedNanos,phase,processCpuNanos,heapUsedBytes,heapCommittedBytes,fps,serverTicks,paused,screen,simulationFrozen\n");
         metadata.setProperty("status", "running");
         metadata.setProperty("warmupSeconds", Integer.toString(warmup));
         metadata.setProperty("seconds", Integer.toString(duration));
@@ -80,13 +80,14 @@ final class RuntimeObservation {
             boolean measuring = elapsed >= TimeUnit.SECONDS.toNanos(warmup);
             if (measuring) {
                 measured++;
-                if (state.paused()) paused++;
+                if (state.paused() || state.simulationFrozen()) paused++;
             }
             var heap = ManagementFactory.getMemoryMXBean().getHeapMemoryUsage();
             var os = (com.sun.management.OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
             samples.write(Instant.now() + "," + elapsed + "," + (measuring ? "measure" : "warmup")
                     + "," + os.getProcessCpuTime() + "," + heap.getUsed() + "," + heap.getCommitted()
-                    + "," + state.fps() + "," + ticks.getAsLong() + "," + state.paused() + "\n");
+                    + "," + state.fps() + "," + ticks.getAsLong() + "," + state.paused() + "," + state.screen()
+                    + "," + state.simulationFrozen() + "\n");
             samples.flush();
         } catch (Exception failed) {
             complete(failed);
@@ -100,6 +101,7 @@ final class RuntimeObservation {
         metadata.setProperty("status", failure == null ? "passed" : "failed");
         metadata.setProperty("samples", Integer.toString(measured));
         metadata.setProperty("pausedSamples", Integer.toString(paused));
+        metadata.setProperty("lastScreen", client.get().screen());
         if (failure != null) metadata.setProperty("failure", failure.toString());
         try {
             samples.close();
@@ -119,7 +121,8 @@ final class RuntimeObservation {
 
     private static int seconds(String name, int fallback) {
         int value = Integer.parseInt(System.getProperty("lumi.observation." + name, Integer.toString(fallback)));
-        if (value < 1 || value > 86400) throw new IllegalArgumentException("Invalid observation " + name);
+        int minimum = name.equals("seconds") ? 3 : 1;
+        if (value < minimum || value > 86400) throw new IllegalArgumentException("Invalid observation " + name);
         return value;
     }
 }
