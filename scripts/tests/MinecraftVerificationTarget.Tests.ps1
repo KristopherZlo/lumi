@@ -16,6 +16,14 @@ $taskNative = [LumiMinecraftVerificationTarget]::new($taskCatalog, 'modern-262',
 Assert-That ($taskNative.PrepareArguments() -contains ':adapters:modern-262:prepareMultiplayerLaunch') 'Native task missing.'
 Assert-That ($taskNative.TaskArguments(@(':core:test', 'runPackagedGameTest')) -contains ':core:test') 'Absolute task changed.'
 Assert-That ($taskNative.TaskArguments(@('runPackagedGameTest')) -contains ':adapters:modern-262:runPackagedGameTest') 'Wrong native server task.'
+Assert-That ($taskLegacy.RequiredReleaseGates() -notcontains 'UpgradeCrash') 'Legacy must not require history conversion from an older supported game.'
+Assert-That ($taskNative.RequiredReleaseGates() -contains 'UpgradeCrash') 'Native release must require process-crash conversion coverage.'
+$task263 = [LumiMinecraftVerificationTarget]::new($taskCatalog, 'modern-263', '', '')
+foreach ($taskBackendGate in @('ClientVulkan', 'NativeViewport')) {
+    Assert-That ($task263.RequiredReleaseGates() -contains $taskBackendGate) "26.3 release can omit $taskBackendGate."
+    Assert-That ($taskLegacy.RequiredReleaseGates() -notcontains $taskBackendGate) 'Java 21 must not acquire Vulkan gates.'
+    Assert-That ($taskNative.RequiredReleaseGates() -notcontains $taskBackendGate) '26.2 must not acquire 26.3 native-window gates.'
+}
 Assert-Rejected { [LumiMinecraftVerificationTarget]::new($taskCatalog, 'missing', '', '') }
 Assert-Rejected { [LumiMinecraftVerificationTarget]::new($taskCatalog, 'modern-262', '26.1', '') }
 Assert-Rejected { [LumiMinecraftVerificationTarget]::new($taskCatalog, 'modern-261', '26.1.2', '') }

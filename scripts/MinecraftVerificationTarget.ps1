@@ -26,6 +26,15 @@ class LumiMinecraftVerificationTarget {
         return $this.TaskArguments(@('prepareMultiplayerLaunch'))
     }
 
+    [string[]] RequiredReleaseGates() {
+        $gates = @('Core', 'Client', 'Exact', 'Recovery', 'Multiplayer', 'RestoreCrash', 'RestoreColdCrash',
+            'SaveCrash', 'MergeCrash', 'ImportCrash', 'LoadRegression', 'RestoreSoak', 'SaveMemory',
+            'IdleAB', 'ForegroundCooling', 'SaveRetainedBound', 'BuilderToolsIntegrated')
+        if ($this.Modern) { $gates += 'UpgradeCrash' }
+        if ($this.Definition.id -ceq 'modern-263') { $gates += @('ClientVulkan', 'NativeViewport') }
+        return $gates
+    }
+
     [string[]] TaskArguments([string[]] $tasks) {
         $arguments = @()
         if ($this.Modern) { $arguments += @('-p', 'modern') }

@@ -1,9 +1,11 @@
 param(
     [switch]$RunTests,
     [ValidateSet('Core', 'Client', 'Exact', 'Recovery', 'Multiplayer', 'RestoreCrash', 'RestoreColdCrash',
-        'SaveCrash', 'MergeCrash', 'ImportCrash', 'UpgradeCrash', 'LoadRegression', 'RestoreSoak', 'SaveMemory')]
+        'SaveCrash', 'MergeCrash', 'ImportCrash', 'UpgradeCrash', 'LoadRegression', 'RestoreSoak', 'SaveMemory',
+        'ClientVulkan', 'NativeViewport')]
     [string[]]$Gate = @('Core', 'Client', 'Exact', 'Recovery', 'Multiplayer', 'RestoreCrash', 'RestoreColdCrash',
-        'SaveCrash', 'MergeCrash', 'ImportCrash', 'UpgradeCrash', 'LoadRegression', 'RestoreSoak', 'SaveMemory'),
+        'SaveCrash', 'MergeCrash', 'ImportCrash', 'UpgradeCrash', 'LoadRegression', 'RestoreSoak', 'SaveMemory',
+        'ClientVulkan', 'NativeViewport'),
     [string]$Target = 'legacy-12111',
     [string]$GameVersion,
     [string]$Artifact,
@@ -61,10 +63,7 @@ try {
             ($null -eq $taskArtifact -or ((Test-Path -LiteralPath $taskArtifact.path) -and
             (Get-FileHash -LiteralPath $taskArtifact.path -Algorithm SHA256).Hash.ToLowerInvariant() -ceq $taskArtifact.sha256)))
     }
-    $taskRequired = @('Core', 'Client', 'Exact', 'Recovery', 'Multiplayer', 'RestoreCrash', 'RestoreColdCrash',
-        'SaveCrash', 'MergeCrash', 'ImportCrash', 'LoadRegression', 'RestoreSoak', 'SaveMemory',
-        'IdleAB', 'ForegroundCooling', 'SaveRetainedBound', 'BuilderToolsIntegrated')
-    if ($taskVerification.Modern) { $taskRequired += 'UpgradeCrash' }
+    $taskRequired = $taskVerification.RequiredReleaseGates()
     $taskResults = [ordered]@{}
     foreach ($taskName in $taskRequired) {
         $taskResults[$taskName] = [ordered]@{ status = 'unverified'; artifact = ''; detail = '' }
@@ -90,6 +89,7 @@ try {
             throw 'The candidate changed during its release run.'
         }
         if ($taskName -eq 'UpgradeCrash' -and -not $taskVerification.Modern) { continue }
+        if ($taskName -in @('ClientVulkan', 'NativeViewport') -and $Target -cne 'modern-263') { continue }
         $taskResult = $taskResults[$taskName]
         $taskDirectory = Join-Path $taskRun $taskName
         New-Item -ItemType Directory -Path $taskDirectory | Out-Null
@@ -106,7 +106,36 @@ try {
                     $taskTasks = @(':core:test', 'compileJava', 'compileTestJava', 'compileGametestJava', 'test', 'runPackagedGameTest')
                     $taskGradleArguments = @("-PlumiCoreTestJava=$($taskVerification.Definition.javaVersion)")
                 }
-                'Client' { $taskGradleArguments = @('-Dlumi.gametest.suite=ALL'); $taskTasks = @('runPackagedClientGameTest') }
+                'Client' {
+                    $taskGradleArguments = @('-Dlumi.gametest.suite=ALL')
+                    if ($Target -ceq 'modern-263') { $taskGradleArguments += '-PlumiGraphicsBackend=opengl' }
+                    $taskTasks = @('runPackagedClientGameTest')
+                }
+                'ClientVulkan' {
+                    $taskGradleArguments = @('-Dlumi.gametest.suite=ALL', '-PlumiGraphicsBackend=vulkan',
+                        '-Dlumi.gametest.fixedNativeWindow=true')
+                    $taskTasks = @('runPackagedClientGameTest')
+                }
+                'NativeViewport' {
+                    $taskResult.runtimeEvidence = @()
+                    foreach ($taskBackend in @('opengl', 'vulkan')) {
+                        foreach ($taskLumiMode in @('false', 'true')) {
+                            if (-not (Test-Candidate)) { throw 'The candidate changed during native viewport checks.' }
+                            $taskNativeLog = Join-Path $taskDirectory ("${taskBackend}-lumi-${taskLumiMode}.log")
+                            $taskNativeArguments = $taskVerification.TaskArguments(@('runNativeViewportControl')) + @(
+                                "-PlumiGraphicsBackend=$taskBackend", "-PlumiViewportLumi=$taskLumiMode", '-PlumiBuilderTools=none')
+                            $ErrorActionPreference = 'Continue'
+                            & (Join-Path $taskRepo 'gradlew.bat') @taskNativeArguments --console=plain *> $taskNativeLog
+                            $taskExit = $LASTEXITCODE
+                            $ErrorActionPreference = 'Stop'
+                            if ($taskExit -ne 0) { throw "Native viewport failed; see $taskNativeLog" }
+                            $taskNativeCompletion = Get-Content -LiteralPath $taskNativeLog |
+                                Where-Object { $_ -like 'Native viewport *passed; evidence: *' } | Select-Object -Last 1
+                            if (-not $taskNativeCompletion) { throw "Missing native viewport completion: $taskNativeLog" }
+                            $taskResult.runtimeEvidence += $taskNativeCompletion
+                        }
+                    }
+                }
                 'Exact' { $taskGradleArguments = @('-Dlumi.gametest.suite=EXACT'); $taskTasks = @('runPackagedClientGameTest') }
                 'Recovery' { $taskGradleArguments = @('-Dlumi.gametest.suite=RECOVERY'); $taskTasks = @('runPackagedClientGameTest') }
                 'Multiplayer' { & (Join-Path $PSScriptRoot 'run-multiplayer-gate.ps1') -RunMinecraft @taskTargetArguments *> $taskLog }
