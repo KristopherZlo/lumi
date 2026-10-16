@@ -1,4 +1,9 @@
 param(
+    [switch]$RunMinecraft,
+    [string]$Target = 'legacy-12111',
+    [string]$GameVersion,
+    [Parameter(Mandatory)] [string]$Artifact,
+    [string]$OutputDirectory,
     [ValidateRange(5, 100)]
     [int]$Samples = 5,
     [ValidateRange(16, 10000)]
@@ -12,32 +17,54 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+if (-not $RunMinecraft) { throw 'Pass -RunMinecraft to run serial fresh-JVM cold benchmarks.' }
+. (Join-Path $PSScriptRoot 'MinecraftVerificationTarget.ps1')
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$build = [IO.Path]::GetFullPath((Join-Path $repo 'build'))
-$state = [IO.Path]::GetFullPath((Join-Path $build 'cold-restore'))
-if (-not $state.StartsWith($build + [IO.Path]::DirectorySeparatorChar)) {
-    throw "Cold benchmark state escaped the build directory: $state"
+$taskCatalog = Get-Content -LiteralPath (Join-Path $repo 'gradle/minecraft-targets.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$taskTarget = [LumiMinecraftVerificationTarget]::new($taskCatalog, $Target, $GameVersion, $Artifact)
+$state = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else {
+    Join-Path $repo ('build/reports/lumi-cold-restore/' + [Guid]::NewGuid().ToString('N'))
 }
-if (Test-Path -LiteralPath $state) {
-    Remove-Item -LiteralPath $state -Recurse -Force
-}
+if (Test-Path -LiteralPath $state) { throw "Cold benchmark output must be unused: $state" }
 New-Item -ItemType Directory -Path $state | Out-Null
 
 $gradle = Join-Path $repo 'gradlew.bat'
 $manifest = Join-Path $state 'fixture.properties'
 $worldName = 'Lumi behavior seed 710'
-$runWorld = Join-Path $build "run/clientGameTest/saves/$worldName"
 $fixture = Join-Path $state 'fixture'
+$taskHash = (Get-FileHash -LiteralPath $taskTarget.Artifact -Algorithm SHA256).Hash.ToLowerInvariant()
+$taskEvidence = [ordered]@{
+    schema = 1; status = 'running'; minecraftTarget = $taskTarget.Definition
+    artifact = @{ path = $taskTarget.Artifact; sha256 = $taskHash }
+    samples = $Samples; baseSize = $BaseSize; changeSize = $ChangeSize; layers = $Layers; commits = $Commits
+    runs = @()
+}
+$taskEvidence | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $state 'manifest.json') -Encoding UTF8
 
-function Invoke-ClientGameTest([string[]]$Properties) {
-    $arguments = @(
+function Invoke-ClientGameTest([string]$Name, [string[]]$Properties) {
+    $arguments = $taskTarget.TaskArguments(@('runPackagedBenchmark')) + @(
         '-Dlumi.gametest.suite=BENCHMARK',
         '-Dlumi.benchmark.enabled=true'
-    ) + $Properties + @('runClientGameTest', '--no-daemon')
-    & $gradle @arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "Client GameTest failed with exit code $LASTEXITCODE"
+    ) + $Properties + @('--console=plain')
+    $taskLog = Join-Path $state ($Name + '.log')
+    $ErrorActionPreference = 'Continue'
+    & $gradle @arguments *> $taskLog
+    $taskExit = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+    if ($taskExit -ne 0) { throw "Packaged cold benchmark failed; see $taskLog" }
+    $taskLine = Get-Content -LiteralPath $taskLog | Where-Object { $_ -like 'Packaged client *evidence: *' } | Select-Object -Last 1
+    if (-not $taskLine) { throw "No packaged completion: $taskLog" }
+    $taskPath = ($taskLine -split 'evidence: ', 2)[1]
+    $taskProof = Get-Content -LiteralPath $taskPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($taskProof.status -cne 'passed' -or $taskProof.scope -cne 'client-benchmark' -or
+        $taskProof.game -cne $taskTarget.Definition.minecraftVersion -or $taskProof.artifact.sha256 -cne $taskHash -or
+        (Get-FileHash -LiteralPath $taskTarget.Artifact -Algorithm SHA256).Hash.ToLowerInvariant() -cne $taskHash) {
+        throw 'Cold benchmark completion identifies a different candidate or scope.'
     }
+    $taskEvidence.runs += @{ name = $Name; log = $taskLog; evidence = $taskPath }
+    $taskEvidence | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $state 'manifest.json') -Encoding UTF8
+    Write-Host "Cold benchmark $Name passed: $taskPath"
+    return Split-Path -Parent $taskPath
 }
 
 function Get-TreeDigest([string]$Root) {
@@ -76,7 +103,7 @@ function Read-Properties([string]$Path) {
 
 Push-Location $repo
 try {
-    Invoke-ClientGameTest @(
+    $taskFixtureRun = Invoke-ClientGameTest 'fixture' @(
         '-Dlumi.benchmark.coldMode=fixture',
         "-Dlumi.benchmark.coldManifest=$manifest",
         "-Dlumi.benchmark.baseSize=$BaseSize",
@@ -86,6 +113,7 @@ try {
         '-Dlumi.benchmark.restoreSamples=1',
         '-Dlumi.benchmark.chunkPath=stored'
     )
+    $runWorld = Join-Path $taskFixtureRun "saves/$worldName"
     if (-not (Test-Path -LiteralPath $runWorld)) {
         throw "Fixture JVM did not leave the expected world: $runWorld"
     }
@@ -99,7 +127,7 @@ try {
             throw 'Immutable cold fixture changed between samples'
         }
         $result = Join-Path $state ("sample-{0:d2}.properties" -f $sample)
-        Invoke-ClientGameTest @(
+        $null = Invoke-ClientGameTest ("sample-{0:d2}" -f $sample) @(
             '-Dlumi.benchmark.coldMode=measure',
             "-Dlumi.benchmark.coldManifest=$manifest",
             "-Dlumi.benchmark.coldResult=$result",
@@ -109,6 +137,12 @@ try {
         )
         $results += Read-Properties $result
     }
+    if ((Get-TreeDigest $fixture) -ne $fixtureDigest) { throw 'Immutable cold fixture changed after the final sample.' }
+} catch {
+    $taskEvidence.status = 'failed'
+    $taskEvidence.failure = $_.Exception.Message
+    $taskEvidence | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $state 'manifest.json') -Encoding UTF8
+    throw
 } finally {
     Pop-Location
 }
@@ -191,6 +225,13 @@ $results | Format-Table pid, jvmStartMillis,
 Write-Host (
     "fixtureDigest=$fixtureDigest;freshJvmColdP95Millis=$p95;" +
     "applicationP50Nanos=$applicationP50;samples=$Samples")
+$taskEvidence.status = if ($violations.Count -eq 0) { 'passed' } else { 'failed' }
+$taskEvidence.fixtureDigest = $fixtureDigest
+$taskEvidence.results = $results
+$taskEvidence.freshJvmColdP95Millis = $p95
+$taskEvidence.applicationP50Nanos = $applicationP50
+$taskEvidence.violations = @($violations)
+$taskEvidence | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $state 'manifest.json') -Encoding UTF8
 if ($violations.Count -gt 0) {
     throw ($violations -join '; ')
 }
