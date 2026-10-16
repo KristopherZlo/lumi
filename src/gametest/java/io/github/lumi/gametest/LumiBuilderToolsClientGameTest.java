@@ -49,7 +49,7 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
             return start;
         });
         area = List.of(new BlockBox(origin.getX(), origin.getY(), origin.getZ(),
-                origin.getX() + 5, origin.getY(), origin.getZ()));
+                origin.getX() + 63, origin.getY() + 4, origin.getZ()));
         var operations = new LumiBehaviorOperations(context, server, report);
         operations.awaitDurability("tools_fixture");
         operations.save("tools-baseline", area);
@@ -85,6 +85,7 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
             BlockPos target = origin.offset(4, 0, 0);
             exerciseTool(context, world, report, "axiom", target,
                     () -> context.runOnClient(client -> AxiomClientEdits.apply(target)));
+            new LumiAxiomEntityClientScenario().run(context, world, report, origin, area);
         }
         expected = new LumiBehaviorChecks(context, world, report).snapshot("tools_final", area);
         if (loaded("axiom")) assertBiomes(world);

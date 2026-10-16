@@ -11,6 +11,10 @@ import io.github.lumi.LumiMod;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.operation.DimensionMutation;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
+import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
+import io.github.lumi.minecraft.runtime.MinecraftEntityMutationCapture;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -74,6 +78,24 @@ public final class LumiAxiomEntityGameTests {
                     helper.assertValueEqual(MutationTerminalState.SUCCEEDED, operation.get().terminalState(),
                             "Passenger transfer Redo failed");
                     graph.get().assertRiding(helper, graph.get().second());
+                    Entity vehicle = helper.getLevel().getEntity(graph.get().second());
+                    try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), UUID.randomUUID());
+                            var capture = new MinecraftEntityMutationCapture(runtime)) {
+                        capture.capture(List.of(vehicle));
+                        vehicle.addTag("other-builder");
+                    } catch (IOException failed) {
+                        throw new UncheckedIOException(failed);
+                    }
+                    operation.set(runtime.startLiveAction(player.get().getUUID(),
+                            LiveActionJournal.Direction.UNDO, ignored -> { }));
+                })
+                .thenWaitUntil(() -> helper.assertFalse(runtime.operations().hasActiveOperation(), "Conflicting Undo is active"))
+                .thenExecute(() -> {
+                    helper.assertValueEqual(MutationTerminalState.FAILED, operation.get().terminalState(),
+                            "Overlapping entity Undo must fail atomically");
+                    graph.get().assertRiding(helper, graph.get().second());
+                    helper.assertTrue(helper.getLevel().getEntity(graph.get().second()).getTags().contains("other-builder"),
+                            "Conflicting Undo overwrote another builder's entity");
                     for (UUID entity : List.of(graph.get().rider(), graph.get().first(), graph.get().second())) {
                         helper.getLevel().getEntity(entity).discard();
                     }
