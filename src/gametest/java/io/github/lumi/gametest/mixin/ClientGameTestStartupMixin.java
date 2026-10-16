@@ -22,8 +22,9 @@ public abstract class ClientGameTestStartupMixin {
         PHASER.register();
     }
 
-    @Redirect(method = "lambda$runTestThread$0", at = @At(value = "INVOKE",
-            target = "Ljava/util/concurrent/Phaser;register()I"))
+    // Fabric's synthetic lambda suffix differs between the pinned client test APIs.
+    @Redirect(method = "*(Ljava/lang/Runnable;)V", at = @At(value = "INVOKE",
+            target = "Ljava/util/concurrent/Phaser;register()I"), allow = 1)
     private static int lumi$alreadyRegistered(Phaser phaser) throws InterruptedException {
         // A delayed first test instruction reproduces the original registration race.
         if (Boolean.getBoolean("lumi.gametest.delayStartup")) Thread.sleep(500);

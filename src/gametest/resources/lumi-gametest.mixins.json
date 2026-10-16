@@ -7,6 +7,6 @@
     "IndexCrashMixin", "AtomicRefCrashMixin", "CommitCrashMixin", "JournalCrashMixin",
     "RefCrashMixin", "WorkingIndexCrashMixin", "PreviewCrashMixin", "GameTestSequenceFailureMixin",
     "MergeObjectCrashMixin", "MergeApplyCrashMixin", "HistoryUpgradeCrashMixin", "ClosingServerExecutionMixin", "GameTestServerFailFastMixin"],
-  "client": ["ClientInteractionTimingMixin", "ClientUseTimingMixin"],
+  "client": ["ClientInteractionTimingMixin", "ClientUseTimingMixin", "ClientGameTestStartupMixin"],
   "injectors": {"defaultRequire": 1}
 }
