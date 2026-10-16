@@ -86,6 +86,7 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
             exerciseTool(context, world, report, "axiom", target,
                     () -> context.runOnClient(client -> AxiomClientEdits.apply(target)));
             new LumiAxiomEntityClientScenario().run(context, world, report, origin, area);
+            new LumiAxiomSplitDispatchClientScenario().run(context, world, report, origin, area);
         }
         expected = new LumiBehaviorChecks(context, world, report).snapshot("tools_final", area);
         if (loaded("axiom")) assertBiomes(world);
