@@ -21,6 +21,7 @@ try {
     $taskInputs = Get-Content -LiteralPath (Join-Path $taskBuild 'multiplayer-launch.inputs.json') -Raw -Encoding UTF8 | ConvertFrom-Json
     $taskJvm = Get-Content -LiteralPath (Join-Path $taskBuild 'multiplayer-launch.args') -Encoding UTF8
     if ($taskInputs.launchKind -cne 'production-client' -or
+        -not [IO.File]::Exists($taskInputs.javaExecutable) -or
         $taskInputs.target.id -cne $Target -or
         $taskInputs.target.minecraftVersion -cne $taskTarget.Definition.minecraftVersion -or
         $taskInputs.artifact.sha256 -cne (Get-FileHash -LiteralPath $taskTarget.Artifact -Algorithm SHA256).Hash.ToLowerInvariant()) {
@@ -34,6 +35,10 @@ try {
     if (@($taskInputs.classpath | Where-Object { -not [IO.File]::Exists($_) }).Count -ne 0 -or
         $taskInputs.mods -cnotcontains $taskTarget.Artifact) {
         throw 'Prepared production classpath or player mod is missing.'
+    }
+    $taskRuntime = (& $taskInputs.javaExecutable --version) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or $taskRuntime -cnotmatch ('(?m)^(openjdk|java) ' + $taskTarget.Definition.javaVersion + '(?:[ .+-])')) {
+        throw "Prepared executable has a different Java major: $taskRuntime"
     }
     Write-Output "Prepared production launch passed: $Target/$($taskTarget.Definition.minecraftVersion)"
 } finally {

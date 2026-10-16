@@ -4,7 +4,7 @@ param(
     [string]$GameVersion,
     [string]$Artifact,
     [ValidateRange(120, 7200)] [int]$TimeoutSeconds = 900,
-    [string]$Java = (Join-Path $env:JAVA_HOME 'bin/java.exe')
+    [string]$Java
 )
 
 $ErrorActionPreference = 'Stop'
@@ -19,7 +19,6 @@ $taskVerification = [LumiMinecraftVerificationTarget]::new($taskCatalog, $Target
 $taskProfile = @($taskVerification.Definition)
 $taskModern = $taskVerification.Modern
 $taskBuild = Join-Path $taskRepo $(if ($taskModern) { "versions/$Target/build" } else { 'build' })
-if (-not (Test-Path -LiteralPath $Java)) { throw "A JDK $($taskProfile[0].javaVersion) java.exe is required." }
 Push-Location $taskRepo
 try {
     $ErrorActionPreference = 'Continue'
@@ -28,6 +27,8 @@ try {
     $ErrorActionPreference = 'Stop'
     if ($LASTEXITCODE -ne 0) { throw 'Multiplayer launch preparation failed.' }
     $taskLaunch = Get-Content -LiteralPath (Join-Path $taskBuild 'multiplayer-launch.inputs.json') -Raw | ConvertFrom-Json
+    if (-not $Java) { $Java = $taskLaunch.javaExecutable }
+    if (-not $Java -or -not (Test-Path -LiteralPath $Java)) { throw "A JDK $($taskProfile[0].javaVersion) java.exe is required." }
     $taskProduction = $taskLaunch.launchKind -ceq 'production-client'
     if ($taskModern -and -not $taskProduction) { throw 'Native multiplayer gates require the packaged production launch.' }
     foreach ($name in @('id', 'javaVersion', 'minecraftVersion', 'minecraftVersions', 'loaderVersion', 'fabricApiVersion',

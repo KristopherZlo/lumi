@@ -9,7 +9,7 @@ param(
     [switch]$RestoreCold,
     [string[]]$ResumeFrom = @(),
     [ValidateRange(120, 7200)] [int]$TimeoutSeconds = 900,
-    [string]$Java = (Join-Path $env:JAVA_HOME 'bin/java.exe')
+    [string]$Java
 )
 
 $ErrorActionPreference = 'Stop'
@@ -41,7 +41,6 @@ if ($Phase.Count -gt 0) {
     }
     $taskPhases = $Phase
 }
-if (-not (Test-Path -LiteralPath $Java)) { throw "JDK $($taskProfile[0].javaVersion) java.exe is required." }
 Push-Location $taskRepo
 try {
     $ErrorActionPreference = 'Continue'
@@ -50,6 +49,8 @@ try {
     $ErrorActionPreference = 'Stop'
     if ($LASTEXITCODE -ne 0) { throw 'Client launch preparation failed.' }
     $taskLaunch = Get-Content -LiteralPath (Join-Path $taskBuild 'multiplayer-launch.inputs.json') -Raw | ConvertFrom-Json
+    if (-not $Java) { $Java = $taskLaunch.javaExecutable }
+    if (-not $Java -or -not (Test-Path -LiteralPath $Java)) { throw "JDK $($taskProfile[0].javaVersion) java.exe is required." }
     $taskProduction = $taskLaunch.launchKind -ceq 'production-client'
     if ($taskModern -and -not $taskProduction) { throw 'Native crash gates require the packaged production launch.' }
     if ($taskLaunch.target.id -cne $Target -or $taskLaunch.target.javaVersion -ne $taskProfile[0].javaVersion) {

@@ -61,7 +61,9 @@ tasks.register('prepareMultiplayerLaunch', launchType) {
         parameters.minecraftVersion = project.findProperty('lumiVerificationGame') ?: target.minecraftVersion()
         layout.buildDirectory.file('multiplayer-launch.inputs.json').get().asFile.text = JsonOutput.toJson([
                 schema: 1, target: parameters, configuration: configuration,
-                classpath: classpath] + (production ? [launchKind: 'production-client',
+                classpath: classpath,
+                javaExecutable: production ? raw.command[0] : run.javaLauncher.get().executablePath.asFile.absolutePath
+        ] + (production ? [launchKind: 'production-client',
                 mainClass: raw.mainClass, programArguments: raw.command.subList(raw.command.indexOf(raw.mainClass) + 1,
                         raw.command.indexOf('--gameDir')), mods: raw.mods,
                 artifact: [path: lumiPackagedArtifact.singleFile.absolutePath,
