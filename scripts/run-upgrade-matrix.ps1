@@ -17,14 +17,23 @@ if (Test-Path -LiteralPath $taskOutput) { throw "Upgrade output must be unused: 
 $taskCatalog = Get-Content -LiteralPath (Join-Path $taskRepo 'gradle/minecraft-targets.json') -Raw | ConvertFrom-Json
 $taskCandidate = Get-Content -LiteralPath (Join-Path $taskCandidateDirectory 'candidate.json') -Raw | ConvertFrom-Json
 if ($taskCandidate.schema -ne 1 -or $taskCandidate.groups.Count -ne $taskCatalog.targets.Count) { throw 'Wrong candidate manifest.' }
-$taskGames = @($taskCatalog.targets.minecraftVersions | Sort-Object { [version]$_ })
+$taskGames = @($taskCatalog.targets | Where-Object { $_.javaVersion -gt 21 } |
+    ForEach-Object { $_.minecraftVersions } | Sort-Object { [version]$_ })
+$taskSourceGames = @(Get-ChildItem -LiteralPath $taskSources -Directory | Where-Object {
+    Test-Path -LiteralPath (Join-Path $_.FullName 'fixture.properties')
+} | ForEach-Object { $_.Name })
+foreach ($taskGame in $taskSourceGames) {
+    $taskVersion = $null
+    if (-not [version]::TryParse($taskGame, [ref]$taskVersion)) { throw "Invalid source fixture game: $taskGame" }
+}
+$taskSourceGames = @($taskSourceGames | Sort-Object { [version]$_ })
 foreach ($taskGame in $TargetGame) {
-    if ($taskGame -cnotin $taskGames -or $taskGame -ceq $taskGames[0]) { throw "Unknown upgrade target: $taskGame" }
+    if ($taskGame -cnotin $taskGames) { throw "Unknown upgrade target: $taskGame" }
 }
 foreach ($taskGame in $SourceGame) {
-    if ($taskGame -cnotin $taskGames -or $taskGame -ceq $taskGames[-1]) { throw "Unknown upgrade source: $taskGame" }
+    if ($taskGame -cnotin $taskSourceGames) { throw "Unknown upgrade source: $taskGame" }
 }
-$taskSelectedSources = if ($SourceGame.Count) { $SourceGame } else { $taskGames }
+$taskSelectedSources = if ($SourceGame.Count) { $SourceGame } else { $taskSourceGames }
 $taskSelectedTargets = if ($TargetGame.Count) { $TargetGame } else { $taskGames }
 if (-not @($taskSelectedSources | Where-Object {
     $taskSourceVersion = [version]$_
@@ -50,13 +59,12 @@ $taskMatrix = [ordered]@{ schema = 1; status = 'running'; candidate = $taskCandi
 $taskMatrix | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $taskOutput 'matrix.json') -Encoding UTF8
 Push-Location $taskRepo
 try {
-    for ($taskTargetIndex = 1; $taskTargetIndex -lt $taskGames.Count; $taskTargetIndex++) {
-        $taskGame = $taskGames[$taskTargetIndex]
+    foreach ($taskGame in $taskGames) {
         if ($TargetGame.Count -gt 0 -and $taskGame -cnotin $TargetGame) { continue }
         $taskProfile = $taskProfiles[$taskGame]
         $taskHash = (Get-FileHash -LiteralPath $taskProfile.Artifact -Algorithm SHA256).Hash.ToLowerInvariant()
-        for ($taskSourceIndex = 0; $taskSourceIndex -lt $taskTargetIndex; $taskSourceIndex++) {
-            $taskSourceGame = $taskGames[$taskSourceIndex]
+        foreach ($taskSourceGame in $taskSourceGames) {
+            if ([version]$taskSourceGame -ge [version]$taskGame) { continue }
             if ($SourceGame.Count -gt 0 -and $taskSourceGame -cnotin $SourceGame) { continue }
             $taskFixture = Join-Path $taskOutput ($taskSourceGame + '-to-' + $taskGame)
             New-Item -ItemType Directory -Path $taskFixture | Out-Null
