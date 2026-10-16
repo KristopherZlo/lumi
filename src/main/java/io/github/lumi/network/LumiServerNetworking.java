@@ -87,9 +87,18 @@ public final class LumiServerNetworking {
         PayloadTypeRegistry.playS2C().register(BuilderToolBarrierPayload.TYPE, BuilderToolBarrierPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(BuilderToolBarrierPayload.TYPE, BuilderToolBarrierPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(BuilderToolBarrierPayload.TYPE, (payload, context) ->
-                context.server().execute(() -> LumiMod.serverRuntime().find(context.player().level())
+                context.server().execute(() -> LumiMod.serverRuntime().find(payload.dimension())
                         .flatMap(FabricDimensionRuntime::axiomBarrier)
                         .ifPresent(barrier -> barrier.acknowledge(context.player(), payload))));
+        PayloadTypeRegistry.playC2S().register(AxiomDispatchPayload.TYPE, AxiomDispatchPayload.CODEC);
+        ServerPlayNetworking.registerGlobalReceiver(AxiomDispatchPayload.TYPE, (payload, context) ->
+                context.server().execute(() -> LumiMod.serverRuntime().find(payload.dimension()).ifPresent(runtime -> {
+                    ServerPlayer player = context.player();
+                    if (context.server().getPlayerList().getPlayer(player.getUUID()) != player) return;
+                    if (payload.complete()) runtime.axiomBufferActions().complete(player.connection, payload.dispatch());
+                    else if (runtime.level() == player.level() && runtime.freeze().isMutationAllowed()) runtime.axiomBufferActions()
+                            .begin(player.connection, player.getUUID(), payload.dispatch());
+                })));
         PayloadTypeRegistry.playC2S().register(
                 HistoryCommandPayload.TYPE, HistoryCommandPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(
@@ -138,6 +147,8 @@ public final class LumiServerNetworking {
                                     dimension(runtime), runtime.pendingRevision(), -1));
                 }));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+            for (var level : server.getAllLevels()) LumiMod.serverRuntime().find(level)
+                    .ifPresent(runtime -> runtime.axiomBufferActions().finishConnection(handler));
             cleanupPlayer(handler.getPlayer().getUUID());
         });
         ServerTickEvents.END_SERVER_TICK.register(

@@ -7,11 +7,14 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.ServerGamePacketListenerImpl;
 
 /** Server-thread, connection-bound admission; never waits on a disconnected builder. */
 public final class MinecraftAxiomWorldBarrier implements WorldReplacementBarrier {
@@ -22,11 +25,18 @@ public final class MinecraftAxiomWorldBarrier implements WorldReplacementBarrier
     //?}
     private static final long TIMEOUT_NANOS = 15_000_000_000L;
     private final ServerLevel level;
+    private final Consumer<ServerGamePacketListenerImpl> drained;
+    private final Predicate<ServerGamePacketListenerImpl> pending;
     private final Map<UUID, Participant> participants = new LinkedHashMap<>();
     private UUID barrier;
     private boolean refused;
 
-    public MinecraftAxiomWorldBarrier(ServerLevel level) { this.level = level; }
+    public MinecraftAxiomWorldBarrier(ServerLevel level, Consumer<ServerGamePacketListenerImpl> drained,
+            Predicate<ServerGamePacketListenerImpl> pending) {
+        this.level = level;
+        this.drained = java.util.Objects.requireNonNull(drained, "drained");
+        this.pending = java.util.Objects.requireNonNull(pending, "pending");
+    }
 
     @Override public boolean awaitReady() throws IOException {
         if (barrier == null) barrier = UUID.randomUUID();
@@ -50,20 +60,23 @@ public final class MinecraftAxiomWorldBarrier implements WorldReplacementBarrier
     public void acknowledge(ServerPlayer player, BuilderToolBarrierPayload payload) {
         if (!payload.barrier().equals(barrier) || !payload.dimension().equals(dimension())) return;
         Participant participant = participants.get(player.getUUID());
-        if (participant != null && participant.player == player
+        if (participant != null && participant.connection == player.connection
                 && (payload.state() == State.READY || payload.state() == State.REFUSED)) {
+            boolean firstReady = participant.state != State.READY && payload.state() == State.READY;
             participant.state = payload.state();
+            if (firstReady) drained.accept(participant.connection);
         }
     }
 
     private boolean synchronize(boolean releasing) throws IOException {
         participants.values().removeIf(participant -> {
-            if (connected(participant.player)) return false;
-            if (sameConnection(participant.player)) send(participant.player, State.RESUME);
+            if (currentPlayer(participant) != null) return false;
+            drained.accept(participant.connection);
             return true;
         });
-        for (ServerPlayer player : level.players()) {
-            if (!connected(player) || participants.containsKey(player.getUUID())
+        for (ServerPlayer player : level.getServer().getPlayerList().getPlayers()) {
+            if (player.level() != level && !pending.test(player.connection)) continue;
+            if (!sameConnection(player) || participants.containsKey(player.getUUID())
                     || !ServerPlayNetworking.canSend(player, AXIOM_CLIENT_CHANNEL)) continue;
             if (!ServerPlayNetworking.canSend(player, BuilderToolBarrierPayload.TYPE)) {
                 String reason = "Lumi cannot synchronize Axiom on this client; update Lumi before restoring";
@@ -82,7 +95,7 @@ public final class MinecraftAxiomWorldBarrier implements WorldReplacementBarrier
             if (participant.state == State.REFUSED || System.nanoTime() >= participant.deadline) {
                 String reason = "Lumi could not drain pending Axiom work before world replacement";
                 if (!releasing) throw new IOException(reason);
-                participant.player.connection.disconnect(Component.literal(reason));
+                participant.connection.disconnect(Component.literal(reason));
                 iterator.remove();
             } else {
                 ready = false;
@@ -93,19 +106,22 @@ public final class MinecraftAxiomWorldBarrier implements WorldReplacementBarrier
 
     @Override public void released() {
         for (Participant participant : participants.values()) {
-            if (sameConnection(participant.player)) send(participant.player, State.RESUME);
+            ServerPlayer player = currentPlayer(participant);
+            if (player != null) send(player, State.RESUME);
         }
         participants.clear();
         barrier = null;
         refused = false;
     }
 
-    private boolean connected(ServerPlayer player) {
-        return player.level() == level && sameConnection(player);
+    private boolean sameConnection(ServerPlayer player) {
+        ServerPlayer current = level.getServer().getPlayerList().getPlayer(player.getUUID());
+        return current != null && current.connection == player.connection;
     }
 
-    private boolean sameConnection(ServerPlayer player) {
-        return level.getServer().getPlayerList().getPlayer(player.getUUID()) == player;
+    private ServerPlayer currentPlayer(Participant participant) {
+        ServerPlayer current = level.getServer().getPlayerList().getPlayer(participant.player);
+        return current != null && current.connection == participant.connection ? current : null;
     }
 
     private String dimension() { return level.dimension().identifier().toString(); }
@@ -115,9 +131,13 @@ public final class MinecraftAxiomWorldBarrier implements WorldReplacementBarrier
     }
 
     private static final class Participant {
-        private final ServerPlayer player;
+        private final UUID player;
+        private final ServerGamePacketListenerImpl connection;
         private final long deadline = System.nanoTime() + TIMEOUT_NANOS;
         private State state;
-        private Participant(ServerPlayer player) { this.player = player; }
+        private Participant(ServerPlayer player) {
+            this.player = player.getUUID();
+            connection = player.connection;
+        }
     }
 }

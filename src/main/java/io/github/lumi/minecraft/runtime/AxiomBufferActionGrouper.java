@@ -73,6 +73,10 @@ public final class AxiomBufferActionGrouper {
 
     int pendingCount() { return pending.size(); }
 
+    public boolean hasPending(Object connection) {
+        return blocked.contains(connection) || pending.keySet().stream().anyMatch(key -> key.connection == connection);
+    }
+
     private void finish(Pending edit) {
         if (edit != null && edit.root != null) journal.finishChanges(edit.root);
     }

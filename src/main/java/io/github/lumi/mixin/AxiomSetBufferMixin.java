@@ -10,6 +10,7 @@ import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.BlockSnapshot;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
+import io.github.lumi.minecraft.runtime.AxiomBufferDispatchContext;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
 import io.github.lumi.minecraft.world.MinecraftSectionCapture;
 import java.io.IOException;
@@ -40,7 +41,7 @@ abstract class AxiomSetBufferMixin {
             Operation<Void> original) {
         FabricDimensionRuntime runtime = LumiMod.serverRuntime().find(level)
                 .orElseThrow(() -> new IllegalStateException("Lumi dimension runtime is not loaded"));
-        if (player == null || !runtime.freeze().isMutationAllowed()) {
+        if (player == null || player.level() != level || !runtime.freeze().isMutationAllowed()) {
             return;
         }
         Map<BlockPosition, BlockSnapshot> before = new LinkedHashMap<>();
@@ -48,6 +49,8 @@ abstract class AxiomSetBufferMixin {
         try (var ignored = DirectLiveActionContext.open(
                 runtime.liveActions(), player.getUUID())) {
             UUID action = DirectLiveActionContext.current(runtime.liveActions()).orElseThrow();
+            AxiomBufferDispatchContext.current(player).ifPresent(dispatch -> runtime.axiomBufferActions()
+                    .attach(player.connection, player.getUUID(), dispatch, action));
             boolean exactCapture = captureBefore(
                     buffer, runtime, action, before, sections);
             Map<SectionKey, Long> generations =

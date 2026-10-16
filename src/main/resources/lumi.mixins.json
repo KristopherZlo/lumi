@@ -6,6 +6,7 @@
   "mixins": [
     "AxiomSetBlockMixin",
     "AxiomSetBufferMixin",
+    "AxiomBufferDispatchMixin",
     "AxiomSpawnEntityMixin",
     "AxiomDeleteEntityMixin",
     "AxiomManipulateEntityMixin",
@@ -44,6 +45,7 @@
   ],
   "client": [
     "client.AxiomToolExecutorMixin",
+    "client.AxiomDispatchCompletionMixin",
     "client.AxiomDispatcherPendingAccess",
     "client.AxiomModellingResetMixin",
     "client.AxiomClientTickBarrierMixin",

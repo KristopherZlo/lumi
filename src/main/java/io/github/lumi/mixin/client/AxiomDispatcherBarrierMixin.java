@@ -34,9 +34,12 @@ abstract class AxiomDispatcherBarrierMixin {
         var runtime = LumiMod.serverRuntime().find(server.getLevel(client.level.dimension())).orElseThrow();
         long generation = runtime.freeze().replacementGeneration();
         long clientGeneration = AxiomClientWorkBarrier.generation();
+        var actor = client.player == null ? null : client.player.getUUID();
         return original.call(server, (Runnable) () -> {
+            var player = actor == null ? null : server.getPlayerList().getPlayer(actor);
             if (runtime.freeze().replacementGeneration() == generation
-                    && AxiomClientWorkBarrier.generation() == clientGeneration) task.run();
+                    && AxiomClientWorkBarrier.generation() == clientGeneration
+                    && player != null && player.level() == runtime.level()) task.run();
         });
     }
 }

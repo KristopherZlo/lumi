@@ -199,6 +199,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final UUID defaultWorkspaceId;
     private final LiveActionJournal liveActions;
     private final AxiomSetBlockActionGrouper axiomSetBlockActions;
+    private final AxiomBufferActionGrouper axiomBufferActions;
     private final MinecraftLiveBlockWorldAccess liveWorld;
     private final MinecraftLiveEntityWorldAccess liveEntityWorld;
     private final MinecraftLiveBlockTracker liveBlocks;
@@ -244,9 +245,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.level = level;
         this.repository = repository;
         this.freeze = freeze;
-        axiomBarrier = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom")
-                ? new MinecraftAxiomWorldBarrier(level) : null;
-        if (axiomBarrier != null) freeze.replacementBarrier(axiomBarrier);
         this.operations = operations;
         this.mutations = mutations;
         this.saves = saves;
@@ -286,6 +284,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         liveActions = new LiveActionJournal(
                 checkpoint -> releaseSessionCheckpoint(checkpoint.hiddenRef()));
         axiomSetBlockActions = new AxiomSetBlockActionGrouper(liveActions);
+        axiomBufferActions = new AxiomBufferActionGrouper(liveActions);
+        axiomBarrier = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom")
+                ? new MinecraftAxiomWorldBarrier(level, axiomBufferActions::finishConnection,
+                        axiomBufferActions::hasPending) : null;
+        if (axiomBarrier != null) freeze.replacementBarrier(axiomBarrier);
         this.defaultWorkspaceId = defaultWorkspaceId;
         this.pendingRecovery = pendingRecovery;
         this.recoveryLease = recoveryLease;
@@ -1151,6 +1154,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     public LiveActionJournal liveActions() { return liveActions; }
+    public AxiomBufferActionGrouper axiomBufferActions() { return axiomBufferActions; }
     public AxiomSetBlockActionGrouper axiomSetBlockActions() {
         return axiomSetBlockActions;
     }
@@ -1172,6 +1176,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             if (operation.terminalState() == io.github.lumi.minecraft.operation.MutationTerminalState.SUCCEEDED) {
                 liveEntities.clear();
                 axiomSetBlockActions.clear();
+                axiomBufferActions.clear();
                 liveActions.clear();
                 liveWorld.clear();
                 liveEntityWorld.clear();
@@ -2388,6 +2393,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 liveEntities.clear();
             } finally {
                 axiomSetBlockActions.clear();
+                axiomBufferActions.clear();
                 liveActions.clear();
             }
         }
