@@ -15,7 +15,11 @@ import net.minecraft.server.level.ServerPlayer;
 
 /** Server-thread, connection-bound admission; never waits on a disconnected builder. */
 public final class MinecraftAxiomWorldBarrier implements WorldReplacementBarrier {
-    private static final Identifier AXIOM_GOODBYE = Identifier.fromNamespaceAndPath("axiom", "goodbye");
+    //? if >=26.1 {
+    /*private static final Identifier AXIOM_CLIENT_CHANNEL = Identifier.fromNamespaceAndPath("axiom", "goodbye");
+    *///?} else {
+    private static final Identifier AXIOM_CLIENT_CHANNEL = Identifier.fromNamespaceAndPath("axiom", "enable");
+    //?}
     private static final long TIMEOUT_NANOS = 15_000_000_000L;
     private final ServerLevel level;
     private final Map<UUID, Participant> participants = new LinkedHashMap<>();
@@ -60,7 +64,7 @@ public final class MinecraftAxiomWorldBarrier implements WorldReplacementBarrier
         });
         for (ServerPlayer player : level.players()) {
             if (!connected(player) || participants.containsKey(player.getUUID())
-                    || !ServerPlayNetworking.canSend(player, AXIOM_GOODBYE)) continue;
+                    || !ServerPlayNetworking.canSend(player, AXIOM_CLIENT_CHANNEL)) continue;
             if (!ServerPlayNetworking.canSend(player, BuilderToolBarrierPayload.TYPE)) {
                 String reason = "Lumi cannot synchronize Axiom on this client; update Lumi before restoring";
                 if (!releasing) throw new IOException(reason);

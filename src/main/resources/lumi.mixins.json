@@ -43,6 +43,12 @@
     "TransientCarrierEntityMixin"
   ],
   "client": [
+    "client.AxiomToolExecutorMixin",
+    "client.AxiomDispatcherPendingAccess",
+    "client.AxiomModellingResetMixin",
+    "client.AxiomClientTickBarrierMixin",
+    "client.AxiomClientSendBarrierMixin",
+    "client.AxiomDispatcherBarrierMixin",
     "AxiomIntegratedBiomeMixin",
     "client.GuiGraphicsAccessor",
     "client.GuiGraphicsMixin",

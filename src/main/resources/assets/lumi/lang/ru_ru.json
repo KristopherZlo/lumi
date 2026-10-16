@@ -1,4 +1,6 @@
 {
+  "lumi.axiom.history_invalidated": "Lumi синхронизирует мир. Ожидающие правки и история Undo/Redo Axiom очищены.",
+  "lumi.axiom.sync_refused": "Не удалось безопасно остановить задачи Axiom. Axiom остаётся приостановлен: переподключитесь перед новой правкой.",
   "key.category.lumi.general": "Lumi",
   "key.lumi.undo": "Отменить",
   "key.lumi.redo": "Повторить",

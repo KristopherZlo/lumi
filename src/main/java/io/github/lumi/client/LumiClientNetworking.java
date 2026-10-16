@@ -110,6 +110,9 @@ public final class LumiClientNetworking {
     }
 
     public void register() {
+        if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom")) {
+            io.github.lumi.client.integration.AxiomClientWorkBarrier.register();
+        }
         ClientPlayNetworking.registerGlobalReceiver(
                 HistorySnapshotPayload.TYPE, (payload, context) ->
                         context.client().execute(() -> {
