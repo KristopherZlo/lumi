@@ -36,6 +36,7 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
         ui.completeOnboardingIfShown();
         ui.awaitHistory();
         origin = server.computeOnServer(minecraft -> {
+            minecraft.tickRateManager().setFrozen(true);
             var player = minecraft.getPlayerList().getPlayers().getFirst();
             BlockPos start = player.blockPosition().atY(170);
             var runtime = LumiMod.serverRuntime().find(player.level()).orElseThrow();
@@ -94,8 +95,9 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
                 .find(minecraft.getPlayerList().getPlayers().getFirst().level()).orElseThrow()
                 .compare(baseline.commit(), edited.commit()));
         context.waitFor(client -> comparison.isDone());
-        if (comparison.join().changedBlocks() != 2) {
-            throw new AssertionError(tool + " Compare did not report exactly two changed blocks");
+        var summary = comparison.join();
+        if (summary.changedBlocks() != 2) {
+            throw new AssertionError(tool + " Compare did not report exactly two changed blocks: " + summary);
         }
         operations.restore(tool + "_before", baseline.commit());
         checks.assertSnapshot(tool + "_restore_before", area, baseline.snapshot());
