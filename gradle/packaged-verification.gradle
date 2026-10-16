@@ -94,7 +94,7 @@ def writeTestMetadata = tasks.register('writePackagedTestMetadata') {
         def metadata = new groovy.json.JsonSlurper().parse(new File(sourceSets.gametest.output.resourcesDir, 'fabric.mod.json'))
         metadata.entrypoints['fabric-gametest'].removeAll { entry ->
             (!withWorldEdit && entry.endsWith('.LumiWorldEditGameTests')) ||
-                    (!withAxiom && entry.endsWith('.LumiAxiomGameTests'))
+                    (!withAxiom && entry.startsWith('io.github.lumi.gametest.LumiAxiom'))
         }
         if (target.id() == 'modern-263') metadata.mixins += 'fixed-gametest-window.mixins.json'
         def output = testMetadata.get().asFile

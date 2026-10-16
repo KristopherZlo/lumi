@@ -6,6 +6,9 @@
   "mixins": [
     "AxiomSetBlockMixin",
     "AxiomSetBufferMixin",
+    "AxiomSpawnEntityMixin",
+    "AxiomDeleteEntityMixin",
+    "AxiomManipulateEntityMixin",
     "BoundTickingBlockEntityMixin",
     "BlockEntityMixin",
     "ChunkMapPersistenceAccessor",

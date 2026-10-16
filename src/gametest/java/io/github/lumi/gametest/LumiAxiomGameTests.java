@@ -486,7 +486,7 @@ public final class LumiAxiomGameTests {
         helper.assertFalse(runtime.operations().hasActiveOperation(),
                 "Lumi operation is still active");
     }
-    private static void activateAxiom(ServerPlayer player) {
+    static void activateAxiom(ServerPlayer player) {
         //? if >=26.1 {
         /*AxiomServer.onAxiomActive(player.level().getServer(), player);
         *///?} else {
@@ -494,7 +494,7 @@ public final class LumiAxiomGameTests {
         //?}
     }
 
-    private static void deactivateAxiom(ServerPlayer player) {
+    static void deactivateAxiom(ServerPlayer player) {
         //? if >=26.1 {
         /*((com.moulberry.axiom.hooks.MinecraftServerExt) player.level().getServer())
                 .axiom$getAxiomServer().activeAxiomPlayers.remove(player.getUUID());
