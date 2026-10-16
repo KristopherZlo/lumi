@@ -8,6 +8,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 
 /** Exercises the real window backend without Fabric's GameTest window virtualization. */
@@ -18,14 +19,19 @@ public final class NativeViewportControl implements ClientModInitializer {
     private int step;
     private int frames;
     private boolean completed;
+    private NativeLumiViewportChecks lumi;
+    private Screen page;
 
     @Override public void onInitializeClient() {
         FabricLoader loader = FabricLoader.getInstance();
-        for (String forbidden : new String[] {"lumi", "worldedit", "axiom", "lumi-gametest",
+        for (String forbidden : new String[] {"worldedit", "axiom", "lumi-gametest",
                 "fabric-client-gametest-api-v1", "fabric-gametest-api-v1"}) {
             if (loader.isModLoaded(forbidden)) throw new IllegalStateException("Unexpected control mod: " + forbidden);
         }
         if (!Boolean.getBoolean("lumi.viewport.enabled")) throw new IllegalStateException("Control requires enablement");
+        boolean expectedLumi = Boolean.getBoolean("lumi.viewport.lumi");
+        if (loader.isModLoaded("lumi") != expectedLumi) throw new IllegalStateException("Unexpected Lumi presence");
+        if (expectedLumi) lumi = new NativeLumiViewportChecks();
         System.out.println("Native viewport runtime: " + Runtime.version() + ";java=" + System.getProperty("java.home"));
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
     }
@@ -34,7 +40,11 @@ public final class NativeViewportControl implements ClientModInitializer {
         if (completed) return;
         try {
             if (System.nanoTime() > deadline) throw new IllegalStateException("Native viewport control timed out");
-            if (client.getOverlay() != null || !(client.screen instanceof TitleScreen)) return;
+            if (page == null) {
+                if (client.getOverlay() != null || !(client.screen instanceof TitleScreen)) return;
+                page = lumi == null ? client.screen : lumi.open(client);
+            }
+            if (client.screen != page) throw new IllegalStateException("Native viewport screen changed unexpectedly");
             if (++frames < 40) return;
             frames = 0;
             if (step > 0) {
@@ -43,12 +53,14 @@ public final class NativeViewportControl implements ClientModInitializer {
                     throw new IllegalStateException("Native window did not reach requested size at step " + step
                             + ": " + client.getWindow().getWidth() + "x" + client.getWindow().getHeight());
                 }
+                if (lumi != null) lumi.verify(client, previous[0], previous[1]);
                 System.out.println("Native viewport completed step " + step + "/" + SIZES.length * SCALES.length);
             }
             if (step == SIZES.length * SCALES.length) {
                 String game = FabricLoader.getInstance().getModContainer("minecraft").orElseThrow()
                         .getMetadata().getVersion().getFriendlyString();
-                finish(client, game + "\nnative-viewport\n" + step);
+                finish(client, game + (lumi == null ? "\nnative-viewport\n" : "\nnative-lumi-viewport\n") + step
+                        + (lumi == null ? "" : "\n" + System.getProperty("lumi.viewport.artifactHash")));
                 return;
             }
             int[] size = SIZES[step / SCALES.length];

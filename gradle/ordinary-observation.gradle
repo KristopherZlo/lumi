@@ -24,7 +24,8 @@ def observationJar = tasks.register('ordinaryObservationJar', Jar) {
 
 def nativeViewportJar = tasks.register('nativeViewportControlJar', Jar) {
     from(sourceSets.gametest.output) {
-        include 'io/github/lumi/observation/NativeViewportControl.class', 'native-viewport.mod.json'
+        include 'io/github/lumi/observation/NativeViewportControl.class',
+                'io/github/lumi/observation/NativeLumiViewportChecks.class', 'native-viewport.mod.json'
         filesMatching('native-viewport.mod.json') {
             expand(java_version: target.javaVersion())
             name = 'fabric.mod.json'
@@ -34,14 +35,19 @@ def nativeViewportJar = tasks.register('nativeViewportControlJar', Jar) {
 }
 
 def viewportDirectory = layout.buildDirectory.dir("run/native-viewport/${target.id()}/${game}/${UUID.randomUUID()}")
+def viewportLumi = providers.gradleProperty('lumiViewportLumi').getOrElse('false')
 tasks.register('runNativeViewportControl', lumiClientProductionRunTaskType) {
     group = 'verification'
-    description = 'Exercises real 26.3 window resizing without Lumi, builder tools or GameTest APIs'
+    description = 'Exercises real 26.3 window resizing without builder tools or GameTest APIs'
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(target.javaVersion()) }
     runDir = viewportDirectory
-    mods.setFrom(configurations.packagedTestMods, nativeViewportJar)
+    mods.setFrom(configurations.packagedTestMods, nativeViewportJar, viewportLumi == 'true' ? player : files())
     def completion = viewportDirectory.map { it.file('viewport.completed').asFile }
     jvmArgs.add('-Dlumi.viewport.enabled=true')
+    jvmArgs.add("-Dlumi.viewport.lumi=${viewportLumi}")
+    jvmArgs.add(providers.provider {
+        "-Dlumi.viewport.artifactHash=${viewportLumi == 'true' && supplied.isPresent() ? evidence.hash(player.singleFile.toPath()) : ''}"
+    })
     jvmArgs.add(completion.map { "-Dlumi.viewport.completion=${it.absolutePath}" })
     jvmArgs.add(viewportDirectory.map { "-XX:ErrorFile=${it.file('hs_err_pid%p.log').asFile.absolutePath}" })
     if (backend != null) programArgs.addAll('--graphicsBackend', backend.toUpperCase(Locale.ROOT))
@@ -50,15 +56,20 @@ tasks.register('runNativeViewportControl', lumiClientProductionRunTaskType) {
                 || project.findProperty('lumiBuilderTools') != 'none') {
             throw new GradleException('Native viewport control requires modern-263, explicit graphics backend and -PlumiBuilderTools=none')
         }
+        if (!(viewportLumi in ['true', 'false']) || (viewportLumi == 'true' && !supplied.isPresent())) {
+            throw new GradleException('Native Lumi viewport requires boolean lumiViewportLumi and a frozen -PlumiArtifact')
+        }
+        if (viewportLumi == 'true') new MinecraftArtifactVerifier().verify(player.singleFile.toPath(), target, project.version.toString())
         def root = viewportDirectory.get().asFile
         root.mkdirs()
         new File(root, 'options.txt').text = 'lang:en_us\nmaxFps:30\nenableVsync:false\nfullscreen:false\nonboardAccessibility:false\n'
     }
     doLast {
-        if (completion.get().text != game + '\nnative-viewport\n15') {
+        def expected = game + (viewportLumi == 'true' ? '\nnative-lumi-viewport\n15\n' + evidence.hash(player.singleFile.toPath()) : '\nnative-viewport\n15')
+        if (completion.get().text != expected) {
             throw new GradleException('Native viewport control did not complete all 15 window/scale combinations')
         }
-        logger.lifecycle("Native viewport ${game}/${backend}: passed; evidence: ${completion.get()}")
+        logger.lifecycle("Native viewport ${game}/${backend}/lumi=${viewportLumi}: passed; evidence: ${completion.get()}")
     }
 }
 def distributable = observationJar
