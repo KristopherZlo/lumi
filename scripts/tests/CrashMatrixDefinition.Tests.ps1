@@ -96,10 +96,11 @@ try {
     $manifestPath = Join-Path $scratchRoot ([Guid]::NewGuid().ToString('N') + '.json')
     $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
     $resumed = $evidence.Resume(@($manifestPath), @('ref-forced', 'cleanup'), $false)
+    $documentationCommit = [LumiCrashMatrixEvidence]::new('inputs', 'documentation-only-new-commit', $false, $save)
+    Assert-That ($documentationCommit.Resume(@($manifestPath), @('ref-forced'), $false).ContainsKey('ref-forced')) 'Git provenance invalidated identical crash inputs.'
     Assert-That ($resumed.Count -eq 1 -and $resumed.ContainsKey('ref-forced')) 'Partial run was not resumed exactly.'
     Assert-Rejected { $evidence.Resume(@($manifestPath), @('ref-forced'), $true) }
     Assert-Rejected { ([LumiCrashMatrixEvidence]::new('other-inputs', 'candidate', $false, $save)).Resume(@($manifestPath), @('ref-forced'), $false) }
-    Assert-Rejected { ([LumiCrashMatrixEvidence]::new('inputs', 'other-candidate', $false, $save)).Resume(@($manifestPath), @('ref-forced'), $false) }
     Assert-Rejected { ([LumiCrashMatrixEvidence]::new('inputs', 'candidate', $true, $save)).Resume(@($manifestPath), @('ref-forced'), $false) }
     [IO.File]::AppendAllText($verifyLog, 'changed')
     Assert-Rejected { $evidence.Resume(@($manifestPath), @('ref-forced'), $false) }
@@ -131,6 +132,16 @@ try {
     $fingerprint = [LumiCrashMatrixEvidence]::Inputs($scratch, (Join-Path $scratch 'jdk/bin/java.exe'), $scratch)
     [IO.File]::AppendAllText($mod, 'modified')
     Assert-That ([LumiCrashMatrixEvidence]::Inputs($scratch, (Join-Path $scratch 'jdk/bin/java.exe'), $scratch) -cne $fingerprint) 'Production mod changes did not invalidate launch inputs.'
+    $fixture = Join-Path $scratch 'upgrade-world'
+    New-Item -ItemType Directory -Path $fixture | Out-Null
+    [IO.File]::WriteAllText((Join-Path $fixture 'level.dat'), 'old world')
+    $fingerprint = [LumiCrashMatrixEvidence]::Inputs($scratch, (Join-Path $scratch 'jdk/bin/java.exe'), $scratch, $fixture)
+    [IO.File]::WriteAllText((Join-Path $fixture 'level.dat'), 'another world')
+    Assert-That ([LumiCrashMatrixEvidence]::Inputs($scratch, (Join-Path $scratch 'jdk/bin/java.exe'), $scratch, $fixture) -cne $fingerprint) 'Upgrade fixture changes did not invalidate crash reuse.'
+    $fingerprint = [LumiCrashMatrixEvidence]::Inputs($scratch, (Join-Path $scratch 'jdk/bin/java.exe'), $scratch)
+    New-Item -ItemType Directory -Path (Join-Path $scratch 'scripts') | Out-Null
+    [IO.File]::WriteAllText((Join-Path $scratch 'scripts/run-publication-crash-matrix.ps1'), 'changed runner')
+    Assert-That ([LumiCrashMatrixEvidence]::Inputs($scratch, (Join-Path $scratch 'jdk/bin/java.exe'), $scratch) -cne $fingerprint) 'Crash runner changes did not invalidate reuse.'
 } finally {
     if ($manifestPath) { [IO.File]::Delete($manifestPath) }
     if (-not [IO.Path]::GetFullPath($scratch).StartsWith($scratchRoot, [StringComparison]::OrdinalIgnoreCase)) {

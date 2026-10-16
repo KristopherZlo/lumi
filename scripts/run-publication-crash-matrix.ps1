@@ -43,6 +43,7 @@ if ($Phase.Count -gt 0) {
 }
 Push-Location $taskRepo
 try {
+    function Test-CodeDirty { return [bool]@(& git status --porcelain | Where-Object { $_ -notmatch '\.md"?$' }) }
     $ErrorActionPreference = 'Continue'
     $taskPrepare = $taskVerification.PrepareArguments()
     & (Join-Path $taskRepo 'gradlew.bat') @taskPrepare --no-daemon
@@ -63,8 +64,8 @@ try {
         }
     }
     $taskSha = (& git rev-parse HEAD).Trim()
-    $taskDirty = [bool](& git status --porcelain)
-    $taskFingerprint = [LumiCrashMatrixEvidence]::Inputs($taskRepo, $Java, $taskBuild)
+    $taskDirty = Test-CodeDirty
+    $taskFingerprint = [LumiCrashMatrixEvidence]::Inputs($taskRepo, $Java, $taskBuild, $UpgradeFixture)
     $taskEvidence = [LumiCrashMatrixEvidence]::new($taskFingerprint, $taskSha, $taskDirty, $taskDefinition)
     $taskResumed = $taskEvidence.Resume($ResumeFrom, $taskPhases, [bool]$RestoreCold)
     $taskRun = Join-Path $taskRepo ('build/reports/lumi-publication-crash/' +
@@ -84,7 +85,7 @@ try {
     $taskManifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $taskManifestPath -Encoding UTF8
     try {
         foreach ($taskPhase in $taskPhases) {
-            if ((& git rev-parse HEAD).Trim() -cne $taskSha -or [bool](& git status --porcelain) -ne $taskDirty) {
+            if ((& git rev-parse HEAD).Trim() -cne $taskSha -or (Test-CodeDirty) -ne $taskDirty) {
                 throw 'The candidate changed during the crash matrix.'
             }
             if ($taskResumed.ContainsKey($taskPhase)) {
@@ -177,8 +178,8 @@ try {
                     $taskProcess.Dispose()
                 }
             }
-            if ((& git rev-parse HEAD).Trim() -cne $taskSha -or [bool](& git status --porcelain) -ne $taskDirty -or
-                [LumiCrashMatrixEvidence]::Inputs($taskRepo, $Java, $taskBuild) -cne $taskFingerprint) {
+            if ((& git rev-parse HEAD).Trim() -cne $taskSha -or (Test-CodeDirty) -ne $taskDirty -or
+                [LumiCrashMatrixEvidence]::Inputs($taskRepo, $Java, $taskBuild, $UpgradeFixture) -cne $taskFingerprint) {
                 throw 'The candidate or launch inputs changed during the crash pair.'
             }
             $taskManifest.results[$taskPhase] = $taskEvidence.Record($taskDirectory, $taskPhase, $taskReceipts)
@@ -186,8 +187,8 @@ try {
             $taskManifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $taskManifestPath -Encoding UTF8
             Write-Output "Verified $Kind/$taskPhase`: $taskDirectory"
         }
-        if ((& git rev-parse HEAD).Trim() -cne $taskSha -or [bool](& git status --porcelain) -ne $taskDirty -or
-            [LumiCrashMatrixEvidence]::Inputs($taskRepo, $Java, $taskBuild) -cne $taskFingerprint) {
+        if ((& git rev-parse HEAD).Trim() -cne $taskSha -or (Test-CodeDirty) -ne $taskDirty -or
+            [LumiCrashMatrixEvidence]::Inputs($taskRepo, $Java, $taskBuild, $UpgradeFixture) -cne $taskFingerprint) {
             throw 'The candidate or launch inputs changed during the crash matrix.'
         }
         $taskManifest.status = 'passed'

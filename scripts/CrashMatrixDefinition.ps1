@@ -124,11 +124,20 @@ class LumiCrashMatrixEvidence {
     }
 
     static [string] Inputs([string] $repo, [string] $java, [string] $build) {
+        return [LumiCrashMatrixEvidence]::Inputs($repo, $java, $build, '')
+    }
+
+    static [string] Inputs([string] $repo, [string] $java, [string] $build, [string] $fixture) {
         $descriptor = Join-Path $build 'multiplayer-launch.inputs.json'
         $launch = Get-Content -LiteralPath $descriptor -Raw | ConvertFrom-Json
         if ($launch.schema -ne 1) { throw 'Unknown prepared-launch input schema.' }
         $jdk = Split-Path (Split-Path ([IO.Path]::GetFullPath($java)) -Parent) -Parent
         $roots = @($launch.classpath) + @($descriptor, (Join-Path $build 'multiplayer-launch.args'))
+        foreach ($script in @('scripts/CrashMatrixDefinition.ps1', 'scripts/run-publication-crash-matrix.ps1',
+                'scripts/MinecraftVerificationTarget.ps1', 'gradle/client-verification.gradle', 'gradle/packaged-verification.gradle')) {
+            $roots += Join-Path $repo $script
+        }
+        if ($fixture) { $roots += [IO.Path]::GetFullPath($fixture) }
         if ($launch.PSObject.Properties.Name -contains 'mods') { $roots += @($launch.mods) }
         if ($launch.PSObject.Properties.Name -contains 'configuration') {
             $roots += @($launch.configuration)
@@ -218,7 +227,7 @@ class LumiCrashMatrixEvidence {
             if ($this.Dirty) { throw 'Crash evidence can only be reused for a clean candidate.' }
             $manifest = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
             if ($manifest.schema -ne 2 -or $manifest.dirty -ne $false -or
-                $manifest.gitSha -cne $this.GitSha -or $manifest.inputFingerprint -cne $this.Fingerprint -or
+                $manifest.inputFingerprint -cne $this.Fingerprint -or
                 $manifest.kind -cne $this.Definition.Kind -or $manifest.restoreCold -ne $cold) {
                 throw "Crash evidence has a different candidate/configuration or lacks receipts: $path"
             }

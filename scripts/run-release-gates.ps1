@@ -268,6 +268,7 @@ try {
             Write-Manifest
         }
         Write-Output "$taskName`: $($taskResult.status)"
+        if ($taskResult.status -eq 'failed') { break }
     }
     if ($ReviewedEvidence) {
         $taskReviewed = Get-Content -LiteralPath $ReviewedEvidence -Raw | ConvertFrom-Json
@@ -299,7 +300,7 @@ try {
     } elseif (@($Gate | Where-Object { $taskResults[$_].status -notin @('passed', 'reused', 'not-applicable') }).Count -eq 0) {
         $taskManifest.status = 'passed'
     }
-    $taskManifest.releaseReady = @($taskRequired | Where-Object {
+    $taskManifest.releaseReady = $ServerFilter -ceq '*' -and @($taskRequired | Where-Object {
         $taskResults[$_].status -notin @('passed', 'reused')
     }).Count -eq 0
     $taskManifest.finishedUtc = [DateTime]::UtcNow.ToString('o')
