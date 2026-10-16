@@ -1,11 +1,14 @@
 param(
     [switch]$RunTests,
-    [ValidateSet('Core', 'Client', 'Exact', 'Recovery', 'Multiplayer', 'RestoreCrash', 'RestoreColdCrash',
+    [switch]$Plan,
+    [switch]$RequireReleaseReady,
+    [ValidateSet('Development', 'Adapter', 'Candidate', 'Long')]
+    [string]$Profile = 'Candidate',
+    [ValidateSet('Compile', 'Core', 'Server', 'Smoke', 'Render', 'Tools', 'UI', 'Interaction',
+        'Client', 'Exact', 'Recovery', 'Multiplayer', 'RestoreCrash', 'RestoreColdCrash',
         'SaveCrash', 'MergeCrash', 'ImportCrash', 'UpgradeCrash', 'LoadRegression', 'RestoreSoak', 'SaveMemory',
         'ClientVulkan', 'NativeViewport')]
-    [string[]]$Gate = @('Core', 'Client', 'Exact', 'Recovery', 'Multiplayer', 'RestoreCrash', 'RestoreColdCrash',
-        'SaveCrash', 'MergeCrash', 'ImportCrash', 'UpgradeCrash', 'LoadRegression', 'RestoreSoak', 'SaveMemory',
-        'ClientVulkan', 'NativeViewport'),
+    [string[]]$Gate = @(),
     [string]$Target = 'legacy-12111',
     [string]$GameVersion,
     [string]$Artifact,
@@ -18,7 +21,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-if (-not $RunTests) {
+if (-not $RunTests -and -not $Plan) {
     throw 'No tests started. Release gates can repeatedly open Minecraft windows and impose sustained CPU/GPU/memory load. Pass -RunTests only when the computer is available for testing.'
 }
 foreach ($taskResumeGate in $CrashResumeFrom.Keys) {
@@ -28,8 +31,16 @@ foreach ($taskResumeGate in $CrashResumeFrom.Keys) {
 }
 $taskRepo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 . (Join-Path $PSScriptRoot 'MinecraftVerificationTarget.ps1')
+. (Join-Path $PSScriptRoot 'VerificationPlan.ps1')
 $taskCatalog = Get-Content -LiteralPath (Join-Path $taskRepo 'gradle/minecraft-targets.json') -Raw | ConvertFrom-Json
 $taskVerification = [LumiMinecraftVerificationTarget]::new($taskCatalog, $Target, $GameVersion, $Artifact)
+$taskPlan = [LumiVerificationPlan]::new($Profile, $Gate)
+$Gate = $taskPlan.Gates
+if ($Plan) {
+    [ordered]@{ profile = $Profile; target = $taskVerification.Definition
+        selected = $taskPlan.Describe($taskVerification); releaseReady = $false } | ConvertTo-Json -Depth 8
+    return
+}
 $taskTargetArguments = @{ Target = $Target; GameVersion = $taskVerification.Definition.minecraftVersion }
 if ($taskVerification.Artifact) { $taskTargetArguments.Artifact = $taskVerification.Artifact }
 $taskBuild = if ($taskVerification.Modern) { "versions/$Target/build" } else { 'build' }
@@ -65,11 +76,12 @@ try {
     }
     $taskRequired = $taskVerification.RequiredReleaseGates()
     $taskResults = [ordered]@{}
-    foreach ($taskName in $taskRequired) {
+    foreach ($taskName in @($taskRequired + $Gate | Select-Object -Unique)) {
         $taskResults[$taskName] = [ordered]@{ status = 'unverified'; artifact = ''; detail = '' }
     }
     $taskManifest = [ordered]@{
-        schema = 2; gitSha = $taskSha; startedUtc = [DateTime]::UtcNow.ToString('o')
+        schema = 3; gitSha = $taskSha; startedUtc = [DateTime]::UtcNow.ToString('o')
+        profile = $Profile; selected = $Gate; releaseReady = $false
         minecraftTarget = $taskVerification.Definition; artifact = $taskArtifact
         status = 'incomplete'; gates = $taskResults
         buildProperties = @((Get-Content -LiteralPath 'gradle.properties') | ForEach-Object { [string]$_ })
@@ -88,9 +100,12 @@ try {
         if (-not (Test-Candidate)) {
             throw 'The candidate changed during its release run.'
         }
-        if ($taskName -eq 'UpgradeCrash' -and -not $taskVerification.Modern) { continue }
-        if ($taskName -in @('ClientVulkan', 'NativeViewport') -and $Target -cne 'modern-263') { continue }
         $taskResult = $taskResults[$taskName]
+        if (-not $taskPlan.Applies($taskName, $taskVerification)) {
+            $taskResult.status = 'not-applicable'
+            $taskResult.detail = 'This gate does not apply to the selected adapter.'
+            continue
+        }
         $taskDirectory = Join-Path $taskRun $taskName
         New-Item -ItemType Directory -Path $taskDirectory | Out-Null
         $taskLog = Join-Path $taskDirectory 'run.log'
@@ -98,12 +113,13 @@ try {
         $taskStarted = [DateTime]::UtcNow
         try {
             $taskGradleArguments = @()
-            $taskTasks = @()
+            $taskTasks = $taskPlan.Tasks($taskName)
+            $taskSuite = $taskPlan.Suite($taskName)
+            if ($taskSuite) { $taskGradleArguments = @("-Dlumi.gametest.suite=$taskSuite") }
             $taskCrashResume = @()
             if ($CrashResumeFrom.ContainsKey($taskName)) { $taskCrashResume = @($CrashResumeFrom[$taskName]) }
             switch ($taskName) {
                 'Core' {
-                    $taskTasks = @(':core:test', 'compileJava', 'compileTestJava', 'compileGametestJava', 'test', 'runPackagedGameTest')
                     $taskGradleArguments = @("-PlumiCoreTestJava=$($taskVerification.Definition.javaVersion)")
                 }
                 'Client' {
@@ -230,13 +246,18 @@ try {
         $taskManifest.status = 'invalid-candidate'
     } elseif (@($taskResults.Values | Where-Object { $_.status -eq 'failed' }).Count -gt 0) {
         $taskManifest.status = 'failed'
-    } elseif (@($taskResults.Values | Where-Object { $_.status -ne 'passed' }).Count -eq 0) {
+    } elseif (@($Gate | Where-Object { $taskResults[$_].status -notin @('passed', 'reused', 'not-applicable') }).Count -eq 0) {
         $taskManifest.status = 'passed'
     }
+    $taskManifest.releaseReady = @($taskRequired | Where-Object {
+        $taskResults[$_].status -notin @('passed', 'reused')
+    }).Count -eq 0
     $taskManifest.finishedUtc = [DateTime]::UtcNow.ToString('o')
     Write-Manifest
-    Write-Output "Release status: $($taskManifest.status); evidence: $taskRun"
-    if ($taskManifest.status -ne 'passed') { throw 'Release readiness has unverified, failed, or invalid gates. See manifest.json.' }
+    Write-Output "Selected checks: $($taskManifest.status); release ready: $($taskManifest.releaseReady); evidence: $taskRun"
+    if ($taskManifest.status -ne 'passed' -or ($RequireReleaseReady -and -not $taskManifest.releaseReady)) {
+        throw 'Requested verification has unverified, failed, or invalid gates. See manifest.json.'
+    }
 } finally {
     Pop-Location
 }
