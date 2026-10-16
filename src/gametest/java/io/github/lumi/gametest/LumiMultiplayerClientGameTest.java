@@ -29,6 +29,11 @@ public final class LumiMultiplayerClientGameTest implements FabricClientGameTest
                     var server = context.worldBuilder()
                             .adjustSettings(LumiClientBehaviorWorld::configureWorld).createServer(settings);
                     var connection = server.connect()) {
+                // New Fabric test APIs whitelist only the owner; admit the known offline peer too.
+                server.runOnServer(minecraft -> minecraft.getPlayerList().getWhiteList().add(
+                        new net.minecraft.server.players.UserWhiteListEntry(
+                                new net.minecraft.server.players.NameAndId(java.util.UUID.nameUUIDFromBytes(
+                                        "OfflinePlayer:Lumi-peer".getBytes(java.nio.charset.StandardCharsets.UTF_8)), "Lumi-peer"))));
                 Properties ready = new Properties();
                 ready.setProperty("address", "localhost:" + server.computeOnServer(
                         minecraft -> minecraft.getPort()));
