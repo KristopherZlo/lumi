@@ -18,6 +18,30 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class LiveActionJournalTest {
+    @Test void streamedGroupWaitsForEveryProducerAndSurvivesIndependentActionClosure() {
+        var journal = new LiveActionJournal();
+        UUID first = journal.begin(PLAYER_A);
+        journal.holdForMoreChanges(first);
+        journal.record(first, POSITION, block("stone"), block("dirt"));
+        journal.close(first);
+        UUID second = journal.begin(PLAYER_A);
+        journal.holdForMoreChanges(second);
+        journal.mergeGroups(first, second);
+        journal.record(second, POSITION, block("dirt"), block("gold_block"));
+        journal.close(second);
+        assertThrows(IllegalStateException.class, () -> journal.prepareUndo(PLAYER_A));
+        journal.finishChanges(first);
+        assertThrows(IllegalStateException.class, () -> journal.prepareUndo(PLAYER_A));
+        journal.finishChanges(second);
+        var undo = journal.prepareUndo(PLAYER_A).orElseThrow();
+        assertEquals(block("gold_block"), undo.expected().get(POSITION));
+        assertEquals(block("stone"), undo.replacement().get(POSITION));
+        journal.clear();
+        journal.finishChanges(first);
+        journal.finishChanges(second);
+        assertTrue(journal.prepareUndo(PLAYER_A).isEmpty());
+    }
+
     private static final UUID PLAYER_A = new UUID(0, 1);
     private static final UUID PLAYER_B = new UUID(0, 2);
     private static final UUID ENTITY = new UUID(0, 3);

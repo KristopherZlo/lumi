@@ -27,6 +27,7 @@ import java.util.function.Consumer;
 public final class LiveActionJournal {
     private final Map<UUID, MutableAction> actions = new HashMap<>();
     private final Map<UUID, UUID> openActions = new HashMap<>();
+    private final Set<UUID> pendingChanges = new HashSet<>();
     private final Map<UUID, PlayerStacks> playerStacks = new HashMap<>();
     private final OwnershipIndex<BlockPosition> blockOwners = new OwnershipIndex<>();
     private final OwnershipIndex<UUID> entityOwners = new OwnershipIndex<>();
@@ -251,6 +252,21 @@ public final class LiveActionJournal {
         requireAction(actionId).causalReferences++;
     }
 
+    /** A streamed edit is not undoable until its producer finishes or drains. */
+    public synchronized void holdForMoreChanges(UUID actionId) {
+        requireAction(actionId);
+        if (pendingChanges.add(actionId)) retain(actionId);
+    }
+
+    public synchronized void finishChanges(UUID actionId) {
+        if (pendingChanges.remove(actionId)) release(actionId);
+    }
+
+    public synchronized boolean isAvailable(UUID actionId) {
+        MutableAction action = actions.get(Objects.requireNonNull(actionId, "actionId"));
+        return action != null && action.available;
+    }
+
     public synchronized void release(UUID actionId) {
         MutableAction action = actions.get(Objects.requireNonNull(actionId, "actionId"));
         if (action == null) {
@@ -309,6 +325,7 @@ public final class LiveActionJournal {
                 .toList();
         actions.clear();
         openActions.clear();
+        pendingChanges.clear();
         playerStacks.clear();
         blockOwners.clear();
         entityOwners.clear();
@@ -393,6 +410,9 @@ public final class LiveActionJournal {
                 .map(this::requireAction)
                 .filter(action -> action.groupId.equals(selected.groupId))
                 .toList();
+        if (group.stream().anyMatch(action -> pendingChanges.contains(action.id))) {
+            throw new IllegalStateException("The selected builder edit is still arriving");
+        }
         if (selected.checkpoint != null) {
             if (group.size() != 1) {
                 throw new IllegalStateException(
