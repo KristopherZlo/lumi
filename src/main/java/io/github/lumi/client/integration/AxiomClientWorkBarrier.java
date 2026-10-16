@@ -7,6 +7,7 @@ import com.moulberry.axiom.world_modification.Dispatcher;
 import com.moulberry.axiom.world_modification.HistoryIO;
 import io.github.lumi.LumiMod;
 import io.github.lumi.mixin.client.AxiomDispatcherPendingAccess;
+import io.github.lumi.minecraft.runtime.MinecraftPlayerMessages;
 import io.github.lumi.network.BuilderToolBarrierPayload;
 import io.github.lumi.network.BuilderToolBarrierPayload.State;
 import java.util.LinkedHashMap;
@@ -126,8 +127,8 @@ public final class AxiomClientWorkBarrier {
                 throw new IllegalStateException("Native Axiom worker is not tracked");
             }
             Minecraft client = Minecraft.getInstance();
-            if (invalidateHistory && client.player != null) client.player.displayClientMessage(
-                    Component.translatable("lumi.axiom.history_invalidated"), false);
+            if (invalidateHistory && client.player != null) MinecraftPlayerMessages.chat(
+                    client.player, Component.translatable("lumi.axiom.history_invalidated"));
         } catch (RuntimeException failure) {
             LumiMod.LOGGER.error("Cannot quiesce pending Axiom work", failure);
             finish(State.REFUSED);
@@ -178,7 +179,7 @@ public final class AxiomClientWorkBarrier {
         if (requests.isEmpty() && state == State.READY) {
             paused = false;
         } else if (requests.isEmpty() && state == State.REFUSED && Minecraft.getInstance().player != null) {
-            Minecraft.getInstance().player.displayClientMessage(Component.translatable("lumi.axiom.sync_refused"), false);
+            MinecraftPlayerMessages.chat(Minecraft.getInstance().player, Component.translatable("lumi.axiom.sync_refused"));
         }
     }
 
