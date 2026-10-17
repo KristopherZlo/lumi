@@ -22,6 +22,7 @@ final class RuntimeObservation {
     private final Supplier<ClientState> client;
     private final LongSupplier ticks;
     private final Runnable finish;
+    private final Runnable verify;
     private final Path directory;
     private final BufferedWriter samples;
     private final int warmup = seconds("warmupSeconds", 120);
@@ -38,11 +39,12 @@ final class RuntimeObservation {
     private boolean completed;
 
     RuntimeObservation(Properties metadata, Supplier<ClientState> client,
-            LongSupplier ticks, Runnable finish) throws IOException {
+            LongSupplier ticks, Runnable verify, Runnable finish) throws IOException {
         this.metadata = metadata;
         this.client = client;
         this.ticks = ticks;
         this.finish = finish;
+        this.verify = verify;
         directory = Path.of(System.getProperty("lumi.observation.output"));
         Files.createDirectories(directory);
         samples = Files.newBufferedWriter(directory.resolve("samples.csv"), StandardOpenOption.CREATE_NEW);
@@ -74,6 +76,7 @@ final class RuntimeObservation {
                 if (measured < Math.max(1, duration * 9 / 10) || paused != 0) {
                     throw new IllegalStateException("Insufficient ordinary unpaused samples: " + measured + "/" + paused);
                 }
+                verify.run();
                 complete(null);
                 return;
             }
@@ -102,7 +105,10 @@ final class RuntimeObservation {
         metadata.setProperty("samples", Integer.toString(measured));
         metadata.setProperty("pausedSamples", Integer.toString(paused));
         metadata.setProperty("lastScreen", client.get().screen());
-        if (failure != null) metadata.setProperty("failure", failure.toString());
+        if (failure != null) {
+            metadata.setProperty("failure", failure.toString());
+            failure.printStackTrace();
+        }
         try {
             samples.close();
             writeMetadata();

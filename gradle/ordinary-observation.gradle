@@ -13,7 +13,17 @@ def evidence = new PackagedGameTestEvidence()
 def observationJar = tasks.register('ordinaryObservationJar', Jar) {
     from(sourceSets.gametest.output) {
         include 'io/github/lumi/observation/OrdinaryClientObservation.class',
-                'io/github/lumi/observation/RuntimeObservation*.class', 'observation.mod.json'
+                'io/github/lumi/observation/RuntimeObservation*.class',
+                'io/github/lumi/observation/OrdinaryPlayRoute.class', 'observation.mod.json'
+        include 'io/github/lumi/gametest/LumiOrdinaryRestoreSoak*.class',
+                'io/github/lumi/gametest/LumiRestoreSoakChecks.class',
+                'io/github/lumi/gametest/LumiRestoreMeasurement*.class',
+                'io/github/lumi/gametest/LumiServerTickProbe*.class',
+                'io/github/lumi/gametest/LumiWorldSnapshot*.class',
+                'io/github/lumi/gametest/LumiColdRestoreManifest.class',
+                'io/github/lumi/gametest/LumiBehaviorReport*.class',
+                'io/github/lumi/gametest/LumiHistoryBenchmarkConfig*.class',
+                'io/github/lumi/gametest/LumiRestorePerformanceGate*.class'
         filesMatching('observation.mod.json') {
             expand(java_version: target.javaVersion())
             name = 'fabric.mod.json'

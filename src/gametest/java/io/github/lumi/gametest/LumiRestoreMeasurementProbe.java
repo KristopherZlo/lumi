@@ -43,6 +43,7 @@ final class LumiRestoreMeasurementProbe implements AutoCloseable {
     long startedNanos() { return started; }
     AtomicReference<Throwable> failure() { return failure; }
     void sampleHeap() { heapPeak = Math.max(heapPeak, usedHeap()); }
+    boolean coversTerminalTick() { return terminal.get() != 0 && ticks != null && ticks.covers(terminal.get()); }
 
     LumiRestoreMeasurement measurement() {
         if (failure.get() != null) throw new AssertionError("Mutation measurement failed", failure.get());

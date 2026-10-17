@@ -1,8 +1,10 @@
 package io.github.lumi.observation;
 
+import io.github.lumi.gametest.LumiOrdinaryRestoreSoak;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
@@ -11,6 +13,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 
@@ -29,14 +32,31 @@ public final class OrdinaryClientObservation implements ClientModInitializer {
         try {
             Properties metadata = identifyRuntime();
             Minecraft client = Minecraft.getInstance();
+            String manifest = System.getProperty("lumi.observation.soakManifest", "");
+            if (!manifest.isBlank() && !Boolean.parseBoolean(metadata.getProperty("lumi"))) {
+                throw new IllegalArgumentException("Ordinary Restore soak requires Lumi");
+            }
+            int cycles = Integer.getInteger("lumi.observation.restoreCycles", 20);
+            var soak = manifest.isBlank() ? null : new LumiOrdinaryRestoreSoak(Path.of(manifest), cycles);
+            var route = Boolean.getBoolean("lumi.observation.playRoute") ? new OrdinaryPlayRoute() : null;
+            metadata.setProperty("restoreCycles", Integer.toString(soak == null ? 0 : cycles));
             RuntimeObservation observation = new RuntimeObservation(metadata,
-                    () -> state, serverTicks::get, () -> client.execute(client::stop));
-            ClientTickEvents.END_CLIENT_TICK.register(ticking -> state =
-                    new RuntimeObservation.ClientState(ticking.getFps(),
-                            ticking.level != null && ticking.player != null
-                                    && ticking.getSingleplayerServer() != null,
-                            ticking.isPaused(), ticking.screen == null ? "none" : ticking.screen.getClass().getName(),
-                            simulationFrozen));
+                    () -> state, serverTicks::get, () -> {
+                        if (soak != null) soak.verifyCompleted();
+                        if (route != null) {
+                            route.verify(Integer.getInteger("lumi.observation.seconds", 300));
+                            metadata.setProperty("playRoute", route.describe());
+                        }
+                    },
+                    () -> client.execute(client::stop));
+            ServerLifecycleEvents.SERVER_STARTED.register(server -> server.tickRateManager().setFrozen(false));
+            ClientTickEvents.END_CLIENT_TICK.register(ticking -> {
+                boolean loaded = ticking.level != null && ticking.player != null
+                        && ticking.getSingleplayerServer() != null && (soak == null || soak.tick(ticking));
+                if (loaded && route != null) route.tick(ticking);
+                state = new RuntimeObservation.ClientState(ticking.getFps(), loaded,
+                        ticking.isPaused(), ticking.screen == null ? "none" : ticking.screen.getClass().getName(), simulationFrozen);
+            });
             ServerTickEvents.END_SERVER_TICK.register(server -> {
                 serverTicks.incrementAndGet();
                 simulationFrozen = server.tickRateManager().isFrozen();

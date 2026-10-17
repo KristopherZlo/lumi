@@ -31,6 +31,7 @@ final class LumiServerTickProbe implements AutoCloseable {
     private final MinecraftServer server;
     private final int openedAtTick;
     private final AtomicLong maximumNanos = new AtomicLong();
+    private volatile long sampledNanos;
     private final boolean tracing = Boolean.getBoolean("lumi.benchmark.trace");
     private TickTrace trace;
 
@@ -48,12 +49,15 @@ final class LumiServerTickProbe implements AutoCloseable {
         return maximumNanos.get();
     }
 
+    boolean covers(long time) { return sampledNanos >= time; }
+
     private void samplePreviousTick(MinecraftServer tickingServer) {
         int completedTick = tickingServer.getTickCount() - 1;
         if (tickingServer == server && completedTick > openedAtTick) {
             long[] times = tickingServer.getTickTimesNanos();
             maximumNanos.accumulateAndGet(
                     times[Math.floorMod(completedTick, times.length)], Math::max);
+            sampledNanos = System.nanoTime();
         }
         if (tracing && tickingServer == server) {
             trace = new TickTrace();

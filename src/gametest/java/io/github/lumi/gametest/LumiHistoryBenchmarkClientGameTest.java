@@ -108,8 +108,10 @@ public final class LumiHistoryBenchmarkClientGameTest
                                         .prepareBranchSwitch(
                                                 new LumiUiTestDriver(test));
                         LumiColdRestoreManifest captured =
-                                LumiColdRestoreManifest.capture(
-                                        "Lumi behavior seed 710", fixture);
+                                new LumiColdRestoreManifest("Lumi behavior seed 710",
+                                        fixture.a().ref().name(), fixture.a().ref().commit(),
+                                        fixture.b().ref().name(), fixture.b().ref().commit(), fixture.area(),
+                                        fixture.a().snapshot().sha256(), fixture.b().snapshot().sha256(), "");
                         captured.write(Path.of(manifest));
                         report.event("fixture", "cold_restore_manifest",
                                 "written", 0, 0,

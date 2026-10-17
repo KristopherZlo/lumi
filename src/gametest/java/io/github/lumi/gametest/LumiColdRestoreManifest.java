@@ -38,21 +38,6 @@ record LumiColdRestoreManifest(
         Objects.requireNonNull(fixtureDigest, "fixtureDigest");
     }
 
-    static LumiColdRestoreManifest capture(
-            String worldName,
-            LumiHistoryBenchmarkScenario.BranchFixture fixture) {
-        return new LumiColdRestoreManifest(
-                worldName,
-                fixture.a().ref().name(),
-                fixture.a().ref().commit(),
-                fixture.b().ref().name(),
-                fixture.b().ref().commit(),
-                fixture.area(),
-                fixture.a().snapshot().sha256(),
-                fixture.b().snapshot().sha256(),
-                "");
-    }
-
     static LumiColdRestoreManifest read(Path path) throws IOException {
         Properties values = new Properties();
         try (Reader reader = Files.newBufferedReader(

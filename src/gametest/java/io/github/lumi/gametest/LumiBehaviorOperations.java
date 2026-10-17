@@ -242,6 +242,7 @@ final class LumiBehaviorOperations {
                     probe.begin(server.computeOnServer(LumiServerTickProbe::open))), probe::startedNanos);
             if (probe.startedNanos() == 0) throw new AssertionError(name + " did not mark its mutation boundary");
             awaitOperation(name, requestId, probe.failure(), probe.startedNanos(), probe::sampleHeap);
+            context.waitFor(client -> probe.coversTerminalTick());
         }
         return probe.measurement();
     }
