@@ -122,8 +122,11 @@ class ObjectStoreTest {
             for (int reader = 0; reader < 8; reader++) {
                 readers.add(executor.submit(() -> {
                     readersReady.countDown();
-                    for (int reads = 0; reads < 128 || running.get(); reads++) {
-                        assertArrayEquals(payload, new ObjectStore(tempDir).read(retained));
+                    try (var session = new ObjectStore(tempDir).beginReadSession()) {
+                        for (int reads = 0; reads < 128 || running.get(); reads++) {
+                            assertArrayEquals(payload, session.read(retained));
+                            assertArrayEquals(payload, new ObjectStore(tempDir).read(retained));
+                        }
                     }
                     return null;
                 }));
@@ -131,6 +134,22 @@ class ObjectStoreTest {
             for (var reader : readers) reader.get(30, java.util.concurrent.TimeUnit.SECONDS);
             compaction.get(30, java.util.concurrent.TimeUnit.SECONDS);
         }
+    }
+
+    @Test
+    @org.junit.jupiter.api.Timeout(5)
+    void missingRetiredObjectFailsInsteadOfRetryingForever() throws IOException {
+        var store = new ObjectStore(tempDir);
+        ObjectId id;
+        try (var batch = store.beginBatch()) {
+            id = batch.write("retired object".getBytes(StandardCharsets.UTF_8));
+            batch.publish();
+        }
+        assertTrue(store.listIds().contains(id));
+        try (var files = Files.list(tempDir.resolve("packs"))) {
+            for (Path file : files.toList()) Files.delete(file);
+        }
+        assertThrows(java.nio.file.NoSuchFileException.class, () -> store.read(id));
     }
 
     @Test

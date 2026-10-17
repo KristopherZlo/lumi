@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 import net.jpountz.lz4.LZ4Exception;
 import net.jpountz.lz4.LZ4Factory;
 
@@ -555,11 +557,12 @@ public final class ObjectStore {
                     return packs.read(packed);
                 } catch (java.nio.file.FileSystemException replacedPack) {
                     PackedObject refreshed = refreshPackedObjects().get(id);
-                    if (refreshed == null) throw replacedPack;
-                    // A new immutable pack is progress; only an unchanged failure consumes retries.
-                    failures = refreshed.pack().equals(packed.pack()) ? failures + 1 : 0;
+                    // A retiring directory snapshot may briefly omit the published replacement.
+                    boolean progress = refreshed != null && !refreshed.pack().equals(packed.pack());
+                    failures = progress ? 0 : failures + 1;
                     if (failures == 3) throw replacedPack;
-                    packed = refreshed;
+                    if (!progress) LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10L * failures));
+                    if (refreshed != null) packed = refreshed;
                 }
             }
         }
