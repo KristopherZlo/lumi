@@ -122,10 +122,7 @@ public final class MinecraftLiveBlockWorldAccess implements LiveBlockWorldAccess
                 ? Optional.empty() : Optional.of(canonicalTag(blockEntity));
         Optional<CanonicalNbt> canonicalNbt = nbt.isEmpty()
                 ? Optional.empty() : Optional.of(MinecraftNbtCodec.encode(nbt.orElseThrow()));
-        BlockSnapshot snapshot = new BlockSnapshot(
-                BlockStateParser.serialize(state), canonicalNbt);
-        prepared.put(snapshot, new PreparedBlock(state, nbt.map(CompoundTag::copy)));
-        return snapshot;
+        return new BlockSnapshot(BlockStateParser.serialize(state), canonicalNbt);
     }
 
     @Override
@@ -155,6 +152,10 @@ public final class MinecraftLiveBlockWorldAccess implements LiveBlockWorldAccess
 
     public void clear() {
         prepared.clear();
+    }
+
+    public void releasePrepared(BlockSnapshot snapshot) {
+        prepared.remove(snapshot);
     }
 
     public void prepare(BlockSnapshot snapshot) throws IOException {

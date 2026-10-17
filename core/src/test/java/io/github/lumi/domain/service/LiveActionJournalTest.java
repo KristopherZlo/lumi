@@ -13,11 +13,84 @@ import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.ObjectId;
 import java.util.List;
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class LiveActionJournalTest {
+    @Test void releasesCoalescedAndRevertedStatesWhileKeepingUndoEndpoints() {
+        var prepared = new HashSet<BlockSnapshot>();
+        var journal = new LiveActionJournal(LiveActionJournal.Limits.DEFAULT, ignored -> { }, prepared::remove);
+        UUID action = journal.begin(PLAYER_A);
+        prepared.addAll(List.of(block("stone"), block("dirt"), block("gold_block")));
+        journal.record(action, POSITION, block("stone"), block("dirt"));
+        journal.record(action, POSITION, block("dirt"), block("gold_block"));
+        assertEquals(java.util.Set.of(block("stone"), block("gold_block")), prepared);
+        journal.record(action, POSITION, block("gold_block"), block("stone"));
+        assertTrue(prepared.isEmpty());
+        assertTrue(!journal.close(action));
+    }
+
+    @Test void sharedPreparedStateSurvivesUntilItsFinalActionLeavesHistory() {
+        var prepared = new HashSet<BlockSnapshot>();
+        var journal = new LiveActionJournal(LiveActionJournal.Limits.DEFAULT, ignored -> { }, prepared::remove);
+        prepared.addAll(List.of(block("stone"), block("dirt"), block("gold_block")));
+        UUID first = journal.begin(PLAYER_A);
+        journal.record(first, POSITION, block("stone"), block("dirt"));
+        UUID second = journal.begin(PLAYER_B);
+        journal.record(second, new BlockPosition(8, 4, 5), block("stone"), block("gold_block"));
+        journal.close(second);
+        journal.makeUnavailable(first, "discard first");
+        journal.close(first);
+        assertEquals(java.util.Set.of(block("stone"), block("gold_block")), prepared);
+        journal.clear();
+        assertTrue(prepared.isEmpty());
+    }
+
+    @Test void newRecordPinsSharedEndpointsBeforeClearingRedo() {
+        var prepared = new HashSet<BlockSnapshot>();
+        var journal = new LiveActionJournal(LiveActionJournal.Limits.DEFAULT, ignored -> { }, prepared::remove);
+        prepared.addAll(List.of(block("air"), block("stone")));
+        add(journal, 1);
+        journal.complete(journal.prepareUndo(PLAYER_A).orElseThrow());
+        prepared.add(block("gold_block"));
+        UUID next = journal.begin(PLAYER_A);
+        journal.record(next, POSITION, block("stone"), block("gold_block"));
+        journal.close(next);
+        assertEquals(java.util.Set.of(block("stone"), block("gold_block")), prepared);
+        assertEquals(block("stone"), journal.prepareUndo(PLAYER_A).orElseThrow().replacement().get(POSITION));
+    }
+
+    @Test void rejectedAndLateRecordsCannotRetainPreparedStates() {
+        var prepared = new HashSet<BlockSnapshot>();
+        var journal = new LiveActionJournal(new LiveActionJournal.Limits(64, 32, 128, 256),
+                ignored -> { }, prepared::remove);
+        UUID action = journal.begin(PLAYER_A);
+        prepared.addAll(List.of(block("stone"), block("gold_block")));
+        journal.record(action, POSITION, block("stone"), block("gold_block"));
+        assertTrue(prepared.isEmpty());
+        prepared.addAll(List.of(block("dirt"), block("air")));
+        journal.record(action, POSITION, block("dirt"), block("air"));
+        assertTrue(prepared.isEmpty());
+        journal.close(action);
+    }
+
+    @Test void actionEvictionDoesNotReleaseEndpointsPreparedForNewRecord() {
+        var prepared = new HashSet<BlockSnapshot>();
+        var journal = new LiveActionJournal(new LiveActionJournal.Limits(64, 1000, 1000, 80),
+                ignored -> { }, prepared::remove);
+        prepared.addAll(List.of(block("air"), block("stone")));
+        add(journal, 1);
+        UUID second = journal.begin(PLAYER_B);
+        journal.record(second, POSITION, block("air"), block("stone"));
+        journal.close(second);
+        assertEquals(java.util.Set.of(block("air"), block("stone")), prepared);
+        assertTrue(journal.prepareUndo(PLAYER_A).isEmpty());
+        journal.clear();
+        assertTrue(prepared.isEmpty());
+    }
+
     @Test void streamedGroupWaitsForEveryProducerAndSurvivesIndependentActionClosure() {
         var journal = new LiveActionJournal();
         UUID first = journal.begin(PLAYER_A);

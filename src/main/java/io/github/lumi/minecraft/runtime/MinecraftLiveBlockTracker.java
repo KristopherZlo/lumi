@@ -107,9 +107,7 @@ public final class MinecraftLiveBlockTracker {
         Optional<CanonicalNbt> blockEntity =
                 baseline.blockState().equals(visible.blockState())
                         ? baseline.blockEntity() : visible.blockEntity();
-        BlockSnapshot before = new BlockSnapshot(visible.blockState(), blockEntity);
-        world.prepare(before);
-        return before;
+        return new BlockSnapshot(visible.blockState(), blockEntity);
     }
 
     public void removing(

@@ -33,8 +33,10 @@ public final class LiveActionJournal {
     private final OwnershipIndex<UUID> entityOwners = new OwnershipIndex<>();
     private final Map<UUID, Long> playerBytes = new HashMap<>();
     private final Map<UUID, String> unavailableReasons = new HashMap<>();
+    private final Map<BlockSnapshot, Integer> blockStateReferences = new HashMap<>();
     private final Limits limits;
     private final Consumer<Checkpoint> checkpointRelease;
+    private final Consumer<BlockSnapshot> blockStateRelease;
     private long nextSequence;
     private long retainedBytes;
     private long unsafeBeforeSequence;
@@ -54,9 +56,18 @@ public final class LiveActionJournal {
     public LiveActionJournal(
             Limits limits,
             Consumer<Checkpoint> checkpointRelease) {
+        this(limits, checkpointRelease, ignored -> { });
+    }
+
+    /** Release callbacks must be idempotent and must not throw or reenter the journal. */
+    public LiveActionJournal(
+            Limits limits,
+            Consumer<Checkpoint> checkpointRelease,
+            Consumer<BlockSnapshot> blockStateRelease) {
         this.limits = Objects.requireNonNull(limits, "limits");
         this.checkpointRelease = Objects.requireNonNull(
                 checkpointRelease, "checkpointRelease");
+        this.blockStateRelease = Objects.requireNonNull(blockStateRelease, "blockStateRelease");
     }
 
     public synchronized UUID begin(UUID player) {
@@ -89,31 +100,38 @@ public final class LiveActionJournal {
             BlockSnapshot before,
             BlockSnapshot after) {
         MutableAction causalAction = requireAction(actionId);
-        if (!causalAction.available) {
-            return causalAction.id;
-        }
         Objects.requireNonNull(position, "position");
         Objects.requireNonNull(before, "before");
         Objects.requireNonNull(after, "after");
+        if (!causalAction.available) {
+            discardUnowned(before);
+            discardUnowned(after);
+            return causalAction.id;
+        }
         MutableAction action = effectiveAction(
                 causalAction, position, blockOwners);
-        startRecording(action);
         Change previous = action.changes.get(position);
         Change updated = new Change(previous == null ? before : previous.before, after);
         long previousBytes = previous == null ? 0 : estimatedBytes(previous);
         long updatedBytes = updated.before.equals(updated.after) ? 0 : estimatedBytes(updated);
-        long delta = updatedBytes - previousBytes;
-        if (!resize(action, delta)) {
+        // Pin the new endpoints before clearing Redo or evicting another owner.
+        if (updatedBytes != 0) retainBlockStates(updated);
+        boolean recorded = false;
+        try {
+            startRecording(action);
+            if (!resize(action, updatedBytes - previousBytes)) return action.id;
+            if (previous != null) releaseBlockStates(previous);
+            if (updatedBytes == 0) action.changes.remove(position);
+            else action.changes.put(position, updated);
+            recorded = true;
+            blockOwners.set(position, action, updatedBytes != 0 && action.applied);
+            touchClosedGroup(action);
             return action.id;
+        } finally {
+            if (!recorded && updatedBytes != 0) releaseBlockStates(updated);
+            discardUnowned(before);
+            discardUnowned(after);
         }
-        if (updatedBytes == 0) {
-            action.changes.remove(position);
-        } else {
-            action.changes.put(position, updated);
-        }
-        blockOwners.set(position, action, updatedBytes != 0 && action.applied);
-        touchClosedGroup(action);
-        return action.id;
     }
 
     public synchronized UUID recordEntity(
@@ -333,6 +351,8 @@ public final class LiveActionJournal {
         unavailableReasons.clear();
         retainedBytes = 0;
         unsafeBeforeSequence = 0;
+        blockStateReferences.keySet().forEach(blockStateRelease);
+        blockStateReferences.clear();
         checkpoints.forEach(checkpointRelease);
     }
 
@@ -684,12 +704,37 @@ public final class LiveActionJournal {
         action.bytes = 0;
         action.changes.keySet().forEach(position -> blockOwners.set(position, action, false));
         action.entities.keySet().forEach(entity -> entityOwners.set(entity, action, false));
+        action.changes.values().forEach(this::releaseBlockStates);
         action.changes.clear();
         action.entities.clear();
         PlayerStacks stacks = stacks(action.player);
         if (stacks.undo.remove(action.id) || stacks.redo.remove(action.id)) {
             stacks.remove(action.groupId);
         }
+    }
+
+    private void retainBlockStates(Change change) {
+        blockStateReferences.merge(change.before, 1, Integer::sum);
+        blockStateReferences.merge(change.after, 1, Integer::sum);
+    }
+
+    private void releaseBlockStates(Change change) {
+        releaseBlockState(change.before);
+        releaseBlockState(change.after);
+    }
+
+    private void releaseBlockState(BlockSnapshot snapshot) {
+        int remaining = blockStateReferences.get(snapshot) - 1;
+        if (remaining == 0) {
+            blockStateReferences.remove(snapshot);
+            blockStateRelease.accept(snapshot);
+        } else {
+            blockStateReferences.put(snapshot, remaining);
+        }
+    }
+
+    private void discardUnowned(BlockSnapshot snapshot) {
+        if (!blockStateReferences.containsKey(snapshot)) blockStateRelease.accept(snapshot);
     }
 
     private void adjustBytes(UUID player, long delta) {
@@ -708,7 +753,7 @@ public final class LiveActionJournal {
 
     private static long estimatedBytes(BlockSnapshot snapshot) {
         return snapshot.blockState().getBytes(StandardCharsets.UTF_8).length
-                + snapshot.blockEntity().map(nbt -> nbt.bytes().length).orElse(0);
+                + snapshot.blockEntity().map(nbt -> nbt.byteSize()).orElse(0);
     }
 
     private static long estimatedBytes(EntityChange change) {
@@ -717,7 +762,7 @@ public final class LiveActionJournal {
     }
 
     private static long estimatedBytes(EntityState state) {
-        return 24L + state.type().getBytes(StandardCharsets.UTF_8).length + state.nbt().bytes().length;
+        return 24L + state.type().getBytes(StandardCharsets.UTF_8).length + state.nbt().byteSize();
     }
 
     public enum Direction {

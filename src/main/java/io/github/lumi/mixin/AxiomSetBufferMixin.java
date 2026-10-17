@@ -100,7 +100,7 @@ abstract class AxiomSetBufferMixin {
                     BlockSnapshot snapshot = runtime.liveWorld().read(position);
                     long bytes = 128L
                             + snapshot.blockState().getBytes(StandardCharsets.UTF_8).length
-                            + snapshot.blockEntity().map(nbt -> nbt.bytes().length).orElse(0);
+                            + snapshot.blockEntity().map(nbt -> nbt.byteSize()).orElse(0);
                     if (retainedBytes[0] + bytes > LUMI_MAX_CAPTURE_BYTES) {
                         available[0] = false;
                         before.clear();

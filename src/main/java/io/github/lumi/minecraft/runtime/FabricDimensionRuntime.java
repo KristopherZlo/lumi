@@ -281,8 +281,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.refs = refs;
         this.sessionCheckpoints = Objects.requireNonNull(
                 sessionCheckpoints, "sessionCheckpoints");
-        liveActions = new LiveActionJournal(
-                checkpoint -> releaseSessionCheckpoint(checkpoint.hiddenRef()));
+        liveWorld = new MinecraftLiveBlockWorldAccess(level, freeze);
+        liveActions = new LiveActionJournal(LiveActionJournal.Limits.DEFAULT,
+                checkpoint -> releaseSessionCheckpoint(checkpoint.hiddenRef()),
+                liveWorld::releasePrepared);
         axiomSetBlockActions = new AxiomSetBlockActionGrouper(liveActions);
         axiomBufferActions = new AxiomBufferActionGrouper(liveActions);
         axiomBarrier = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom")
@@ -294,7 +296,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.recoveryLease = recoveryLease;
         worldReader = new MinecraftWorldStateReader(level);
         entityDurability = new EntityChunkDurabilityGate(mutations);
-        liveWorld = new MinecraftLiveBlockWorldAccess(level, freeze);
         liveEntityWorld = new MinecraftLiveEntityWorldAccess(level, freeze);
         liveBlocks = new MinecraftLiveBlockTracker(
                 liveActions, liveWorld, this::recordCausalZoneGrowth);
