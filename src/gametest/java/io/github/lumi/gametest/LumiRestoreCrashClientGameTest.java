@@ -217,7 +217,8 @@ public final class LumiRestoreCrashClientGameTest implements FabricClientGameTes
         BlockPos origin = server.computeOnServer(minecraft ->
                 minecraft.getPlayerList().getPlayers().getFirst().blockPosition());
         List<BlockPos> positions = new ArrayList<>();
-        for (int offset = 0; offset < 128; offset += 32) {
+        // Keep the fixture outside the spawning player's collision box.
+        for (int offset = 8; offset < 128; offset += 32) {
             positions.add(actions.surfacePosition(origin.getX() + offset, origin.getZ()));
         }
         return List.copyOf(positions);
