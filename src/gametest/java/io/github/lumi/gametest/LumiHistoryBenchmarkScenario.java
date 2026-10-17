@@ -279,7 +279,6 @@ final class LumiHistoryBenchmarkScenario {
         checks.assertValue("branch_b_head_created",
                 branchB.commit().hex(), latest.hex());
 
-        operations.switchBranch("branch_setup_b", branchB.name());
         BranchEndpoint endpointB = new BranchEndpoint(
                 branchB, history.latestSnapshot().orElseThrow());
         assertActive(checks, "branch_setup_b", endpointB);
@@ -365,7 +364,7 @@ final class LumiHistoryBenchmarkScenario {
         List<CommitId> commits = new ArrayList<>();
         commits.add(initial.commit());
         Optional<BranchRef> branchA = captureEndpoints
-                ? Optional.of(operations.createBranch("benchmark-a"))
+                ? Optional.of(operations.createBranch("benchmark-a", initial.commit()))
                 : Optional.empty();
 
         editRandomVolume("benchmark_base_edit", baseArea, 0);
