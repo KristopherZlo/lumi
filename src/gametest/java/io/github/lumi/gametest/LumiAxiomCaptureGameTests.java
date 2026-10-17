@@ -154,6 +154,7 @@ public final class LumiAxiomCaptureGameTests {
         private final boolean fallback;
         private final boolean expanded;
         private final boolean sparseNbt;
+        private final boolean cold;
         private final boolean partialApply;
         private final boolean verificationFailure;
         private final UUID lease = UUID.randomUUID();
@@ -177,13 +178,14 @@ public final class LumiAxiomCaptureGameTests {
             fallback = capture != Capture.EXACT;
             expanded = capture == Capture.EXPANDED_FALLBACK;
             sparseNbt = capture == Capture.SPARSE_NBT_FALLBACK;
+            cold = capture == Capture.EXACT && failure == Failure.NONE;
             partialApply = failure == Failure.APPLY || failure == Failure.APPLY_AND_VERIFY;
             verificationFailure = failure == Failure.VERIFY || failure == Failure.APPLY_AND_VERIFY;
             runtime = LumiMod.serverRuntime().find(helper.getLevel()).orElseThrow();
             BlockPos origin = fixtureOrigin(helper);
             positions = sparseNbt ? IntStream.range(0, 32)
                     .mapToObj(index -> origin.offset((index % 4) * 16, (index / 4) * 16, 0)).toList()
-                    : List.of(origin, origin.east(), origin.above(16));
+                    : List.of(origin, origin.east(), cold ? origin.offset(512, 16, 512) : origin.above(16));
             var keys = new LinkedHashSet<SectionKey>();
             if (expanded) {
                 SectionKey first = MinecraftSectionCapture.key(origin);
@@ -200,11 +202,12 @@ public final class LumiAxiomCaptureGameTests {
         }
 
         private void run() {
-            helper.startSequence()
+            var sequence = helper.startSequence()
                     .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, lease))
                     .thenExecute(this::initialize)
-                    .thenWaitUntil(this::awaitIdle)
-                    .thenExecute(this::editAndSave)
+                    .thenWaitUntil(this::awaitIdle);
+            if (cold) sequence.thenIdle(400);
+            sequence.thenExecute(this::editAndSave)
                     .thenWaitUntil(this::awaitIdle)
                     .thenExecute(() -> {
                         succeeded();
@@ -262,6 +265,12 @@ public final class LumiAxiomCaptureGameTests {
 
         private void editAndSave() {
             succeeded();
+            if (cold) {
+                BlockPos destination = positions.getLast();
+                helper.assertTrue(helper.getLevel().getChunkSource().getChunkNow(
+                                destination.getX() >> 4, destination.getZ() >> 4) == null,
+                        "Cold exact-capture fixture still has its destination loaded");
+            }
             baselineCommit = activeCommit();
             var injectedFailure = new IllegalStateException("Injected Axiom failure after the first native section");
             var injectedVerification = new IOException("Injected Axiom post-apply identification failure");

@@ -32,6 +32,7 @@ import org.spongepowered.asm.mixin.Mixin;
 @Mixin(value = AxiomServerboundSetBuffer.class, remap = false)
 abstract class AxiomSetBufferMixin {
     private static final long LUMI_MAX_CAPTURE_BYTES = 64L << 20;
+    private static final long LUMI_BLOCK_CAPTURE_OVERHEAD = 128L;
     private static final MinecraftSectionCapture LUMI_SECTIONS = new MinecraftSectionCapture();
 
     @WrapMethod(method = "applyBlockBufferServer")
@@ -86,8 +87,17 @@ abstract class AxiomSetBufferMixin {
             FabricDimensionRuntime runtime,
             Map<BlockPosition, BlockSnapshot> before,
             Set<SectionKey> sections) {
+        long[] minimumBytes = {0};
+        buffer.forEach((x, y, z, state) -> {
+            if (state == BlockBuffer.EMPTY_STATE) return;
+            sections.add(new SectionKey(x >> 4, y >> 4, z >> 4));
+            // Every snapshot needs its fixed allowance and a nonempty state name.
+            minimumBytes[0] += LUMI_BLOCK_CAPTURE_OVERHEAD + 1;
+        });
+        if (buffer.estimateSizeInRAM() > LUMI_MAX_CAPTURE_BYTES
+                || minimumBytes[0] > LUMI_MAX_CAPTURE_BYTES) return false;
         long[] retainedBytes = {0};
-        boolean[] available = {buffer.estimateSizeInRAM() <= LUMI_MAX_CAPTURE_BYTES};
+        boolean[] available = {true};
         buffer.forEach((x, y, z, state) -> {
             if (state == BlockBuffer.EMPTY_STATE) {
                 return;
@@ -98,7 +108,7 @@ abstract class AxiomSetBufferMixin {
                     // Native Axiom loads cold destinations; populate its chunk cache before the live read.
                     level.getChunk(x >> 4, z >> 4);
                     BlockSnapshot snapshot = runtime.liveWorld().read(position);
-                    long bytes = 128L
+                    long bytes = LUMI_BLOCK_CAPTURE_OVERHEAD
                             + snapshot.blockState().getBytes(StandardCharsets.UTF_8).length
                             + snapshot.blockEntity().map(nbt -> nbt.byteSize()).orElse(0);
                     if (retainedBytes[0] + bytes > LUMI_MAX_CAPTURE_BYTES) {
@@ -112,7 +122,6 @@ abstract class AxiomSetBufferMixin {
                     throw new UncheckedIOException("Cannot capture Axiom block before mutation", failed);
                 }
             }
-            sections.add(MinecraftSectionCapture.key(new BlockPos(x, y, z)));
         });
         return available[0];
     }
