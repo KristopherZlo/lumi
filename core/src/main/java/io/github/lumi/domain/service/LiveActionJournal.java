@@ -37,6 +37,7 @@ public final class LiveActionJournal {
     private final Limits limits;
     private final Consumer<Checkpoint> checkpointRelease;
     private final Consumer<BlockSnapshot> blockStateRelease;
+    private final LiveEntityStateReferences entityStates;
     private long nextSequence;
     private long retainedBytes;
     private long unsafeBeforeSequence;
@@ -64,10 +65,17 @@ public final class LiveActionJournal {
             Limits limits,
             Consumer<Checkpoint> checkpointRelease,
             Consumer<BlockSnapshot> blockStateRelease) {
+        this(limits, checkpointRelease, blockStateRelease, new LiveEntityStateReferences(ignored -> { }));
+    }
+
+    public LiveActionJournal(
+            Limits limits, Consumer<Checkpoint> checkpointRelease,
+            Consumer<BlockSnapshot> blockStateRelease, LiveEntityStateReferences entityStates) {
         this.limits = Objects.requireNonNull(limits, "limits");
         this.checkpointRelease = Objects.requireNonNull(
                 checkpointRelease, "checkpointRelease");
         this.blockStateRelease = Objects.requireNonNull(blockStateRelease, "blockStateRelease");
+        this.entityStates = Objects.requireNonNull(entityStates, "entityStates");
     }
 
     public synchronized UUID begin(UUID player) {
@@ -141,6 +149,8 @@ public final class LiveActionJournal {
             Optional<EntityState> after) {
         MutableAction causalAction = requireAction(actionId);
         if (!causalAction.available) {
+            entityStates.discardUnowned(before);
+            entityStates.discardUnowned(after);
             return causalAction.id;
         }
         Objects.requireNonNull(entityId, "entityId");
@@ -148,23 +158,41 @@ public final class LiveActionJournal {
         validateEntityId(entityId, after);
         MutableAction action = effectiveAction(
                 causalAction, entityId, entityOwners);
-        startRecording(action);
         EntityChange previous = action.entities.get(entityId);
         EntityChange updated = new EntityChange(
                 previous == null ? before : previous.before, after);
+        try {
+            return replaceEntity(action, entityId, updated);
+        } finally {
+            entityStates.discardUnowned(before);
+            entityStates.discardUnowned(after);
+        }
+    }
+
+    private UUID replaceEntity(MutableAction action, UUID entityId, EntityChange updated) {
+        EntityChange previous = action.entities.get(entityId);
         long previousBytes = previous == null ? 0 : estimatedBytes(previous);
         long updatedBytes = updated.before.equals(updated.after) ? 0 : estimatedBytes(updated);
-        if (!resize(action, updatedBytes - previousBytes)) {
+        if (updatedBytes != 0) {
+            entityStates.retain(updated.before);
+            entityStates.retain(updated.after);
+        }
+        boolean recorded = false;
+        try {
+            startRecording(action);
+            if (!resize(action, updatedBytes - previousBytes)) return action.id;
+            if (previous != null) releaseEntityStates(previous);
+            if (updatedBytes == 0) action.entities.remove(entityId);
+            else action.entities.put(entityId, updated);
+            recorded = true;
+            entityOwners.set(entityId, action, updatedBytes != 0 && action.applied);
+            touchClosedGroup(action);
             return action.id;
+        } finally {
+            if (!recorded && updatedBytes != 0) releaseEntityStates(updated);
+            entityStates.discardUnowned(updated.before);
+            entityStates.discardUnowned(updated.after);
         }
-        if (updatedBytes == 0) {
-            action.entities.remove(entityId);
-        } else {
-            action.entities.put(entityId, updated);
-        }
-        entityOwners.set(entityId, action, updatedBytes != 0 && action.applied);
-        touchClosedGroup(action);
-        return action.id;
     }
 
     /** Adds one constant-size durable Restore pair to the session stack. */
@@ -222,6 +250,7 @@ public final class LiveActionJournal {
                 .orElseThrow(() -> new IllegalStateException(
                         "Entity is not part of the live action group: " + entityId));
         if (!action.available) {
+            entityStates.discardUnowned(before);
             return;
         }
         if (action.applied) {
@@ -230,18 +259,7 @@ public final class LiveActionJournal {
         Objects.requireNonNull(entityId, "entityId");
         validateEntityId(entityId, before);
         EntityChange previous = action.entities.get(entityId);
-        EntityChange updated = new EntityChange(before, previous.after);
-        long previousBytes = estimatedBytes(previous);
-        long updatedBytes = updated.before.equals(updated.after) ? 0 : estimatedBytes(updated);
-        if (!resize(action, updatedBytes - previousBytes)) {
-            return;
-        }
-        if (updatedBytes == 0) {
-            action.entities.remove(entityId);
-        } else {
-            action.entities.put(entityId, updated);
-        }
-        entityOwners.set(entityId, action, false);
+        replaceEntity(action, entityId, new EntityChange(before, previous.after));
     }
 
     public synchronized boolean close(UUID actionId) {
@@ -341,6 +359,7 @@ public final class LiveActionJournal {
                 .map(action -> action.checkpoint)
                 .filter(Objects::nonNull)
                 .toList();
+        actions.values().forEach(action -> action.entities.values().forEach(this::releaseEntityStates));
         actions.clear();
         openActions.clear();
         pendingChanges.clear();
@@ -705,12 +724,18 @@ public final class LiveActionJournal {
         action.changes.keySet().forEach(position -> blockOwners.set(position, action, false));
         action.entities.keySet().forEach(entity -> entityOwners.set(entity, action, false));
         action.changes.values().forEach(this::releaseBlockStates);
+        action.entities.values().forEach(this::releaseEntityStates);
         action.changes.clear();
         action.entities.clear();
         PlayerStacks stacks = stacks(action.player);
         if (stacks.undo.remove(action.id) || stacks.redo.remove(action.id)) {
             stacks.remove(action.groupId);
         }
+    }
+
+    private void releaseEntityStates(EntityChange change) {
+        entityStates.release(change.before);
+        entityStates.release(change.after);
     }
 
     private void retainBlockStates(Change change) {

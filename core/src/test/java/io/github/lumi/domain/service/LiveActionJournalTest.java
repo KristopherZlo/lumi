@@ -19,6 +19,56 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class LiveActionJournalTest {
+    @Test void entityEndpointsReleaseCoalescedStatesButKeepUnfinishedOwners() {
+        var prepared = new HashSet<EntityState>(List.of(entity(1), entity(2), entity(3)));
+        var references = new LiveEntityStateReferences(prepared::remove);
+        var journal = new LiveActionJournal(LiveActionJournal.Limits.DEFAULT,
+                ignored -> { }, ignored -> { }, references);
+        var before = Optional.of(entity(1));
+        references.retain(before);
+        UUID action = journal.begin(PLAYER_A);
+        journal.recordEntity(action, ENTITY, before, Optional.of(entity(2)));
+        journal.recordEntity(action, ENTITY, Optional.of(entity(2)), Optional.of(entity(3)));
+        assertEquals(java.util.Set.of(entity(1), entity(3)), prepared);
+        journal.close(action);
+        journal.clear();
+        assertEquals(java.util.Set.of(entity(1)), prepared);
+        references.release(before);
+        assertTrue(prepared.isEmpty());
+    }
+
+    @Test void entityRedoReplacementKeepsSharedPreparedEndpoint() {
+        var prepared = new HashSet<EntityState>(List.of(entity(1), entity(2)));
+        var references = new LiveEntityStateReferences(prepared::remove);
+        var journal = new LiveActionJournal(LiveActionJournal.Limits.DEFAULT,
+                ignored -> { }, ignored -> { }, references);
+        UUID first = journal.begin(PLAYER_A);
+        journal.recordEntity(first, ENTITY, Optional.of(entity(1)), Optional.of(entity(2)));
+        journal.close(first);
+        journal.complete(journal.prepareUndo(PLAYER_A).orElseThrow());
+        prepared.add(entity(3));
+        UUID second = journal.begin(PLAYER_A);
+        journal.recordEntity(second, ENTITY, Optional.of(entity(1)), Optional.of(entity(3)));
+        journal.close(second);
+        assertEquals(java.util.Set.of(entity(1), entity(3)), prepared);
+        journal.clear();
+        assertTrue(prepared.isEmpty());
+    }
+
+    @Test void rejectedEntityRecordsReleaseUnownedNativeInputs() {
+        var prepared = new HashSet<EntityState>(List.of(entity(1), entity(2)));
+        var references = new LiveEntityStateReferences(prepared::remove);
+        var journal = new LiveActionJournal(new LiveActionJournal.Limits(64, 32, 128, 256),
+                ignored -> { }, ignored -> { }, references);
+        UUID action = journal.begin(PLAYER_A);
+        journal.recordEntity(action, ENTITY, Optional.of(entity(1)), Optional.of(entity(2)));
+        assertTrue(prepared.isEmpty());
+        prepared.add(entity(3));
+        journal.recordEntity(action, ENTITY, Optional.empty(), Optional.of(entity(3)));
+        assertTrue(prepared.isEmpty());
+        journal.close(action);
+    }
+
     @Test void releasesCoalescedAndRevertedStatesWhileKeepingUndoEndpoints() {
         var prepared = new HashSet<BlockSnapshot>();
         var journal = new LiveActionJournal(LiveActionJournal.Limits.DEFAULT, ignored -> { }, prepared::remove);
