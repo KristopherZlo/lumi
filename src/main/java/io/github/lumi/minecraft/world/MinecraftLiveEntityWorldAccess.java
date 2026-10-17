@@ -3,6 +3,7 @@ package io.github.lumi.minecraft.world;
 import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.service.LiveEntityStateReferences;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -24,6 +25,10 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
     private final MinecraftEntityRestorer entityRestorer;
     private final Map<EntityState, DecodedEntity> prepared = new HashMap<>();
     private final Map<EntityState, EntityChunkKey> chunks = new HashMap<>();
+    private final LiveEntityStateReferences references = new LiveEntityStateReferences(state -> {
+        prepared.remove(state);
+        chunks.remove(state);
+    });
 
     public MinecraftLiveEntityWorldAccess(ServerLevel level, DimensionFreezeState freeze) {
         this.level = Objects.requireNonNull(level, "level");
@@ -48,12 +53,23 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
     }
 
     public Optional<EntityState> capture(Entity entity) throws IOException {
+        return capture(entity, true);
+    }
+
+    public Optional<EntityState> capture(UUID entityId) throws IOException {
+        Optional<Entity> current = entityRestorer.findDurableRoot(entityId);
+        return current.isEmpty() ? Optional.empty() : capture(current.orElseThrow());
+    }
+
+    public LiveEntityStateReferences references() { return references; }
+
+    private Optional<EntityState> capture(Entity entity, boolean prepare) throws IOException {
         if (!MinecraftEntityChunkCapture.isDurableRoot(entity) || entity.isRemoved()) {
             return Optional.empty();
         }
         Optional<MinecraftEntityChunkCapture.CapturedEntity> captured =
                 capture.captureEntity(level, entity);
-        captured.ifPresent(value -> {
+        if (prepare) captured.ifPresent(value -> {
             prepared.put(value.state(), value.decoded());
             chunks.put(value.state(), MinecraftEntityChunkCapture.key(
                     entity.chunkPosition().x, entity.chunkPosition().z));
@@ -74,7 +90,7 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
     @Override
     public Optional<EntityState> read(UUID entityId) throws IOException {
         Optional<Entity> current = entityRestorer.findDurableRoot(entityId);
-        return current.isEmpty() ? Optional.empty() : capture(current.orElseThrow());
+        return current.isEmpty() ? Optional.empty() : capture(current.orElseThrow(), false);
     }
 
     @Override

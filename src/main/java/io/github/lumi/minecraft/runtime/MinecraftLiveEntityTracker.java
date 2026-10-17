@@ -1,6 +1,7 @@
 package io.github.lumi.minecraft.runtime;
 
 import io.github.lumi.domain.model.EntityState;
+import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.world.MinecraftLiveEntityWorldAccess;
 import java.io.IOException;
@@ -8,6 +9,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.world.entity.Entity;
 
@@ -35,10 +37,11 @@ public final class MinecraftLiveEntityTracker {
         }
         Optional<EntityState> after = world.capture(entity);
         if (after.isPresent()) {
+            EntityChunkKey chunk = world.chunk(after.orElseThrow());
             UUID effective = recordEntity(
                     action.orElseThrow(), entity.getUUID(), Optional.empty(), after);
             own(effective, entity.getUUID(), Optional.empty());
-            builderMutations.changed(Optional.empty(), after);
+            builderMutations.changed(Set.of(chunk));
         }
     }
 
@@ -59,36 +62,40 @@ public final class MinecraftLiveEntityTracker {
         UUID actionId = action.orElseThrow();
         UUID entityId = entity.getUUID();
         Optional<EntityState> observedBefore = world.capture(entity);
+        Optional<EntityChunkKey> chunk = observedBefore.isEmpty() ? Optional.empty()
+                : Optional.of(world.chunk(observedBefore.orElseThrow()));
         if (observedBefore.isEmpty() && !(graphMember && entity.isPassenger())) {
             return Optional.empty();
         }
         Map<UUID, Owned> entities = owned.get(actionId);
         if (entities != null && entities.containsKey(entityId)) {
+            world.references().discardUnowned(observedBefore);
             return Optional.of(new Pending(
                     actionId, entityId, entities.get(entityId).before(),
-                    observedBefore));
+                    observedBefore, chunk));
         }
         own(actionId, entityId, observedBefore);
         return Optional.of(new Pending(
-                actionId, entityId, observedBefore, observedBefore));
+                actionId, entityId, observedBefore, observedBefore, chunk));
     }
 
     public boolean finish(Pending pending) throws IOException {
         Objects.requireNonNull(pending, "pending");
-        Optional<EntityState> after = world.read(pending.entity());
+        Optional<EntityState> after = world.capture(pending.entity());
+        Set<EntityChunkKey> chunks = new java.util.LinkedHashSet<>();
+        pending.observedChunk().ifPresent(chunks::add);
+        if (after.isPresent()) chunks.add(world.chunk(after.orElseThrow()));
         UUID effective = recordEntity(
                 pending.action(), pending.entity(), pending.before(),
                 after);
         boolean changed = !pending.observedBefore().equals(after);
         if (changed) {
-            builderMutations.changed(pending.observedBefore(), after);
-        }
-        if (!effective.equals(pending.action())) {
-            disown(pending.action(), pending.entity());
+            builderMutations.changed(Set.copyOf(chunks));
         }
         if (after.isPresent()) {
             own(effective, pending.entity(), pending.before());
         } else {
+            if (!effective.equals(pending.action())) disown(pending.action(), pending.entity());
             disown(effective, pending.entity());
         }
         return changed;
@@ -101,7 +108,7 @@ public final class MinecraftLiveEntityTracker {
         }
         try {
             for (var entry : entities.entrySet()) {
-                Optional<EntityState> current = world.read(entry.getKey());
+                Optional<EntityState> current = world.capture(entry.getKey());
                 if (entry.getValue().endpoint() == Endpoint.BEFORE) {
                     journal.refreshEntityBefore(action, entry.getKey(), current);
                 } else {
@@ -110,6 +117,7 @@ public final class MinecraftLiveEntityTracker {
                 }
             }
         } finally {
+            entities.values().forEach(ownership -> world.references().release(ownership.before()));
             journal.release(action);
         }
         return true;
@@ -147,6 +155,7 @@ public final class MinecraftLiveEntityTracker {
 
     public void clear() {
         for (UUID action : owned.keySet()) {
+            owned.get(action).values().forEach(ownership -> world.references().release(ownership.before()));
             journal.release(action);
         }
         owned.clear();
@@ -158,26 +167,28 @@ public final class MinecraftLiveEntityTracker {
     }
 
     private void own(UUID action, UUID entity, Owned ownership) {
+        Map<UUID, Owned> entities = owned.get(action);
+        if (entities == null) {
+            journal.retain(action);
+            entities = new HashMap<>();
+            owned.put(action, entities);
+        }
+        if (entities.putIfAbsent(entity, ownership) == null) world.references().retain(ownership.before());
         owned.entrySet().stream()
                 .filter(entry -> !entry.getKey().equals(action)
                         && entry.getValue().containsKey(entity))
                 .map(Map.Entry::getKey)
                 .toList()
                 .forEach(other -> disown(other, entity));
-        Map<UUID, Owned> entities = owned.get(action);
-        if (entities == null) {
-            entities = new HashMap<>();
-            owned.put(action, entities);
-            journal.retain(action);
-        }
-        entities.putIfAbsent(entity, ownership);
     }
 
     private void disown(UUID action, UUID entity) {
         Map<UUID, Owned> entities = owned.get(action);
-        if (entities == null || entities.remove(entity) == null || !entities.isEmpty()) {
-            return;
-        }
+        if (entities == null) return;
+        Owned removed = entities.remove(entity);
+        if (removed == null) return;
+        world.references().release(removed.before());
+        if (!entities.isEmpty()) return;
         owned.remove(action);
         journal.release(action);
     }
@@ -198,20 +209,20 @@ public final class MinecraftLiveEntityTracker {
             UUID action,
             UUID entity,
             Optional<EntityState> before,
-            Optional<EntityState> observedBefore) {
+            Optional<EntityState> observedBefore,
+            Optional<EntityChunkKey> observedChunk) {
         public Pending {
             Objects.requireNonNull(action, "action");
             Objects.requireNonNull(entity, "entity");
             Objects.requireNonNull(before, "before");
             Objects.requireNonNull(observedBefore, "observedBefore");
+            Objects.requireNonNull(observedChunk, "observedChunk");
         }
     }
 
     @FunctionalInterface
     public interface BuilderMutationObserver {
-        void changed(
-                Optional<EntityState> before,
-                Optional<EntityState> after) throws IOException;
+        void changed(Set<EntityChunkKey> chunks) throws IOException;
     }
 
     private enum Endpoint {

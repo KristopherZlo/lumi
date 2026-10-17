@@ -1,13 +1,17 @@
 package io.github.lumi.gametest;
 
 import io.github.lumi.LumiMod;
+import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
+import io.github.lumi.minecraft.world.DimensionFreezeState;
+import io.github.lumi.minecraft.world.MinecraftLiveEntityWorldAccess;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -28,6 +32,58 @@ import net.minecraft.world.level.gamerules.GameRules;
 
 /** Integrated gates for exact session-only world actions. */
 public final class LumiLiveActionGameTests {
+    @GameTest(maxTicks = 300000)
+    public void entityPreparedStatesFollowHistoryOwnership(GameTestHelper helper) {
+        var runtime = LumiMod.serverRuntime().find(helper.getLevel()).orElseThrow();
+        UUID lease = UUID.randomUUID();
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, lease))
+                .thenExecute(() -> {
+                    BlockPos position = helper.absolutePos(new BlockPos(2, 2, 2));
+                    var item = new ItemEntity(helper.getLevel(), position.getX() + 0.5,
+                            position.getY(), position.getZ() + 0.5, new ItemStack(Items.DIAMOND));
+                    helper.assertTrue(helper.getLevel().addFreshEntity(item), "Missing native retention fixture");
+                    var readOnly = new MinecraftLiveEntityWorldAccess(helper.getLevel(), new DimensionFreezeState());
+                    try {
+                        for (int index = 0; index < 16; index++) {
+                            item.setYRot(index);
+                            helper.assertTrue(readOnly.read(item.getUUID()).isPresent(), "Fixture entity is not loaded");
+                        }
+                        UUID player = UUID.randomUUID();
+                        for (int index = 0; index < 16; index++) {
+                            try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), player)) {
+                                var pending = runtime.liveEntities().begin(item).orElseThrow();
+                                item.setYRot(index + 32);
+                                runtime.liveEntities().finish(pending);
+                            }
+                        }
+                        runtime.liveEntities().finalizeOwned();
+                        runtime.liveActions().clear();
+                        var field = FabricDimensionRuntime.class.getDeclaredField("liveEntityWorld");
+                        field.setAccessible(true);
+                        long reads = preparedEntityCount(readOnly, item.getUUID());
+                        long discarded = preparedEntityCount(field.get(runtime), item.getUUID());
+                        helper.assertTrue(reads == 0 && discarded == 0,
+                                "Unowned native entity cache entries: reads=" + reads + ", discarded=" + discarded);
+                    } catch (IOException failed) {
+                        throw new java.io.UncheckedIOException(failed);
+                    } catch (ReflectiveOperationException failed) {
+                        throw new IllegalStateException("Cannot inspect prepared entity retention", failed);
+                    } finally {
+                        item.discard();
+                    }
+                    LumiGameTestLease.release(lease);
+                })
+                .thenSucceed();
+    }
+
+    private static long preparedEntityCount(Object world, UUID id) throws ReflectiveOperationException {
+        var field = MinecraftLiveEntityWorldAccess.class.getDeclaredField("prepared");
+        field.setAccessible(true);
+        return ((Map<?, ?>) field.get(world)).keySet().stream().map(EntityState.class::cast)
+                .filter(state -> state.id().equals(id)).count();
+    }
+
     @GameTest(maxTicks = 300000)
     public void untrackedEntityAdditionPreservesOriginDataVersion(GameTestHelper helper) {
         var level = helper.getLevel();

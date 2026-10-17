@@ -282,9 +282,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.sessionCheckpoints = Objects.requireNonNull(
                 sessionCheckpoints, "sessionCheckpoints");
         liveWorld = new MinecraftLiveBlockWorldAccess(level, freeze);
+        liveEntityWorld = new MinecraftLiveEntityWorldAccess(level, freeze);
         liveActions = new LiveActionJournal(LiveActionJournal.Limits.DEFAULT,
                 checkpoint -> releaseSessionCheckpoint(checkpoint.hiddenRef()),
-                liveWorld::releasePrepared);
+                liveWorld::releasePrepared, liveEntityWorld.references());
         axiomSetBlockActions = new AxiomSetBlockActionGrouper(liveActions);
         axiomBufferActions = new AxiomBufferActionGrouper(liveActions);
         axiomBarrier = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom")
@@ -296,7 +297,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.recoveryLease = recoveryLease;
         worldReader = new MinecraftWorldStateReader(level);
         entityDurability = new EntityChunkDurabilityGate(mutations);
-        liveEntityWorld = new MinecraftLiveEntityWorldAccess(level, freeze);
         liveBlocks = new MinecraftLiveBlockTracker(
                 liveActions, liveWorld, this::recordCausalZoneGrowth);
         liveEntities = new MinecraftLiveEntityTracker(
@@ -1262,14 +1262,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     private void publishBuilderEntityMutation(
-            Optional<EntityState> before,
-            Optional<EntityState> after) throws IOException {
+            Set<EntityChunkKey> chunks) throws IOException {
         if (freeze.isAuthorizedMutation()) {
             return;
         }
-        Set<EntityChunkKey> chunks = new java.util.LinkedHashSet<>();
-        before.ifPresent(state -> chunks.add(liveEntityChunk(state)));
-        after.ifPresent(state -> chunks.add(liveEntityChunk(state)));
         for (EntityChunkKey key : chunks) {
             entityDurability.observeCurrent(key, worldReader.read(key));
             mutations.markBuilderMutation(key);
