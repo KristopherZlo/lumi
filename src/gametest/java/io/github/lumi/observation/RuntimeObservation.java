@@ -92,12 +92,12 @@ final class RuntimeObservation {
                     + "," + state.fps() + "," + ticks.getAsLong() + "," + state.paused() + "," + state.screen()
                     + "," + state.simulationFrozen() + "\n");
             samples.flush();
-        } catch (Exception failed) {
+        } catch (Exception | AssertionError failed) {
             complete(failed);
         }
     }
 
-    private void complete(Exception failure) {
+    private void complete(Throwable failure) {
         if (completed) return;
         completed = true;
         worker.shutdown();
