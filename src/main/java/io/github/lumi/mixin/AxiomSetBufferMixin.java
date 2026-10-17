@@ -54,7 +54,7 @@ abstract class AxiomSetBufferMixin {
             AxiomBufferDispatchContext.current(player).ifPresent(dispatch -> runtime.axiomBufferActions()
                     .attach(player.connection, player.getUUID(), dispatch, action));
             boolean exactCapture = captureBefore(
-                    buffer, runtime, before, sections);
+                    buffer, level, runtime, before, sections);
             Map<SectionKey, Long> generations =
                     registerDurability(level, runtime, sections);
             Map<SectionKey, ObjectId> fallbackBefore = exactCapture
@@ -68,7 +68,7 @@ abstract class AxiomSetBufferMixin {
             } finally {
                 try {
                     if (exactCapture) {
-                        recordAfter(runtime, action, before, generations);
+                        recordAfter(level, runtime, action, before, generations);
                     } else {
                         recordFallback(level, runtime, action, fallbackBefore);
                     }
@@ -82,6 +82,7 @@ abstract class AxiomSetBufferMixin {
 
     private static boolean captureBefore(
             BlockBuffer buffer,
+            ServerLevel level,
             FabricDimensionRuntime runtime,
             Map<BlockPosition, BlockSnapshot> before,
             Set<SectionKey> sections) {
@@ -94,6 +95,8 @@ abstract class AxiomSetBufferMixin {
             BlockPosition position = new BlockPosition(x, y, z);
             if (available[0]) {
                 try {
+                    // Native Axiom loads cold destinations; populate its chunk cache before the live read.
+                    level.getChunk(x >> 4, z >> 4);
                     BlockSnapshot snapshot = runtime.liveWorld().read(position);
                     long bytes = 128L
                             + snapshot.blockState().getBytes(StandardCharsets.UTF_8).length
@@ -135,12 +138,14 @@ abstract class AxiomSetBufferMixin {
     }
 
     private static void recordAfter(
+            ServerLevel level,
             FabricDimensionRuntime runtime,
             UUID action,
             Map<BlockPosition, BlockSnapshot> before,
             Map<SectionKey, Long> generations) {
         before.forEach((position, snapshot) -> {
             try {
+                level.getChunk(position.x() >> 4, position.z() >> 4);
                 BlockSnapshot after = runtime.liveWorld().read(position);
                 if (!snapshot.equals(after)) {
                     runtime.liveBlocks().record(action, position, snapshot, after);

@@ -16,8 +16,10 @@ import io.github.lumi.minecraft.world.MinecraftSectionCapture;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -28,41 +30,46 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 
-/** Small native buffers exercise the estimate boundary without allocating a load workload. */
+/** Native capture boundaries and failures, including the expanded-snapshot limit. */
 public final class LumiAxiomCaptureGameTests {
     @GameTest(maxTicks = 300000)
     public void axiomBufferAtCaptureLimitKeepsLiveHistory(GameTestHelper helper) {
-        new Scenario(helper, false).run();
+        new Scenario(helper, Capture.EXACT).run();
     }
 
     @GameTest(maxTicks = 300000)
     public void axiomBufferAboveCaptureLimitKeepsDurableHistory(GameTestHelper helper) {
-        new Scenario(helper, true).run();
+        new Scenario(helper, Capture.ESTIMATE_FALLBACK).run();
+    }
+
+    @GameTest(maxTicks = 300000)
+    public void axiomExpandedCaptureLimitKeepsDurableHistory(GameTestHelper helper) {
+        new Scenario(helper, Capture.EXPANDED_FALLBACK).run();
     }
 
     @GameTest(maxTicks = 300000)
     public void axiomPartialApplyAboveCaptureLimitKeepsDurableHistory(GameTestHelper helper) {
-        new Scenario(helper, true, Failure.APPLY).run();
+        new Scenario(helper, Capture.ESTIMATE_FALLBACK, Failure.APPLY).run();
     }
 
     @GameTest(maxTicks = 300000)
     public void axiomVerificationFailureKeepsDurableHistory(GameTestHelper helper) {
-        new Scenario(helper, true, Failure.VERIFY).run();
+        new Scenario(helper, Capture.ESTIMATE_FALLBACK, Failure.VERIFY).run();
     }
 
     @GameTest(maxTicks = 300000)
     public void axiomApplyAndVerificationFailureKeepsOriginalError(GameTestHelper helper) {
-        new Scenario(helper, true, Failure.APPLY_AND_VERIFY).run();
+        new Scenario(helper, Capture.ESTIMATE_FALLBACK, Failure.APPLY_AND_VERIFY).run();
     }
 
     @GameTest(maxTicks = 300000)
     public void axiomBlockReadFailureDisablesPartialUndo(GameTestHelper helper) {
-        new Scenario(helper, false, Failure.VERIFY).run();
+        new Scenario(helper, Capture.EXACT, Failure.VERIFY).run();
     }
 
     @GameTest(maxTicks = 300000)
     public void axiomApplyAndBlockReadFailureKeepsOriginalError(GameTestHelper helper) {
-        new Scenario(helper, false, Failure.APPLY_AND_VERIFY).run();
+        new Scenario(helper, Capture.EXACT, Failure.APPLY_AND_VERIFY).run();
     }
 
     @GameTest(maxTicks = 300000)
@@ -127,15 +134,18 @@ public final class LumiAxiomCaptureGameTests {
     }
 
     private enum Failure { NONE, APPLY, VERIFY, APPLY_AND_VERIFY }
+    private enum Capture { EXACT, ESTIMATE_FALLBACK, EXPANDED_FALLBACK }
 
     private static final class Scenario {
         private final GameTestHelper helper;
         private final FabricDimensionRuntime runtime;
         private final boolean fallback;
+        private final boolean expanded;
         private final boolean partialApply;
         private final boolean verificationFailure;
         private final UUID lease = UUID.randomUUID();
         private final List<BlockPos> positions;
+        private final Set<SectionKey> sections;
         private ServerPlayer player;
         private CommitAuthor author;
         private UUID zone;
@@ -145,18 +155,32 @@ public final class LumiAxiomCaptureGameTests {
         private Map<SectionKey, SectionBlob> baseline;
         private Map<SectionKey, SectionBlob> edited;
 
-        private Scenario(GameTestHelper helper, boolean fallback) {
-            this(helper, fallback, Failure.NONE);
+        private Scenario(GameTestHelper helper, Capture capture) {
+            this(helper, capture, Failure.NONE);
         }
 
-        private Scenario(GameTestHelper helper, boolean fallback, Failure failure) {
+        private Scenario(GameTestHelper helper, Capture capture, Failure failure) {
             this.helper = helper;
-            this.fallback = fallback;
+            fallback = capture != Capture.EXACT;
+            expanded = capture == Capture.EXPANDED_FALLBACK;
             partialApply = failure == Failure.APPLY || failure == Failure.APPLY_AND_VERIFY;
             verificationFailure = failure == Failure.VERIFY || failure == Failure.APPLY_AND_VERIFY;
             runtime = LumiMod.serverRuntime().find(helper.getLevel()).orElseThrow();
             BlockPos origin = fixtureOrigin(helper);
             positions = List.of(origin, origin.east(), origin.above(16));
+            var keys = new LinkedHashSet<SectionKey>();
+            if (expanded) {
+                SectionKey first = MinecraftSectionCapture.key(origin);
+                SectionKey last = MinecraftSectionCapture.key(origin.offset(127, 127, 31));
+                for (int x = first.chunkX(); x <= last.chunkX(); x++) {
+                    for (int y = first.sectionY(); y <= last.sectionY(); y++) {
+                        for (int z = first.chunkZ(); z <= last.chunkZ(); z++) keys.add(new SectionKey(x, y, z));
+                    }
+                }
+            } else {
+                positions.forEach(position -> keys.add(MinecraftSectionCapture.key(position)));
+            }
+            sections = Set.copyOf(keys);
         }
 
         private void run() {
@@ -193,8 +217,8 @@ public final class LumiAxiomCaptureGameTests {
             try {
                 zone = runtime.createZone("Axiom capture boundary", author.id()).id();
                 try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), UUID.randomUUID())) {
+                    for (SectionKey key : sections) runtime.growZoneForActor(zone, author.id(), key);
                     for (BlockPos position : positions) {
-                        runtime.growZoneForActor(zone, author.id(), MinecraftSectionCapture.key(position));
                         helper.getLevel().setBlockAndUpdate(position, Blocks.STONE.defaultBlockState());
                     }
                     helper.getLevel().setBlockAndUpdate(positions.getFirst(), Blocks.CHEST.defaultBlockState());
@@ -215,7 +239,9 @@ public final class LumiAxiomCaptureGameTests {
             var injectedVerification = new IOException("Injected Axiom post-apply identification failure");
             BlockBuffer buffer = new BlockBuffer() {
                 private int appliedSections;
-                @Override public int estimateSizeInRAM() { return (64 << 20) + (fallback ? 1 : 0); }
+                @Override public int estimateSizeInRAM() {
+                    return expanded ? super.estimateSizeInRAM() : (64 << 20) + (fallback ? 1 : 0);
+                }
                 @Override public it.unimi.dsi.fastutil.shorts.Short2ObjectMap<com.moulberry.axiom.world_modification.CompressedBlockEntity>
                         getBlockEntityChunkMap(long key) {
                     appliedSections++;
@@ -227,6 +253,14 @@ public final class LumiAxiomCaptureGameTests {
                     return super.getBlockEntityChunkMap(key);
                 }
             };
+            if (expanded) {
+                BlockPos origin = positions.getFirst();
+                for (BlockPos position : BlockPos.betweenClosed(origin, origin.offset(127, 127, 31))) {
+                    buffer.set(position.getX(), position.getY(), position.getZ(), Blocks.GOLD_BLOCK.defaultBlockState());
+                }
+                helper.assertTrue(buffer.estimateSizeInRAM() < (64 << 20),
+                        "Expanded capture fixture already exceeds Axiom's native estimate limit");
+            }
             for (BlockPos position : positions) {
                 buffer.set(position.getX(), position.getY(), position.getZ(),
                         position.equals(positions.getFirst()) ? Blocks.AIR.defaultBlockState() : Blocks.GOLD_BLOCK.defaultBlockState());
@@ -237,10 +271,12 @@ public final class LumiAxiomCaptureGameTests {
                         java.util.Optional.of(net.minecraft.server.permissions.LevelBasedPermissionSet.OWNER), java.util.Optional.empty());
                 LumiAxiomGameTests.activateAxiom(player);
             }
+            long applyStarted = System.nanoTime();
             try {
                 AxiomServerboundSetBuffer.applyBlockBufferServer(buffer, helper.getLevel(), null, player);
                 helper.assertFalse(partialApply || verificationFailure, "Native Axiom failure was not reached");
             } catch (RuntimeException failed) {
+                if (!partialApply && !verificationFailure) throw failed;
                 if (partialApply) {
                     helper.assertTrue(failed == injectedFailure, "Native apply failure was replaced or unexpected: " + failed);
                     if (verificationFailure) {
@@ -260,11 +296,14 @@ public final class LumiAxiomCaptureGameTests {
                     LumiAxiomGameTests.deactivateAxiom(player);
                     helper.getLevel().getServer().getPlayerList().deop(player.nameAndId());
                 }
+                if (expanded) LumiMod.LOGGER.info(
+                        "Axiom expanded capture diagnostic: cells=524288, sections={}, nativeEstimateBytes={}, applyMs={}",
+                        sections.size(), buffer.estimateSizeInRAM(), (System.nanoTime() - applyStarted) / 1_000_000);
             }
             helper.assertFalse(before.equals(runtime.mutations().builderSnapshot()), "Axiom fallback lost builder attribution");
-            for (BlockPos position : positions) {
+            for (SectionKey key : sections) {
                 if (!partialApply || verificationFailure) helper.assertTrue(runtime.mutations().builderSnapshot().generations()
-                                .containsKey(MinecraftSectionCapture.key(position)),
+                                .containsKey(key),
                         "Axiom fallback omitted a builder section");
             }
             helper.assertTrue(runtime.liveActions().prepareUndo(author.id()).isEmpty() == (fallback || verificationFailure),
@@ -301,8 +340,7 @@ public final class LumiAxiomCaptureGameTests {
 
         private Map<SectionKey, SectionBlob> capture() {
             Map<SectionKey, SectionBlob> captured = new LinkedHashMap<>();
-            for (BlockPos position : positions) {
-                SectionKey key = MinecraftSectionCapture.key(position);
+            for (SectionKey key : sections) {
                 try {
                     captured.put(key, new MinecraftSectionCapture().capture(helper.getLevel(),
                             helper.getLevel().getChunk(key.chunkX(), key.chunkZ()), key.sectionY()));
