@@ -1,6 +1,7 @@
 package io.github.lumi.observation;
 
 import io.github.lumi.gametest.LumiOrdinaryRestoreSoak;
+import io.github.lumi.gametest.LumiServerTickProbe;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -23,6 +24,7 @@ public final class OrdinaryClientObservation implements ClientModInitializer {
             new RuntimeObservation.ClientState(0, false, false, "startup", false);
     private final AtomicLong serverTicks = new AtomicLong();
     private volatile boolean simulationFrozen;
+    private volatile LumiServerTickProbe ordinaryTicks;
 
     @Override
     public void onInitializeClient() {
@@ -42,6 +44,9 @@ public final class OrdinaryClientObservation implements ClientModInitializer {
             metadata.setProperty("restoreCycles", Integer.toString(soak == null ? 0 : cycles));
             RuntimeObservation observation = new RuntimeObservation(metadata,
                     () -> state, serverTicks::get, () -> {
+                        if (ordinaryTicks == null) throw new IllegalStateException("No ordinary server ticks measured");
+                        ordinaryTicks.close();
+                        metadata.setProperty("maximumServerTickNanos", Long.toString(ordinaryTicks.maximumNanos()));
                         if (soak != null) soak.verifyCompleted();
                         if (route != null) {
                             route.verify(Integer.getInteger("lumi.observation.seconds", 300));
@@ -58,6 +63,9 @@ public final class OrdinaryClientObservation implements ClientModInitializer {
                         ticking.isPaused(), ticking.screen == null ? "none" : ticking.screen.getClass().getName(), simulationFrozen);
             });
             ServerTickEvents.END_SERVER_TICK.register(server -> {
+                if (ordinaryTicks == null && observation.measuring()) {
+                    ordinaryTicks = LumiServerTickProbe.open(server);
+                }
                 serverTicks.incrementAndGet();
                 simulationFrozen = server.tickRateManager().isFrozen();
             });

@@ -21,6 +21,8 @@ public final class LumiOrdinaryRestoreSoak {
     private final LumiColdRestoreManifest manifest;
     private final LumiRestoreSoakChecks checks;
     private final int steps;
+    private final long warmupNanos = TimeUnit.SECONDS.toNanos(
+            Integer.getInteger("lumi.observation.warmupSeconds", 120));
     private final List<LumiRestoreMeasurement> measurements = new ArrayList<>();
     private ServerLevel level;
     private CompletableFuture<BranchRef> verification;
@@ -29,6 +31,7 @@ public final class LumiOrdinaryRestoreSoak {
     private UUID request;
     private int step = -1;
     private long deadline;
+    private long warmupUntil;
     private boolean ready;
 
     public LumiOrdinaryRestoreSoak(Path path, int cycles) throws IOException {
@@ -41,16 +44,18 @@ public final class LumiOrdinaryRestoreSoak {
     public boolean tick(Minecraft client) {
         if (ready) return true;
         if (client.player == null || client.level == null || client.getSingleplayerServer() == null) return false;
-        if (deadline == 0) deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(2);
+        if (deadline == 0) deadline = System.nanoTime() + warmupNanos + TimeUnit.MINUTES.toNanos(2);
         if (System.nanoTime() > deadline) throw new IllegalStateException("Ordinary Restore timed out at step " + step);
         var snapshot = LumiClient.history().state().snapshot();
         if (snapshot.isEmpty() || client.screen != null) return false;
         if (level == null) {
+            warmupUntil = System.nanoTime() + (steps == 0 ? 0 : warmupNanos);
             level = client.getSingleplayerServer().getLevel(client.level.dimension());
             verification = verify(false);
         }
         if (verification != null) {
             if (!verification.isDone()) return false;
+            if (step == -1 && System.nanoTime() < warmupUntil) return false;
             var ref = verification.join();
             if (!snapshot.get().head().equals(ref.commit()) || snapshot.get().revision() != ref.revision()) return false;
             verification = null;

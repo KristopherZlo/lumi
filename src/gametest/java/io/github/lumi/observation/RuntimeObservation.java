@@ -33,10 +33,10 @@ final class RuntimeObservation {
         thread.setDaemon(true);
         return thread;
     });
-    private long loaded;
+    private volatile long loaded;
     private int measured;
     private int paused;
-    private boolean completed;
+    private volatile boolean completed;
 
     RuntimeObservation(Properties metadata, Supplier<ClientState> client,
             LongSupplier ticks, Runnable verify, Runnable finish) throws IOException {
@@ -57,6 +57,11 @@ final class RuntimeObservation {
 
     void start() {
         worker.scheduleAtFixedRate(this::sample, 1, 1, TimeUnit.SECONDS);
+    }
+
+    boolean measuring() {
+        return loaded != 0 && !completed
+                && System.nanoTime() - loaded >= TimeUnit.SECONDS.toNanos(warmup);
     }
 
     private void sample() {
@@ -80,7 +85,7 @@ final class RuntimeObservation {
                 complete(null);
                 return;
             }
-            boolean measuring = elapsed >= TimeUnit.SECONDS.toNanos(warmup);
+            boolean measuring = measuring();
             if (measuring) {
                 measured++;
                 if (state.paused() || state.simulationFrozen()) paused++;

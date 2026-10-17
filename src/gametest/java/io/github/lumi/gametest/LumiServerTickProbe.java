@@ -13,7 +13,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 
 /** Measures complete integrated-server ticks only while a benchmark lease is open. */
-final class LumiServerTickProbe implements AutoCloseable {
+public final class LumiServerTickProbe implements AutoCloseable {
     private static final Set<LumiServerTickProbe> ACTIVE =
             ConcurrentHashMap.newKeySet();
 
@@ -41,11 +41,11 @@ final class LumiServerTickProbe implements AutoCloseable {
         ACTIVE.add(this);
     }
 
-    static LumiServerTickProbe open(MinecraftServer server) {
+    public static LumiServerTickProbe open(MinecraftServer server) {
         return new LumiServerTickProbe(server);
     }
 
-    long maximumNanos() {
+    public long maximumNanos() {
         return maximumNanos.get();
     }
 
