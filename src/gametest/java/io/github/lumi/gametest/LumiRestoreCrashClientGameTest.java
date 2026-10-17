@@ -82,8 +82,8 @@ public final class LumiRestoreCrashClientGameTest implements FabricClientGameTes
         context.waitForScreen(null);
         world.getClientWorld().waitForChunksDownload();
         LumiUiTestDriver ui = new LumiUiTestDriver(context);
-        ui.completeOnboardingIfShown();
         ui.awaitHistory();
+        ui.completeOnboardingIfShown();
         LumiBehaviorActions actions = new LumiBehaviorActions(world.getServer(), report);
         LumiBehaviorOperations operations = new LumiBehaviorOperations(
                 context, world.getServer(), report);
