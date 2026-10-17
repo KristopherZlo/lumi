@@ -40,7 +40,7 @@ public final class MinecraftLiveEntityTracker {
             EntityChunkKey chunk = world.chunk(after.orElseThrow());
             UUID effective = recordEntity(
                     action.orElseThrow(), entity.getUUID(), Optional.empty(), after);
-            own(effective, entity.getUUID(), Optional.empty());
+            if (journal.hasEntityChange(effective, entity.getUUID())) own(effective, entity.getUUID(), Optional.empty());
             builderMutations.changed(Set.of(chunk));
         }
     }
@@ -92,7 +92,7 @@ public final class MinecraftLiveEntityTracker {
         if (changed) {
             builderMutations.changed(Set.copyOf(chunks));
         }
-        if (after.isPresent()) {
+        if (after.isPresent() && journal.hasEntityChange(effective, pending.entity())) {
             own(effective, pending.entity(), pending.before());
         } else {
             if (!effective.equals(pending.action())) disown(pending.action(), pending.entity());

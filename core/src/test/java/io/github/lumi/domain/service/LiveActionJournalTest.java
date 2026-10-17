@@ -19,6 +19,19 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class LiveActionJournalTest {
+    @Test void unchangedBlockAndEntityRecordsPreserveEarlierRedo() {
+        for (boolean entityRecord : List.of(false, true)) {
+            var journal = new LiveActionJournal();
+            UUID first = add(journal, 1);
+            journal.complete(journal.prepareUndo(PLAYER_A).orElseThrow());
+            UUID empty = journal.begin(PLAYER_A);
+            if (entityRecord) journal.recordEntity(empty, ENTITY, Optional.of(entity(1)), Optional.of(entity(1)));
+            else journal.record(empty, POSITION, block("stone"), block("stone"));
+            assertTrue(!journal.close(empty));
+            assertEquals(first, journal.prepareRedo(PLAYER_A).orElseThrow().actionId());
+        }
+    }
+
     @Test void entityEndpointsReleaseCoalescedStatesButKeepUnfinishedOwners() {
         var prepared = new HashSet<EntityState>(List.of(entity(1), entity(2), entity(3)));
         var references = new LiveEntityStateReferences(prepared::remove);

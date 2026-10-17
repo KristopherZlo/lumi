@@ -33,6 +33,36 @@ import net.minecraft.world.level.gamerules.GameRules;
 /** Integrated gates for exact session-only world actions. */
 public final class LumiLiveActionGameTests {
     @GameTest(maxTicks = 300000)
+    public void unchangedEntityActionDoesNotRetainHistory(GameTestHelper helper) {
+        var runtime = LumiMod.serverRuntime().find(helper.getLevel()).orElseThrow();
+        UUID lease = UUID.randomUUID();
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, lease))
+                .thenExecute(() -> {
+                    BlockPos position = helper.absolutePos(new BlockPos(2, 2, 2));
+                    var item = new ItemEntity(helper.getLevel(), position.getX() + 0.5,
+                            position.getY(), position.getZ() + 0.5, new ItemStack(Items.DIAMOND));
+                    helper.assertTrue(helper.getLevel().addFreshEntity(item), "Missing native no-op fixture");
+                    UUID action;
+                    try {
+                        try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), UUID.randomUUID())) {
+                            var pending = runtime.liveEntities().begin(item).orElseThrow();
+                            action = pending.action();
+                            helper.assertFalse(runtime.liveEntities().finish(pending), "No-op changed native state");
+                        }
+                        helper.assertTrue(runtime.liveActions().owner(action).isEmpty(),
+                                "An unchanged entity action retains history and prepared state");
+                    } catch (IOException failed) {
+                        throw new java.io.UncheckedIOException(failed);
+                    } finally {
+                        item.discard();
+                    }
+                    LumiGameTestLease.release(lease);
+                })
+                .thenSucceed();
+    }
+
+    @GameTest(maxTicks = 300000)
     public void entityPreparedStatesFollowHistoryOwnership(GameTestHelper helper) {
         var runtime = LumiMod.serverRuntime().find(helper.getLevel()).orElseThrow();
         UUID lease = UUID.randomUUID();

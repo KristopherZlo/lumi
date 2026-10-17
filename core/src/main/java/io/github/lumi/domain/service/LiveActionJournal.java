@@ -126,6 +126,7 @@ public final class LiveActionJournal {
         if (updatedBytes != 0) retainBlockStates(updated);
         boolean recorded = false;
         try {
+            if (previous == null && updatedBytes == 0) return action.id;
             startRecording(action);
             if (!resize(action, updatedBytes - previousBytes)) return action.id;
             if (previous != null) releaseBlockStates(previous);
@@ -179,6 +180,7 @@ public final class LiveActionJournal {
         }
         boolean recorded = false;
         try {
+            if (previous == null && updatedBytes == 0) return action.id;
             startRecording(action);
             if (!resize(action, updatedBytes - previousBytes)) return action.id;
             if (previous != null) releaseEntityStates(previous);
@@ -413,6 +415,11 @@ public final class LiveActionJournal {
 
     public synchronized Optional<String> lastUnavailableReason(UUID player) {
         return Optional.ofNullable(unavailableReasons.get(Objects.requireNonNull(player, "player")));
+    }
+
+    public synchronized boolean hasEntityChange(UUID actionId, UUID entityId) {
+        MutableAction action = actions.get(Objects.requireNonNull(actionId, "actionId"));
+        return action != null && action.available && action.entities.containsKey(entityId);
     }
 
     public synchronized Optional<UUID> owner(UUID actionId) {
