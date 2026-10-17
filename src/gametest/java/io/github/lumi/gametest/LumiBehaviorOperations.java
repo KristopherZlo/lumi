@@ -11,7 +11,6 @@ import io.github.lumi.minecraft.operation.PendingStatisticsOperation;
 import io.github.lumi.minecraft.operation.SaveCaptureOperation;
 import io.github.lumi.minecraft.operation.SaveOperationStatus;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
-import io.github.lumi.minecraft.world.RestoreApplyStatistics;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.OperationEventPayload;
 import java.io.IOException;
@@ -22,7 +21,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
@@ -237,69 +235,15 @@ final class LumiBehaviorOperations {
     private LumiRestoreMeasurement measureMutation(
             String name, MeasuredClientAction action) throws IOException {
         awaitHistoryReady();
-        AtomicReference<RestoreApplyStatistics> statistics = new AtomicReference<>();
-        AtomicReference<LumiServerTickProbe> tickProbe = new AtomicReference<>();
-        AtomicLong acceptedNanos = new AtomicLong();
-        AtomicLong terminalNanos = new AtomicLong();
-        AtomicReference<Throwable> failure = new AtomicReference<>();
-        server.computeOnServer(minecraft -> {
-            FabricDimensionRuntime runtime = runtime(minecraft);
-            runtime.operations().observeNextEnqueue((ticket, ignored) -> {
-                acceptedNanos.set(System.nanoTime());
-                runtime.operations().observeTerminal(ticket, completed -> {
-                    terminalNanos.set(System.nanoTime());
-                    Optional<RestoreApplyStatistics> measured =
-                            completed.restoreStatistics();
-                    if (measured.isEmpty()) {
-                        failure.compareAndSet(null, new AssertionError(
-                                name + " completed without apply statistics"));
-                    } else {
-                        statistics.set(measured.orElseThrow());
-                    }
-                });
-            });
-            return null;
-        });
-        Runtime jvm = Runtime.getRuntime();
-        long[] heapBefore = {-1};
-        long[] peakHeap = {0};
-        AtomicLong uiStarted = new AtomicLong();
-        long maximumServerTick;
-        try {
-            UUID requestId = send(name, () -> action.run(() -> {
-                heapBefore[0] = usedHeap(jvm);
-                peakHeap[0] = heapBefore[0];
-                tickProbe.set(server.computeOnServer(LumiServerTickProbe::open));
-                uiStarted.set(System.nanoTime());
-            }), uiStarted::get);
-            if (uiStarted.get() == 0) {
-                throw new AssertionError(
-                        name + " did not mark its mutation boundary");
-            }
-            awaitOperation(name,
-                    requestId, failure, uiStarted.get(),
-                    () -> peakHeap[0] = Math.max(peakHeap[0], usedHeap(jvm)));
-        } finally {
-            LumiServerTickProbe probe = tickProbe.get();
-            maximumServerTick = probe == null ? 0 : probe.maximumNanos();
-            if (probe != null) {
-                probe.close();
-            }
+        var probe = server.computeOnServer(minecraft ->
+                new LumiRestoreMeasurementProbe(runtime(minecraft)));
+        try (probe) {
+            UUID requestId = send(name, () -> action.run(() ->
+                    probe.begin(server.computeOnServer(LumiServerTickProbe::open))), probe::startedNanos);
+            if (probe.startedNanos() == 0) throw new AssertionError(name + " did not mark its mutation boundary");
+            awaitOperation(name, requestId, probe.failure(), probe.startedNanos(), probe::sampleHeap);
         }
-        RestoreApplyStatistics measured = statistics.get();
-        if (measured == null) {
-            throw new AssertionError(name + " metrics observer did not complete");
-        }
-        if (acceptedNanos.get() == 0 || terminalNanos.get() == 0) {
-            throw new AssertionError(
-                    name + " server timing observer did not complete");
-        }
-        return new LumiRestoreMeasurement(
-                elapsedMillis(uiStarted.get(), terminalNanos.get()),
-                elapsedMillis(uiStarted.get(), acceptedNanos.get()),
-                elapsedMillis(acceptedNanos.get(), terminalNanos.get()),
-                heapBefore[0], peakHeap[0],
-                maximumServerTick, measured);
+        return probe.measurement();
     }
 
     OperationBoundary restore(
@@ -593,10 +537,6 @@ final class LumiBehaviorOperations {
         return terminal;
     }
 
-    private static long usedHeap(Runtime runtime) {
-        return runtime.totalMemory() - runtime.freeMemory();
-    }
-
     private void awaitHistoryReady() {
         int ticks = 0;
         while (ticks < OPERATION_TIMEOUT_TICKS) {
@@ -668,10 +608,6 @@ final class LumiBehaviorOperations {
 
     private static long elapsedMillis(long started) {
         return (System.nanoTime() - started) / 1_000_000;
-    }
-
-    private static long elapsedMillis(long started, long finished) {
-        return Math.max(0, finished - started) / 1_000_000;
     }
 
     record OperationBoundary(

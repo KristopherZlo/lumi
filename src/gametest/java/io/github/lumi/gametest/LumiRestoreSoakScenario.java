@@ -1,10 +1,8 @@
 package io.github.lumi.gametest;
 
-import io.github.lumi.LumiMod;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
@@ -17,6 +15,7 @@ final class LumiRestoreSoakScenario {
     private final LumiBehaviorReport report;
     private final LumiBehaviorOperations operations;
     private final LumiColdRestoreManifest manifest;
+    private final LumiRestoreSoakChecks checks;
     private final int cycles;
     private final int observeSeconds;
 
@@ -29,6 +28,7 @@ final class LumiRestoreSoakScenario {
         String path = System.getProperty(PREFIX + "coldManifest", "");
         if (path.isBlank()) throw new IllegalArgumentException("coldManifest is required for soak");
         manifest = LumiColdRestoreManifest.read(Path.of(path));
+        checks = new LumiRestoreSoakChecks(manifest);
         cycles = Integer.getInteger(PREFIX + "soakCycles", 20);
         observeSeconds = Integer.getInteger(PREFIX + "observeSeconds", 1800);
         if (cycles < 1 || cycles > 1000 || observeSeconds < 1 || observeSeconds > 86400) {
@@ -76,7 +76,6 @@ final class LumiRestoreSoakScenario {
     void verifyReopened() throws IOException {
         new LumiUiTestDriver(context).awaitHistory();
         assertEndpoint(false);
-        assertSettled();
         report.event("gate", "restore_soak_reopen", "succeeded", 0, 0, "");
     }
 
@@ -86,30 +85,15 @@ final class LumiRestoreSoakScenario {
         report.event("restore_metrics", name, "measured", 0,
                 measurement.totalMillis(), measurement.describe());
         assertEndpoint(initial);
-        assertSettled();
     }
 
     private void assertEndpoint(boolean initial) throws IOException {
-        var target = initial ? manifest.initialCommit() : manifest.latestCommit();
-        if (!operations.activeCommit().equals(target)) {
-            throw new AssertionError("Soak did not publish " + target);
-        }
-        var actual = world.getServer().computeOnServer(server -> LumiWorldSnapshot.capture(
-                server.getPlayerList().getPlayers().getFirst().level(), List.of(manifest.area())));
-        String expected = initial ? manifest.initialDigest() : manifest.latestDigest();
-        if (!actual.sha256().equals(expected)) {
-            throw new AssertionError("Soak endpoint digest mismatch: " + actual.sha256());
-        }
+        world.getServer().computeOnServer(server -> checks.verify(
+                server.getPlayerList().getPlayers().getFirst().level(), initial));
     }
 
     private void assertSettled() {
-        world.getServer().runOnServer(server -> {
-            var runtime = LumiMod.serverRuntime().find(
-                    server.getPlayerList().getPlayers().getFirst().level()).orElseThrow();
-            if (runtime.freeze().isFrozen() || runtime.operations().hasActiveOperation()
-                    || runtime.recoveryJournal().isPresent()) {
-                throw new AssertionError("Completed soak retained a mutation, freeze or journal");
-            }
-        });
+        world.getServer().runOnServer(server -> LumiRestoreSoakChecks.verifySettled(
+                server.getPlayerList().getPlayers().getFirst().level()));
     }
 }
