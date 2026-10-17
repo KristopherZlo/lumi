@@ -16,7 +16,7 @@ import java.util.function.LongSupplier;
 /** Serializes mutation and leaves vanilla work inside the global 50 ms tick limit. */
 public final class DimensionOperationCoordinator implements AutoCloseable {
     public static final long MAX_TICK_WORK_NANOS = 50_000_000L;
-    public static final long DEFAULT_TICK_WORK_NANOS = 30_000_000L;
+    public static final long DEFAULT_TICK_WORK_NANOS = 10_000_000L;
     public static final int MAX_QUEUED_OPERATIONS = 64;
 
     private final DimensionFreeze freeze;
