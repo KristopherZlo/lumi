@@ -28,6 +28,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 
 /** Fast real client-to-Netty-to-server smoke for the first minute of play. */
@@ -88,11 +89,24 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
                                 && client.player.getMainHandItem().is(Items.DIAMOND_SWORD)
                                 && clientEntity(client, pig) != null),
                 "Client did not synchronize the attack target");
+        server.runOnServer(minecraft -> {
+            var level = minecraft.getPlayerList().getPlayers().getFirst().level();
+            var target = (Pig) Objects.requireNonNull(level.getEntityInAnyDimension(pig));
+            if (!target.isAlive()) throw new AssertionError("The smoke pig died before the client attack");
+        });
         context.runOnClient(client -> client.gameMode.attack(
                 client.player,
                 Objects.requireNonNull(clientEntity(client, pig))));
         waitFor(context, () -> !entityPresent(server, pig),
                 "Real client attack did not remove the pig");
+        server.runOnServer(minecraft -> {
+            var player = minecraft.getPlayerList().getPlayers().getFirst();
+            var plan = LumiMod.serverRuntime().find(player.level()).orElseThrow()
+                    .liveActions().prepareUndo(player.getUUID()).orElseThrow();
+            if (!plan.replacementEntities().containsKey(pig)) {
+                throw new AssertionError("The client attack did not enter live entity history");
+            }
+        });
         requireConnected(context, server);
 
         operations.awaitDurability("first_minute_actions");
@@ -345,7 +359,12 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
             var player = minecraft.getPlayerList().getPlayers().getFirst();
             Pig pig = Objects.requireNonNull(EntityType.PIG.create(
                     player.level(), EntitySpawnReason.COMMAND));
-            pig.setPos(position.getX() + 0.5, position.getY(), position.getZ() + 0.5);
+            int surface = player.level().getHeight(Heightmap.Types.WORLD_SURFACE,
+                    position.getX(), position.getZ());
+            // The probe column and attack column can have different terrain heights.
+            pig.setPos(position.getX() + 0.5, Math.max(position.getY(), surface) + 1, position.getZ() + 0.5);
+            pig.setNoAi(true);
+            pig.setNoGravity(true);
             pig.setHealth(1.0F);
             if (!player.level().addFreshEntity(pig)) {
                 throw new AssertionError("Could not spawn the smoke pig");
