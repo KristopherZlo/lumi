@@ -8,7 +8,7 @@ New-Item -ItemType Directory -Path $taskRoot | Out-Null
 try {
     $taskLog = Join-Path $taskRoot 'run.log'
     [IO.File]::WriteAllText($taskLog, 'BUILD SUCCESSFUL')
-    $taskEvidence = [LumiVerificationEvidence]::new(@{ jar = 'a'; tests = 'b'; jvm = 'c'; fixture = 'd' })
+    $taskEvidence = [LumiVerificationEvidence]::new(@{ jar = 'a'; tests = 'b'; jvm = 'c'; fixture = 'd'; verification = 'e' })
     Assert-Rejected { $taskEvidence.Record($taskRoot, $taskLog, 'SMOKE', ('a' * 64)) }
     $taskProof = @{ fingerprint = $taskEvidence.Fingerprint; paths = @($taskLog)
         sha256 = [LumiCrashMatrixEvidence]::Digest([LumiCrashMatrixEvidence]::Inventory(@($taskLog))) }
@@ -17,8 +17,8 @@ try {
         status = 'passed'; artifact = $taskRoot; proof = $taskProof } } } |
         ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $taskManifest -Encoding UTF8
     Assert-That ($taskEvidence.Find(@($taskManifest), 'Smoke').status -ceq 'reused') 'Git provenance invalidated identical inputs.'
-    foreach ($taskInput in @('jar', 'tests', 'jvm', 'fixture')) {
-        $taskInputs = @{ jar = 'a'; tests = 'b'; jvm = 'c'; fixture = 'd' }
+    foreach ($taskInput in @('jar', 'tests', 'jvm', 'fixture', 'verification')) {
+        $taskInputs = @{ jar = 'a'; tests = 'b'; jvm = 'c'; fixture = 'd'; verification = 'e' }
         $taskInputs[$taskInput] = 'changed'
         $taskChanged = [LumiVerificationEvidence]::new($taskInputs)
         Assert-That ($null -eq $taskChanged.Find(@($taskManifest), 'Smoke')) "$taskInput failed to invalidate reuse."

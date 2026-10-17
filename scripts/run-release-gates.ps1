@@ -86,8 +86,12 @@ try {
     }
     $taskEvidenceInputs = $null
     if ($taskArtifact) {
+        $taskValidators = @('scripts/run-release-gates.ps1', 'scripts/VerificationEvidence.ps1',
+            'scripts/VerificationPlan.ps1', 'buildSrc/src/main/java/io/github/lumi/buildconfig') |
+            ForEach-Object { Join-Path $taskRepo $_ }
         $taskEvidenceInputs = [ordered]@{
             launch = [LumiCrashMatrixEvidence]::Inputs($taskRepo, $taskLaunch.javaExecutable, (Join-Path $taskRepo $taskBuild))
+            verification = [LumiCrashMatrixEvidence]::Digest([LumiCrashMatrixEvidence]::Inventory($taskValidators))
             target = $taskVerification.Definition; artifact = $taskArtifact.sha256
             builderTools = $BuilderTools; serverFilter = $ServerFilter
             fixtures = [LumiCrashMatrixEvidence]::Inventory(@(@($UpgradeFixture, $FixtureManifest, $ExistingWorldSource) | Where-Object { $_ }))
