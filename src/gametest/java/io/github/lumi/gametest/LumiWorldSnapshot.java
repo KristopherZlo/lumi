@@ -16,6 +16,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -144,12 +145,14 @@ final class LumiWorldSnapshot {
     private String digest() {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            Map<String, byte[]> encodedStates = new HashMap<>();
             for (SectionKey key : sectionKeys(sections.keySet())) {
                 update(digest, key.chunkX() + "," + key.sectionY() + "," + key.chunkZ());
                 SectionBlob section = sections.get(key);
                 for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
                     if (contains(absolutePosition(key, index))) {
-                        update(digest, section.blockStates().get(index));
+                        update(digest, encodedStates.computeIfAbsent(
+                                section.blockStates().get(index), state -> state.getBytes(StandardCharsets.UTF_8)));
                     }
                 }
                 section.blockEntities().entrySet().stream()
@@ -240,8 +243,10 @@ final class LumiWorldSnapshot {
     }
 
     private boolean contains(BlockPos position) {
-        return areas.stream().anyMatch(area -> area.contains(
-                position.getX(), position.getY(), position.getZ()));
+        for (BlockBox area : areas) {
+            if (area.contains(position.getX(), position.getY(), position.getZ())) return true;
+        }
+        return false;
     }
 
     private static String describe(EntityChunkBlob blob) {
@@ -294,7 +299,11 @@ final class LumiWorldSnapshot {
     }
 
     private static void update(MessageDigest digest, String value) {
-        digest.update(value.getBytes(StandardCharsets.UTF_8));
+        update(digest, value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static void update(MessageDigest digest, byte[] value) {
+        digest.update(value);
         digest.update((byte) 0);
     }
 
