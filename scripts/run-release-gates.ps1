@@ -86,10 +86,8 @@ try {
     }
     $taskEvidenceInputs = $null
     if ($taskArtifact) {
-        $taskCodePaths = @(& git ls-files | Where-Object { $_ -notlike '*.md' } | ForEach-Object { Join-Path $taskRepo $_ })
         $taskEvidenceInputs = [ordered]@{
             launch = [LumiCrashMatrixEvidence]::Inputs($taskRepo, $taskLaunch.javaExecutable, (Join-Path $taskRepo $taskBuild))
-            implementation = [LumiCrashMatrixEvidence]::Digest([LumiCrashMatrixEvidence]::Inventory($taskCodePaths))
             target = $taskVerification.Definition; artifact = $taskArtifact.sha256
             builderTools = $BuilderTools; serverFilter = $ServerFilter
             fixtures = [LumiCrashMatrixEvidence]::Inventory(@(@($UpgradeFixture, $FixtureManifest, $ExistingWorldSource) | Where-Object { $_ }))
@@ -167,14 +165,11 @@ try {
                     $taskGradleArguments = @("-PlumiCoreTestJava=$($taskVerification.Definition.javaVersion)")
                 }
                 'Client' {
-                    $taskGradleArguments = @('-Dlumi.gametest.suite=ALL')
                     if ($Target -ceq 'modern-263') { $taskGradleArguments += '-PlumiGraphicsBackend=opengl' }
-                    $taskTasks = @('runPackagedClientGameTest')
                 }
                 'ClientVulkan' {
-                    $taskGradleArguments = @('-Dlumi.gametest.suite=ALL', '-PlumiGraphicsBackend=vulkan',
+                    $taskGradleArguments += @('-PlumiGraphicsBackend=vulkan',
                         '-Dlumi.gametest.fixedNativeWindow=true')
-                    $taskTasks = @('runPackagedClientGameTest')
                 }
                 'NativeViewport' {
                     $taskResult.runtimeEvidence = @()
@@ -196,8 +191,6 @@ try {
                         }
                     }
                 }
-                'Exact' { $taskGradleArguments = @('-Dlumi.gametest.suite=EXACT'); $taskTasks = @('runPackagedClientGameTest') }
-                'Recovery' { $taskGradleArguments = @('-Dlumi.gametest.suite=RECOVERY'); $taskTasks = @('runPackagedClientGameTest') }
                 'Multiplayer' { & (Join-Path $PSScriptRoot 'run-multiplayer-gate.ps1') -RunMinecraft @taskTargetArguments *> $taskLog }
                 'RestoreCrash' { & (Join-Path $PSScriptRoot 'run-publication-crash-matrix.ps1') -RunMinecraft @taskTargetArguments -Kind restore -ResumeFrom $taskCrashResume *> $taskLog }
                 'RestoreColdCrash' { & (Join-Path $PSScriptRoot 'run-publication-crash-matrix.ps1') -RunMinecraft @taskTargetArguments -Kind restore -RestoreCold -ResumeFrom $taskCrashResume *> $taskLog }

@@ -8,6 +8,11 @@ def launchType = production ? lumiPreparedClientLaunchType : DefaultTask
 
 tasks.register('prepareMultiplayerLaunch', launchType) {
     if (production) {
+        // Sibling adapters write the same asset cache during a batched preparation.
+        mustRunAfter {
+            rootProject.subprojects.findAll { it.path.startsWith(':adapters:') }
+                    .collect { "${it.path}:downloadAssets" }
+        }
         outputs.files(layout.buildDirectory.file('multiplayer-launch.args'),
                 layout.buildDirectory.file('multiplayer-launch.inputs.json'))
         def source = tasks.named('runPackagedClientGameTest').get()
