@@ -15,6 +15,7 @@
     "RefCrashMixin",
     "WorkingIndexCrashMixin",
     "PreviewCrashMixin",
+    "AxiomVerificationFaultMixin",
     "MergeObjectCrashMixin",
     "MergeApplyCrashMixin",
     "HistoryUpgradeCrashMixin",
@@ -28,7 +29,8 @@
     "ClientUseTimingMixin",
     "WindowFocusAccessor",
     "ClientGameTestStartupMixin",
-    "ClientGameTestWorldCloseMixin"
+    "ClientGameTestWorldCloseMixin",
+    "ClientScreenTraceMixin"
   ],
   "injectors": {
     "defaultRequire": 1

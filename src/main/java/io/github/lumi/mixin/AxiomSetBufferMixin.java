@@ -59,13 +59,22 @@ abstract class AxiomSetBufferMixin {
                     registerDurability(level, runtime, sections);
             Map<SectionKey, ObjectId> fallbackBefore = exactCapture
                     ? Map.of() : captureSectionIds(level, runtime, sections);
+            Throwable applyFailure = null;
             try {
                 original.call(buffer, level, changedRegion, player);
+            } catch (RuntimeException | Error failed) {
+                applyFailure = failed;
+                throw failed;
             } finally {
-                if (exactCapture) {
-                    recordAfter(runtime, action, before, generations);
-                } else {
-                    recordFallback(level, runtime, action, fallbackBefore);
+                try {
+                    if (exactCapture) {
+                        recordAfter(runtime, action, before, generations);
+                    } else {
+                        recordFallback(level, runtime, action, fallbackBefore);
+                    }
+                } catch (RuntimeException | Error captureFailure) {
+                    if (applyFailure == null) throw captureFailure;
+                    if (captureFailure != applyFailure) applyFailure.addSuppressed(captureFailure);
                 }
             }
         }

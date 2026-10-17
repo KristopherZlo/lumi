@@ -42,7 +42,17 @@ public final class LumiAxiomCaptureGameTests {
 
     @GameTest(maxTicks = 300000)
     public void axiomPartialApplyAboveCaptureLimitKeepsDurableHistory(GameTestHelper helper) {
-        new Scenario(helper, true, true).run();
+        new Scenario(helper, true, Failure.APPLY).run();
+    }
+
+    @GameTest(maxTicks = 300000)
+    public void axiomVerificationFailureKeepsDurableHistory(GameTestHelper helper) {
+        new Scenario(helper, true, Failure.VERIFY).run();
+    }
+
+    @GameTest(maxTicks = 300000)
+    public void axiomApplyAndVerificationFailureKeepsOriginalError(GameTestHelper helper) {
+        new Scenario(helper, true, Failure.APPLY_AND_VERIFY).run();
     }
 
     @GameTest(maxTicks = 300000)
@@ -62,7 +72,7 @@ public final class LumiAxiomCaptureGameTests {
                 .thenExecute(() -> {
                     var runtime = LumiMod.serverRuntime().find(helper.getLevel()).orElseThrow();
                     var player = helper.makeMockServerPlayerInLevel();
-                    BlockPos position = helper.absolutePos(new BlockPos(2, 2, 2));
+                    BlockPos position = fixtureOrigin(helper);
                     helper.getLevel().setBlockAndUpdate(position,
                             (deniedNbt ? Blocks.CHEST : Blocks.STONE).defaultBlockState());
                     try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), player.getUUID())) {
@@ -99,11 +109,21 @@ public final class LumiAxiomCaptureGameTests {
                 .thenSucceed();
     }
 
+    private static BlockPos fixtureOrigin(GameTestHelper helper) {
+        BlockPos controller = helper.absolutePos(BlockPos.ZERO);
+        // GameTest controller NBT changes while a test runs; keep it outside captured sections.
+        return new BlockPos(Math.floorDiv(controller.getX(), 16) * 16 + 2, 170,
+                Math.floorDiv(controller.getZ(), 16) * 16 + 2);
+    }
+
+    private enum Failure { NONE, APPLY, VERIFY, APPLY_AND_VERIFY }
+
     private static final class Scenario {
         private final GameTestHelper helper;
         private final FabricDimensionRuntime runtime;
         private final boolean fallback;
         private final boolean partialApply;
+        private final boolean verificationFailure;
         private final UUID lease = UUID.randomUUID();
         private final List<BlockPos> positions;
         private ServerPlayer player;
@@ -116,16 +136,17 @@ public final class LumiAxiomCaptureGameTests {
         private Map<SectionKey, SectionBlob> edited;
 
         private Scenario(GameTestHelper helper, boolean fallback) {
-            this(helper, fallback, false);
+            this(helper, fallback, Failure.NONE);
         }
 
-        private Scenario(GameTestHelper helper, boolean fallback, boolean partialApply) {
+        private Scenario(GameTestHelper helper, boolean fallback, Failure failure) {
             this.helper = helper;
             this.fallback = fallback;
-            this.partialApply = partialApply;
+            partialApply = failure == Failure.APPLY || failure == Failure.APPLY_AND_VERIFY;
+            verificationFailure = failure == Failure.VERIFY || failure == Failure.APPLY_AND_VERIFY;
             runtime = LumiMod.serverRuntime().find(helper.getLevel()).orElseThrow();
-            positions = List.of(new BlockPos(2, 2, 2), new BlockPos(3, 2, 2), new BlockPos(2, 18, 2))
-                    .stream().map(helper::absolutePos).toList();
+            BlockPos origin = fixtureOrigin(helper);
+            positions = List.of(origin, origin.east(), origin.above(16));
         }
 
         private void run() {
@@ -143,13 +164,13 @@ public final class LumiAxiomCaptureGameTests {
                     .thenWaitUntil(this::awaitIdle)
                     .thenExecute(() -> {
                         succeeded();
-                        helper.assertValueEqual(baseline, capture(), "Fallback lost the exact section origin or chest NBT");
+                        assertSnapshot(baseline, "Fallback lost the exact section origin or chest NBT");
                         restore(editedCommit);
                     })
                     .thenWaitUntil(this::awaitIdle)
                     .thenExecute(() -> {
                         succeeded();
-                        helper.assertValueEqual(edited, capture(), "Fallback Save/Restore left incorrect blocks or block entities");
+                        assertSnapshot(edited, "Fallback Save/Restore left incorrect blocks or block entities");
                         helper.getLevel().getServer().getPlayerList().remove(player);
                         LumiGameTestLease.release(lease);
                     })
@@ -181,12 +202,15 @@ public final class LumiAxiomCaptureGameTests {
             succeeded();
             baselineCommit = activeCommit();
             var injectedFailure = new IllegalStateException("Injected Axiom failure after the first native section");
+            var injectedVerification = new IOException("Injected Axiom post-apply identification failure");
             BlockBuffer buffer = new BlockBuffer() {
                 private int appliedSections;
                 @Override public int estimateSizeInRAM() { return (64 << 20) + (fallback ? 1 : 0); }
                 @Override public it.unimi.dsi.fastutil.shorts.Short2ObjectMap<com.moulberry.axiom.world_modification.CompressedBlockEntity>
                         getBlockEntityChunkMap(long key) {
-                    if (partialApply && ++appliedSections == 2) throw injectedFailure;
+                    appliedSections++;
+                    if (verificationFailure && appliedSections == 1) LumiAxiomVerificationFault.arm(injectedVerification);
+                    if (partialApply && appliedSections == 2) throw injectedFailure;
                     return super.getBlockEntityChunkMap(key);
                 }
             };
@@ -195,25 +219,38 @@ public final class LumiAxiomCaptureGameTests {
                         position.equals(positions.getFirst()) ? Blocks.AIR.defaultBlockState() : Blocks.GOLD_BLOCK.defaultBlockState());
             }
             var before = runtime.mutations().builderSnapshot();
-            if (partialApply) {
+            if (partialApply || verificationFailure) {
                 helper.getLevel().getServer().getPlayerList().op(player.nameAndId(),
                         java.util.Optional.of(net.minecraft.server.permissions.LevelBasedPermissionSet.OWNER), java.util.Optional.empty());
                 LumiAxiomGameTests.activateAxiom(player);
             }
             try {
                 AxiomServerboundSetBuffer.applyBlockBufferServer(buffer, helper.getLevel(), null, player);
-                helper.assertFalse(partialApply, "Native partial-apply failure was not reached");
-            } catch (IllegalStateException failed) {
-                helper.assertTrue(partialApply && failed == injectedFailure, "Native apply failure was replaced or unexpected");
-            } finally {
+                helper.assertFalse(partialApply || verificationFailure, "Native Axiom failure was not reached");
+            } catch (RuntimeException failed) {
                 if (partialApply) {
+                    helper.assertTrue(failed == injectedFailure, "Native apply failure was replaced or unexpected: " + failed);
+                    if (verificationFailure) {
+                        helper.assertTrue(failed.getSuppressed().length == 1
+                                        && failed.getSuppressed()[0] instanceof UncheckedIOException
+                                        && failed.getSuppressed()[0].getCause() == injectedVerification,
+                                "Post-apply verification failure was lost");
+                    }
+                } else {
+                    helper.assertTrue(verificationFailure && failed instanceof UncheckedIOException
+                                    && failed.getCause() == injectedVerification,
+                            "Verification failure was replaced or unexpected: " + failed);
+                }
+            } finally {
+                LumiAxiomVerificationFault.clear();
+                if (partialApply || verificationFailure) {
                     LumiAxiomGameTests.deactivateAxiom(player);
                     helper.getLevel().getServer().getPlayerList().deop(player.nameAndId());
                 }
             }
             helper.assertFalse(before.equals(runtime.mutations().builderSnapshot()), "Axiom fallback lost builder attribution");
             for (BlockPos position : positions) {
-                if (!partialApply) helper.assertTrue(runtime.mutations().builderSnapshot().generations()
+                if (!partialApply || verificationFailure) helper.assertTrue(runtime.mutations().builderSnapshot().generations()
                                 .containsKey(MinecraftSectionCapture.key(position)),
                         "Axiom fallback omitted a builder section");
             }
@@ -221,7 +258,7 @@ public final class LumiAxiomCaptureGameTests {
                     "Capture boundary offered an incorrect or partial live Undo");
             if (fallback) {
                 helper.assertTrue(runtime.liveActions().lastUnavailableReason(author.id())
-                                .filter(reason -> reason.contains("capture limit")).isPresent(),
+                                .filter(reason -> reason.contains(verificationFailure ? "Cannot verify" : "capture limit")).isPresent(),
                         "Capture fallback did not explain why live Undo is unavailable");
             }
             long changed = positions.stream().filter(position -> helper.getLevel().getBlockState(position)
@@ -265,6 +302,12 @@ public final class LumiAxiomCaptureGameTests {
             helper.assertTrue(operation != null && operation.isTerminal()
                             && !runtime.operations().hasActiveOperation() && runtime.operations().queuedCount() == 0,
                     "Axiom capture boundary operation is still active");
+        }
+
+        private void assertSnapshot(Map<SectionKey, SectionBlob> expected, String message) {
+            var actual = capture();
+            var changed = expected.keySet().stream().filter(key -> !expected.get(key).equals(actual.get(key))).toList();
+            helper.assertTrue(expected.equals(actual), message + "; differing sections=" + changed);
         }
 
         private void succeeded() {
