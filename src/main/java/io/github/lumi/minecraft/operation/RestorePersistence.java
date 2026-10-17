@@ -17,7 +17,7 @@ final class RestorePersistence {
         this.background = Objects.requireNonNull(background, "background");
     }
 
-    boolean await(Step requested, Write write, long deadline) throws IOException {
+    boolean await(Step requested, Write write) throws IOException {
         if (pending == null) {
             step = requested;
             pending = CompletableFuture.runAsync(() -> {
@@ -30,7 +30,7 @@ final class RestorePersistence {
         } else if (step != requested) {
             throw new IllegalStateException("Restore persistence step is still owned: " + step);
         }
-        if (!DeadlineFuture.await(pending, deadline)) {
+        if (!pending.isDone()) {
             return false;
         }
         finish();

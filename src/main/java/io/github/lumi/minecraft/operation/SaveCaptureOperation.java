@@ -90,7 +90,7 @@ public final class SaveCaptureOperation implements DimensionMutation {
             capture(deadlineNanos);
         }
         if (status == SaveOperationStatus.WRITING
-                && DeadlineFuture.await(background, deadlineNanos)) {
+                && background.isDone()) {
             finishBackground();
         }
     }

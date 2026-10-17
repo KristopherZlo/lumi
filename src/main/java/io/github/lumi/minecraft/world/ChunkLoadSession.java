@@ -1,7 +1,6 @@
 package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.HistoryKey;
-import io.github.lumi.minecraft.operation.DeadlineFuture;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.HashSet;
@@ -68,7 +67,7 @@ public final class ChunkLoadSession implements AutoCloseable {
                 current = null;
                 continue;
             }
-            if (!DeadlineFuture.await(current.getValue(), deadlineNanos)) {
+            if (!current.getValue().isDone()) {
                 return false;
             }
             try {
@@ -125,7 +124,7 @@ public final class ChunkLoadSession implements AutoCloseable {
             retained.put(chunk, future);
             access.startLoading();
         }
-        if (!DeadlineFuture.await(future, deadlineNanos)) {
+        if (!future.isDone()) {
             return false;
         }
         try {

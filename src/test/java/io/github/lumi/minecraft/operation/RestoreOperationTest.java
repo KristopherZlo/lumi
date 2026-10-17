@@ -3,6 +3,7 @@ package io.github.lumi.minecraft.operation;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.BranchName;
@@ -936,7 +937,8 @@ class RestoreOperationTest {
                     @Override public void installed() { installed.incrementAndGet(); }
                 }, journals, UUID.randomUUID());
 
-        operation.tick(Long.MAX_VALUE);
+        assertTimeoutPreemptively(java.time.Duration.ofSeconds(1),
+                () -> operation.tick(System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30)));
         assertTrue(journals.read().isEmpty());
         assertFalse(operation.cancel());
         assertEquals(1, writes.size());

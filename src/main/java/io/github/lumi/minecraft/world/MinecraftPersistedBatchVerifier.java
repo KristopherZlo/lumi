@@ -4,7 +4,6 @@ import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
-import io.github.lumi.minecraft.operation.DeadlineFuture;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -68,7 +67,7 @@ final class MinecraftPersistedBatchVerifier {
             }
             start();
         }
-        if (!DeadlineFuture.await(verification, deadlineNanos)) {
+        if (!verification.isDone()) {
             return false;
         }
         MinecraftPersistenceFuture.join(

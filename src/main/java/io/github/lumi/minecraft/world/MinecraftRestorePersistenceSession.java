@@ -3,7 +3,6 @@ package io.github.lumi.minecraft.world;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.PlayerSpawn;
 import io.github.lumi.domain.model.SectionKey;
-import io.github.lumi.minecraft.operation.DeadlineFuture;
 import io.github.lumi.mixin.ChunkMapPersistenceAccessor;
 import io.github.lumi.mixin.EntityStoragePersistenceAccessor;
 import io.github.lumi.mixin.PersistentEntityManagerPersistenceAccessor;
@@ -183,11 +182,11 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             while (phase != Phase.COMPLETE && System.nanoTime() < deadlineNanos) {
                 boolean advanced = switch (phase) {
                     case LIGHTING -> awaitLighting(deadlineNanos);
-                    case CHUNKS -> saveChunk(deadlineNanos);
+                    case CHUNKS -> saveChunk();
                     case ENTITIES -> saveEntityChunk();
                     case PLAYERS -> savePlayer();
-                    case SYNCHRONIZING -> synchronizeStorage(deadlineNanos);
-                    case FORCING -> forceStorage(deadlineNanos);
+                    case SYNCHRONIZING -> synchronizeStorage();
+                    case FORCING -> forceStorage();
                     case VERIFYING -> verifyPersisted(deadlineNanos);
                     case COMPLETE -> true;
                 };
@@ -211,7 +210,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
     }
 
     private boolean awaitLighting(long deadlineNanos) throws IOException {
-        if (!DeadlineFuture.await(lighting, deadlineNanos)) {
+        if (!lighting.isDone()) {
             return false;
         }
         MinecraftPersistenceFuture.join(lighting, "Restore lighting");
@@ -255,7 +254,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         return Set.copyOf(surrounding);
     }
 
-    private boolean saveChunk(long deadlineNanos) throws IOException {
+    private boolean saveChunk() throws IOException {
         if (!lightingSynchronized && nextChunk == firstLightAffectedChunk) {
             transitionTo(Phase.LIGHTING);
             return true;
@@ -265,8 +264,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             return true;
         }
         var chunkMap = (ChunkMapPersistenceAccessor) level.getChunkSource().chunkMap;
-        if (!DeadlineFuture.await(() -> chunkMap.lumi$activeChunkWrites().get()
-                < MAX_PENDING_CHUNK_WRITES, deadlineNanos)) {
+        if (chunkMap.lumi$activeChunkWrites().get() >= MAX_PENDING_CHUNK_WRITES) {
             return false;
         }
         ChunkCoordinate coordinate = chunks.get(nextChunk);
@@ -339,7 +337,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         return new PlayerTarget(player, expected);
     }
 
-    private boolean synchronizeStorage(long deadlineNanos) throws IOException {
+    private boolean synchronizeStorage() throws IOException {
         if (synchronization == null) {
             var poiManager = level.getChunkSource().getPoiManager();
             for (ChunkCoordinate chunk : poiChunks) {
@@ -374,7 +372,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
                     .map(MinecraftRegionStorageSynchronizer.Synchronization::complete)
                     .toArray(CompletableFuture[]::new));
         }
-        if (!DeadlineFuture.await(synchronization, deadlineNanos)) {
+        if (!synchronization.isDone()) {
             return false;
         }
         MinecraftPersistenceFuture.join(
@@ -384,9 +382,9 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         return true;
     }
 
-    private boolean forceStorage(long deadlineNanos) throws IOException {
+    private boolean forceStorage() throws IOException {
         verifier.start();
-        if (!DeadlineFuture.await(forcing, deadlineNanos)) {
+        if (!forcing.isDone()) {
             return false;
         }
         MinecraftPersistenceFuture.join(forcing, "Restore affected-region force");

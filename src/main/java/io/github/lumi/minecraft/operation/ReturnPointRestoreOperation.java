@@ -85,7 +85,7 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
     }
 
     private void advancePreparation(long deadlineNanos) throws IOException {
-        if (!preparation.awaitUntil(deadlineNanos)) {
+        if (!preparation.isDone()) {
             return;
         }
         try {

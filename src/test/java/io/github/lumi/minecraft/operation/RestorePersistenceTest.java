@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 
 class RestorePersistenceTest {
     @Test
-    void slowWriteCannotOverrunTheTickDeadlineOrRunTwice() throws Exception {
+    void slowWriteDoesNotWaitOnTheTickOrRunTwice() throws Exception {
         var entered = new CountDownLatch(1);
         var release = new CountDownLatch(1);
         try (var worker = Executors.newSingleThreadExecutor()) {
@@ -24,14 +24,11 @@ class RestorePersistenceTest {
             };
             try {
                 assertFalse(persistence.await(RestorePersistence.Step.CREATE,
-                        write, Long.MAX_VALUE));
+                        write));
                 assertTrue(entered.await(5, TimeUnit.SECONDS));
-                long start = System.nanoTime();
-                assertFalse(persistence.await(RestorePersistence.Step.CREATE,
-                        () -> fail("Duplicate write"), start + 5_000_000));
-                long elapsed = System.nanoTime() - start;
-                System.out.println("Restore persistence blocked writer: tick wait ns=" + elapsed);
-                assertTrue(elapsed < TimeUnit.MILLISECONDS.toNanos(100));
+                assertTimeoutPreemptively(java.time.Duration.ofSeconds(1), () ->
+                        assertFalse(persistence.await(RestorePersistence.Step.CREATE,
+                                () -> fail("Duplicate write"))));
                 assertTrue(persistence.isPending());
             } finally {
                 release.countDown();

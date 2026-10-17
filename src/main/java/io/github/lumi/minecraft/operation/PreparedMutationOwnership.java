@@ -24,10 +24,6 @@ final class PreparedMutationOwnership<T> {
         return preparation.isDone();
     }
 
-    boolean awaitUntil(long deadlineNanos) throws IOException {
-        return DeadlineFuture.await(preparation, deadlineNanos);
-    }
-
     boolean isCompletedExceptionally() {
         return preparation.isCompletedExceptionally();
     }

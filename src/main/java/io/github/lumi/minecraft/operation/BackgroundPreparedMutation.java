@@ -75,8 +75,7 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
         if (failure != null || cancelled) {
             return;
         }
-        if (!preparation.isDone() && (!freezeDuringPreparation
-                || !preparation.awaitUntil(deadlineNanos))) {
+        if (!preparation.isDone()) {
             return;
         }
         if (delegate == null) {
