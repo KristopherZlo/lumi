@@ -129,6 +129,13 @@ try {
     @{ schema = 1; classpath = @(); configuration = @(); mods = @($mod) } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $scratch 'multiplayer-launch.inputs.json') -Encoding UTF8
     [IO.File]::WriteAllText((Join-Path $scratch 'multiplayer-launch.args'), '')
+    $originalAudioBackend = $env:ALSOFT_DRIVERS
+    try {
+        $env:ALSOFT_DRIVERS = 'null'
+        $audioFingerprint = [LumiCrashMatrixEvidence]::Inputs($scratch, (Join-Path $scratch 'jdk/bin/java.exe'), $scratch)
+        $env:ALSOFT_DRIVERS = 'wasapi'
+        Assert-That ([LumiCrashMatrixEvidence]::Inputs($scratch, (Join-Path $scratch 'jdk/bin/java.exe'), $scratch) -cne $audioFingerprint) 'Audio backend changes did not invalidate crash reuse.'
+    } finally { $env:ALSOFT_DRIVERS = $originalAudioBackend }
     $fingerprint = [LumiCrashMatrixEvidence]::Inputs($scratch, (Join-Path $scratch 'jdk/bin/java.exe'), $scratch)
     [IO.File]::AppendAllText($mod, 'modified')
     Assert-That ([LumiCrashMatrixEvidence]::Inputs($scratch, (Join-Path $scratch 'jdk/bin/java.exe'), $scratch) -cne $fingerprint) 'Production mod changes did not invalidate launch inputs.'

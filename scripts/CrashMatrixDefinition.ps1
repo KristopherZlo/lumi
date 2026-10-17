@@ -152,6 +152,7 @@ class LumiCrashMatrixEvidence {
             machine = $env:COMPUTERNAME; os = [Environment]::OSVersion.VersionString
             gpu = @(Get-CimInstance Win32_VideoController | Sort-Object Name | Select-Object Name, DriverVersion)
             javaOptions = @($env:JAVA_TOOL_OPTIONS, $env:JDK_JAVA_OPTIONS, $env:_JAVA_OPTIONS)
+            audioBackend = $env:ALSOFT_DRIVERS
         }
         return [LumiCrashMatrixEvidence]::Digest($identity)
     }
