@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,7 +45,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
     private final List<EntityChunkKey> entityChunks;
     private final List<PlayerTarget> players;
     private final Set<ChunkCoordinate> relightChunks;
-    private final Set<ChunkCoordinate> lightSyncChunks;
+    private final Iterator<ChunkCoordinate> lightSyncCursor;
     private final Set<ChunkCoordinate> poiChunks;
     private final Set<ChunkCoordinate> entityVerificationChunks;
     private final SimpleRegionStorage entityStorage;
@@ -120,7 +121,8 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
                 .map(ChunkCoordinate::from)
                 .collect(Collectors.toUnmodifiableSet());
         relightChunks = Set.copyOf(relight);
-        lightSyncChunks = surroundingChunks(relightChunks);
+        Set<ChunkCoordinate> lightSyncChunks = surroundingChunks(relightChunks);
+        lightSyncCursor = lightSyncChunks.iterator();
         List<ChunkCoordinate> orderedChunks = new ArrayList<>(grouped.size());
         orderedChunks.addAll(grouped.keySet());
         orderedChunks.sort(Comparator.comparing(lightSyncChunks::contains));
@@ -213,14 +215,20 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             return false;
         }
         MinecraftPersistenceFuture.join(lighting, "Restore lighting");
-        synchronizeLighting();
+        if (!synchronizeLighting(deadlineNanos)) {
+            return false;
+        }
         lightingSynchronized = true;
         transitionTo(Phase.CHUNKS);
         return true;
     }
 
-    private void synchronizeLighting() {
-        for (ChunkCoordinate coordinate : lightSyncChunks) {
+    private boolean synchronizeLighting(long deadlineNanos) {
+        while (lightSyncCursor.hasNext()) {
+            if (System.nanoTime() >= deadlineNanos) {
+                return false;
+            }
+            ChunkCoordinate coordinate = lightSyncCursor.next();
             ChunkPos position = new ChunkPos(coordinate.x(), coordinate.z());
             var players = level.getChunkSource().chunkMap.getPlayers(position, false);
             if (players.isEmpty()) {
@@ -230,6 +238,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
                     position, level.getLightEngine(), null, null);
             players.forEach(player -> player.connection.send(packet));
         }
+        return true;
     }
 
     private static Set<ChunkCoordinate> surroundingChunks(
