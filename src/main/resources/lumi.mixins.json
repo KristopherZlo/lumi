@@ -48,6 +48,7 @@
     "client.AxiomDispatchCompletionMixin",
     "client.AxiomDispatcherPendingAccess",
     "client.AxiomModellingResetMixin",
+    "client.AxiomContextMenuMixin",
     "client.AxiomClientTickBarrierMixin",
     "client.AxiomClientSendBarrierMixin",
     "client.AxiomDispatcherBarrierMixin",

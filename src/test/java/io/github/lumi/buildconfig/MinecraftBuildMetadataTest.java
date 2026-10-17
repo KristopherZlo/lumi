@@ -51,6 +51,8 @@ class MinecraftBuildMetadataTest {
         assertEquals(">=" + target.get("fabricApiVersion").getAsString(),
                 dependencies.get("fabric-api").getAsString());
         JsonObject mixins = resource("lumi.mixins.json");
+        assertTrue(mixins.getAsJsonArray("client").asList().stream()
+                .anyMatch(value -> value.getAsString().equals("client.AxiomContextMenuMixin")));
         assertEquals("JAVA_" + target.get("javaVersion").getAsInt(),
                 mixins.get("compatibilityLevel").getAsString());
         assertTrue(mixins.get("required").getAsBoolean());

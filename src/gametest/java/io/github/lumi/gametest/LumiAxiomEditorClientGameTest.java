@@ -2,6 +2,7 @@ package io.github.lumi.gametest;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import com.moulberry.axiom.editor.EditorUI;
+import com.moulberry.axiom.ContextMenuManager;
 import io.github.lumi.client.LumiCompareRenderClientGameTest;
 import io.github.lumi.client.ui.LumiHotkeyScreen;
 import io.github.lumi.client.ui.LumiUiScale;
@@ -46,8 +47,20 @@ public final class LumiAxiomEditorClientGameTest implements FabricClientGameTest
                         context.runOnClient(client -> {
                             client.options.guiScale().set(scale);
                             client.resizeDisplay();
+                            ContextMenuManager.getInstance().close();
                         });
                         context.setScreen(() -> new LumiHotkeyScreen(null, List.of()));
+                        context.runOnClient(client -> {
+                            Screen modal = client.screen;
+                            var menus = ContextMenuManager.getInstance();
+                            menus.open(new Screen(Component.literal("Axiom context-menu close probe")) {
+                                @Override public void onClose() { }
+                            });
+                            menus.close();
+                            if (client.screen != modal || menus.isActive()) {
+                                throw new AssertionError("Native Axiom context-menu cleanup closed the Lumi screen");
+                            }
+                        });
                         long opened = System.nanoTime();
                         context.waitFor(client -> System.nanoTime() - opened >= 500_000_000L);
                         int[] layout = context.computeOnClient(client -> {
