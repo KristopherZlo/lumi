@@ -74,7 +74,8 @@ public final class MinecraftLiveEntityTracker {
                     actionId, entityId, entities.get(entityId).before(),
                     observedBefore, chunk));
         }
-        own(actionId, entityId, observedBefore);
+        // A pending no-op must not take a live entity from its previous action.
+        retainOwnership(actionId, entityId, new Owned(Endpoint.AFTER, observedBefore));
         return Optional.of(new Pending(
                 actionId, entityId, observedBefore, observedBefore, chunk));
     }
@@ -92,8 +93,9 @@ public final class MinecraftLiveEntityTracker {
         if (changed) {
             builderMutations.changed(Set.copyOf(chunks));
         }
-        if (after.isPresent() && journal.hasEntityChange(effective, pending.entity())) {
+        if (journal.hasEntityChange(effective, pending.entity())) {
             own(effective, pending.entity(), pending.before());
+            if (after.isEmpty()) disown(effective, pending.entity());
         } else {
             if (!effective.equals(pending.action())) disown(pending.action(), pending.entity());
             disown(effective, pending.entity());
@@ -167,6 +169,16 @@ public final class MinecraftLiveEntityTracker {
     }
 
     private void own(UUID action, UUID entity, Owned ownership) {
+        retainOwnership(action, entity, ownership);
+        owned.entrySet().stream()
+                .filter(entry -> !entry.getKey().equals(action)
+                        && entry.getValue().containsKey(entity))
+                .map(Map.Entry::getKey)
+                .toList()
+                .forEach(other -> disown(other, entity));
+    }
+
+    private void retainOwnership(UUID action, UUID entity, Owned ownership) {
         Map<UUID, Owned> entities = owned.get(action);
         if (entities == null) {
             journal.retain(action);
@@ -174,12 +186,6 @@ public final class MinecraftLiveEntityTracker {
             owned.put(action, entities);
         }
         if (entities.putIfAbsent(entity, ownership) == null) world.references().retain(ownership.before());
-        owned.entrySet().stream()
-                .filter(entry -> !entry.getKey().equals(action)
-                        && entry.getValue().containsKey(entity))
-                .map(Map.Entry::getKey)
-                .toList()
-                .forEach(other -> disown(other, entity));
     }
 
     private void disown(UUID action, UUID entity) {

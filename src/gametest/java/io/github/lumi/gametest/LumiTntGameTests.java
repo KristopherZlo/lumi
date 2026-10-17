@@ -98,10 +98,14 @@ public final class LumiTntGameTests {
                     runtime.startLiveAction(player, LiveActionJournal.Direction.UNDO,
                             operation -> terminal.set(operation.terminalState()));
                 })
-                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenWaitUntil(() -> helper.assertTrue(terminal.get() != null,
+                        "Detached TNT Undo has not reached a terminal state"))
                 .thenExecute(() -> {
                     helper.assertValueEqual(MutationTerminalState.SUCCEEDED, terminal.get(),
                             "Undo must join every active TNT root before cancellation");
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> {
                     assertNoActiveEntities(helper, EntityType.TNT);
                     helper.assertBlockState(tnt, Blocks.TNT.defaultBlockState());
                 })

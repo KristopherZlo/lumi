@@ -52,6 +52,25 @@ public final class LumiLiveActionGameTests {
                         }
                         helper.assertTrue(runtime.liveActions().owner(action).isEmpty(),
                                 "An unchanged entity action retains history and prepared state");
+                        UUID player = UUID.randomUUID();
+                        UUID original;
+                        try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), player)) {
+                            original = DirectLiveActionContext.current(runtime.liveActions()).orElseThrow();
+                            runtime.liveEntities().added(item);
+                        }
+                        try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), player)) {
+                            var pending = runtime.liveEntities().begin(item).orElseThrow();
+                            action = pending.action();
+                            helper.assertTrue(runtime.liveEntities().owns(original, item.getUUID()),
+                                    "A pending no-op stole the previous entity owner");
+                            helper.assertFalse(runtime.liveEntities().finish(pending), "No-op changed owned state");
+                        }
+                        helper.assertTrue(runtime.liveActions().owner(action).isEmpty(),
+                                "An unchanged overlapping action retains history");
+                        helper.assertTrue(runtime.liveEntities().owns(original, item.getUUID()),
+                                "A completed no-op discarded the previous entity owner");
+                        item.discard();
+                        runtime.liveEntities().finalizeOwned(original);
                     } catch (IOException failed) {
                         throw new java.io.UncheckedIOException(failed);
                     } finally {
