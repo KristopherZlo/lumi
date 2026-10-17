@@ -148,6 +148,8 @@ abstract class AxiomSetBufferMixin {
                             position, generations.get(section(position)));
                 }
             } catch (IOException failed) {
+                runtime.liveActions().makeUnavailable(action, "Cannot verify the Axiom edit after mutation");
+                generations.keySet().forEach(runtime.mutations()::markBuilderMutation);
                 throw new UncheckedIOException("Cannot capture Axiom block after mutation", failed);
             }
         });

@@ -15,7 +15,7 @@
     "RefCrashMixin",
     "WorkingIndexCrashMixin",
     "PreviewCrashMixin",
-    "AxiomVerificationFaultMixin",
+    "AxiomVerificationFaultMixin", "AxiomBlockReadFaultMixin",
     "MergeObjectCrashMixin",
     "MergeApplyCrashMixin",
     "HistoryUpgradeCrashMixin",

@@ -56,6 +56,16 @@ public final class LumiAxiomCaptureGameTests {
     }
 
     @GameTest(maxTicks = 300000)
+    public void axiomBlockReadFailureDisablesPartialUndo(GameTestHelper helper) {
+        new Scenario(helper, false, Failure.VERIFY).run();
+    }
+
+    @GameTest(maxTicks = 300000)
+    public void axiomApplyAndBlockReadFailureKeepsOriginalError(GameTestHelper helper) {
+        new Scenario(helper, false, Failure.APPLY_AND_VERIFY).run();
+    }
+
+    @GameTest(maxTicks = 300000)
     public void axiomNoOpAboveCaptureLimitDoesNotCreateBuilderChanges(GameTestHelper helper) {
         unchangedAboveLimit(helper, false);
     }
@@ -209,7 +219,10 @@ public final class LumiAxiomCaptureGameTests {
                 @Override public it.unimi.dsi.fastutil.shorts.Short2ObjectMap<com.moulberry.axiom.world_modification.CompressedBlockEntity>
                         getBlockEntityChunkMap(long key) {
                     appliedSections++;
-                    if (verificationFailure && appliedSections == 1) LumiAxiomVerificationFault.arm(injectedVerification);
+                    if (verificationFailure && appliedSections == 1) {
+                        if (fallback) LumiAxiomVerificationFault.arm(injectedVerification);
+                        else LumiAxiomVerificationFault.armBlockRead(injectedVerification, 1);
+                    }
                     if (partialApply && appliedSections == 2) throw injectedFailure;
                     return super.getBlockEntityChunkMap(key);
                 }
@@ -254,9 +267,9 @@ public final class LumiAxiomCaptureGameTests {
                                 .containsKey(MinecraftSectionCapture.key(position)),
                         "Axiom fallback omitted a builder section");
             }
-            helper.assertTrue(runtime.liveActions().prepareUndo(author.id()).isEmpty() == fallback,
+            helper.assertTrue(runtime.liveActions().prepareUndo(author.id()).isEmpty() == (fallback || verificationFailure),
                     "Capture boundary offered an incorrect or partial live Undo");
-            if (fallback) {
+            if (fallback || verificationFailure) {
                 helper.assertTrue(runtime.liveActions().lastUnavailableReason(author.id())
                                 .filter(reason -> reason.contains(verificationFailure ? "Cannot verify" : "capture limit")).isPresent(),
                         "Capture fallback did not explain why live Undo is unavailable");
