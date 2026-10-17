@@ -41,6 +41,23 @@ try {
     $taskFrozenLegacy = [LumiMinecraftVerificationTarget]::new($taskCatalog, 'legacy-12111', '', $taskFixture)
     Assert-That (-not $taskFrozenLegacy.Modern) 'Frozen legacy launch must use the root build.'
     Assert-That ($taskFrozenLegacy.PrepareArguments() -contains ("-PlumiArtifact=" + [IO.Path]::GetFullPath($taskFixture))) 'Frozen legacy JAR missing.'
+    # Disposable support changes must keep one family artifact and its compile baseline.
+    $taskLifecycle = $taskCatalog | ConvertTo-Json -Depth 10 | ConvertFrom-Json
+    $taskFamily = @($taskLifecycle.targets | Where-Object id -CEQ 'modern-261')[0]
+    $taskFamily.minecraftVersions += '26.1.99'
+    foreach ($taskGame in $taskFamily.minecraftVersions) {
+        $taskSelection = [LumiMinecraftVerificationTarget]::new($taskLifecycle, 'modern-261', $taskGame, $taskFixture)
+        Assert-That ($taskSelection.Artifact -ceq $taskPatch.Artifact) 'A family patch selected another artifact.'
+        Assert-That ($taskSelection.PrepareArguments() -contains ':adapters:modern-261:prepareMultiplayerLaunch') 'A family patch selected another adapter.'
+        Assert-That ($taskSelection.PrepareArguments() -contains "-PlumiGameVersion=$taskGame") 'A family patch lost its runtime selection.'
+    }
+    $taskFamily.minecraftVersions = @($taskFamily.minecraftVersions | Where-Object { $_ -cne '26.1' })
+    Assert-Rejected { [LumiMinecraftVerificationTarget]::new($taskLifecycle, 'modern-261', '26.1', $taskFixture) }
+    Assert-Rejected { [LumiMinecraftVerificationTarget]::new($taskLifecycle, 'modern-261', '26.1.100', $taskFixture) }
+    $taskAfterRetirement = [LumiMinecraftVerificationTarget]::new($taskLifecycle, 'modern-261', '26.1.1', $taskFixture)
+    Assert-That ($taskAfterRetirement.Artifact -ceq $taskPatch.Artifact) 'Retirement replaced the family artifact.'
+    Assert-That ($taskFamily.minecraftVersion -ceq '26.1') 'Retiring a runtime changed the compile baseline.'
+    Assert-That ($taskCatalog.targets[1].minecraftVersions -cnotcontains '26.1.99') 'Lifecycle fixtures changed the real catalog.'
 } finally {
     Remove-Item -LiteralPath $taskFixture
 }
