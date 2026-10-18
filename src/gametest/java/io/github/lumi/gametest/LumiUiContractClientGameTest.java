@@ -64,7 +64,8 @@ public final class LumiUiContractClientGameTest implements FabricClientGameTest 
                 return new Object[]{shown.get(null), pending.get(null), active.get(null)};
             } catch (IllegalAccessException failed) { throw new AssertionError(failed); }
         });
-        Screen welcome = new Screen(Component.literal("Another mod's welcome")) { };
+        Screen welcome = context.computeOnClient(client ->
+                new Screen(Component.literal("Another mod's welcome")) { });
         try {
             Files.createDirectories(preference.getParent());
             Files.writeString(preference, "0\n");
