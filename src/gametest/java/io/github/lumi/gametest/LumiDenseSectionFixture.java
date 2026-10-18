@@ -121,6 +121,8 @@ final class LumiDenseSectionFixture {
                             "activeChunks=" + loaded + ";paused="
                                     + context.computeOnClient(client -> client.isPaused())
                                     + ";" + details);
+                    // Synchronized GameTests can leave no idle budget for vanilla's unload queue.
+                    server.runOnServer(minecraft -> minecraft.saveEverything(false, true, false));
                 }
             }
             context.waitTick();

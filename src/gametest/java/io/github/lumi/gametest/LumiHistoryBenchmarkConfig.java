@@ -23,6 +23,7 @@ record LumiHistoryBenchmarkConfig(
     static final String PREFIX = "lumi.benchmark.";
     static final String ENABLED_PROPERTY = PREFIX + "enabled";
     private static final long MAX_LIVE_FIXTURE_CHUNKS = 1_089;
+    private static final int MAX_TILED_FIXTURE_SIZE = 1_000;
 
     LumiHistoryBenchmarkConfig {
         requireRange("baseSize", baseSize, 16, 10_000);
@@ -121,15 +122,18 @@ record LumiHistoryBenchmarkConfig(
                 false);
     }
 
-    void requireRunnableFixture() {
+    void requireRunnableFixture(boolean boundedPreparation) {
         long chunksPerAxis = (baseSize + 30L) / 16L;
         long chunks = chunksPerAxis * chunksPerAxis;
-        if (chunks > MAX_LIVE_FIXTURE_CHUNKS) {
+        if (chunks > MAX_LIVE_FIXTURE_CHUNKS
+                && (!boundedPreparation || !chunkPath.requiresUnloadedFixture()
+                || baseSize > MAX_TILED_FIXTURE_SIZE)) {
             throw new IllegalArgumentException(
                     "Dense benchmark would FULL-load about " + chunks
                             + " chunks. The live fixture is limited to "
                             + MAX_LIVE_FIXTURE_CHUNKS
-                            + "; use a bounded stored-chunk fixture for this profile.");
+                            + "; tiled stored preparation supports sizes up to "
+                            + MAX_TILED_FIXTURE_SIZE + ".");
         }
     }
 

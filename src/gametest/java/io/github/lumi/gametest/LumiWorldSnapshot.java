@@ -109,6 +109,12 @@ final class LumiWorldSnapshot {
         return digest;
     }
 
+    void assertSectionsMatch(LumiWorldSnapshot expected, String label) {
+        if (!sections.equals(expected.sections)) {
+            throw new AssertionError(label + ": native section states or block entities differ");
+        }
+    }
+
     private String firstDifference(LumiWorldSnapshot expected) {
         if (!sections.keySet().equals(expected.sections.keySet())) {
             return "section keys differ";

@@ -8,7 +8,9 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -60,6 +62,7 @@ final class LumiHistoryBenchmarkScenario {
     private final LumiDenseSectionFixture fixture;
     private final LumiRepositoryMetrics metrics = new LumiRepositoryMetrics();
     private final Random random;
+    private final Map<BlockBox, LumiWorldSnapshot> initialTiles = new LinkedHashMap<>();
     private final BlockBox baseArea;
 
     LumiHistoryBenchmarkScenario(
@@ -134,6 +137,7 @@ final class LumiHistoryBenchmarkScenario {
             previous = recordStorage(
                     "restore-" + name, history.repository(), previous.bytes());
             recordMemory("restore-" + name);
+            verifyInitialTiles(name);
         }
         verifyPerformance("restore", restores);
         report.event("benchmark", "configuration", "succeeded", 0, 0,
@@ -480,9 +484,12 @@ final class LumiHistoryBenchmarkScenario {
                 minZ + config.changeSize() - 1);
     }
 
-    private void editRandomVolume(String name, BlockBox area, int paletteOffset) {
+    private void editRandomVolume(String name, BlockBox area, int paletteOffset) throws IOException {
         long started = System.nanoTime();
         int tile = 0;
+        boolean bounded = config.chunkPath().requiresUnloadedFixture();
+        boolean captureInitial = bounded && initialTiles.isEmpty();
+        var checks = new LumiBehaviorChecks(context, singleplayer, report);
         for (int z = area.minZ(); z <= area.maxZ(); z += EDIT_TILE_SIZE) {
             for (int x = area.minX(); x <= area.maxX(); x += EDIT_TILE_SIZE) {
                 BlockBox batch = new BlockBox(
@@ -490,16 +497,21 @@ final class LumiHistoryBenchmarkScenario {
                         Math.min(area.maxX(), x + EDIT_TILE_SIZE - 1),
                         area.maxY(),
                         Math.min(area.maxZ(), z + EDIT_TILE_SIZE - 1));
+                if (captureInitial) {
+                    initialTiles.put(batch, checks.snapshot(name + "_initial_tile_" + tile, List.of(batch)));
+                }
                 fixture.fill(
                         name + "_tile_" + String.format("%04d", ++tile),
                         batch, paletteOffset + tile);
                 if (tile % TILES_PER_DURABILITY_BARRIER == 0) {
                     operations.awaitDurability(name + "_batch_" + tile);
+                    if (bounded) fixture.awaitUnloaded(name + "_unload_" + tile, area);
                 }
             }
         }
         if (tile % TILES_PER_DURABILITY_BARRIER != 0) {
             operations.awaitDurability(name + "_batch_" + tile);
+            if (bounded) fixture.awaitUnloaded(name + "_unload_" + tile, area);
         }
         long expectedKeys = sectionCount(area);
         int actualKeys = operations.pendingBuilderKeyCount();
@@ -511,6 +523,22 @@ final class LumiHistoryBenchmarkScenario {
                 (System.nanoTime() - started) / 1_000_000,
                 "tiles=" + tile + ";tileSize=" + EDIT_TILE_SIZE
                         + ";historyKeys=" + actualKeys);
+    }
+
+    private void verifyInitialTiles(String name) throws IOException {
+        if (initialTiles.isEmpty()) return;
+        var checks = new LumiBehaviorChecks(context, singleplayer, report);
+        int tile = 0;
+        for (var initial : initialTiles.entrySet()) {
+            String label = name + "_initial_tile_" + ++tile;
+            checks.snapshot(label, List.of(initial.getKey()))
+                    .assertSectionsMatch(initial.getValue(), label);
+            if (tile % TILES_PER_DURABILITY_BARRIER == 0 || tile == initialTiles.size()) {
+                fixture.awaitUnloaded(label + "_unload", baseArea);
+            }
+        }
+        report.event("gate", name + "_native_sections", "succeeded", 0, 0,
+                "tiles=" + initialTiles.size() + ";entities=excluded");
     }
 
     private static long sectionCount(BlockBox area) {

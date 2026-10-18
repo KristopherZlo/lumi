@@ -61,7 +61,8 @@ public final class LumiHistoryBenchmarkClientGameTest
             return;
         }
         LumiHistoryBenchmarkConfig config = LumiHistoryBenchmarkConfig.load();
-        config.requireRunnableFixture();
+        config.requireRunnableFixture(config.chunkPath().requiresUnloadedFixture()
+                && config.operation() == LumiHistoryBenchmarkConfig.OperationMode.RESTORE);
         try (var ignored = LumiUiScaleTestScope.readableViewport()) {
             if (config.operation()
                     == LumiHistoryBenchmarkConfig.OperationMode.BRANCH_SWITCH) {
@@ -93,7 +94,7 @@ public final class LumiHistoryBenchmarkClientGameTest
 
     private static void runColdFixture(ClientGameTestContext context) {
         LumiHistoryBenchmarkConfig config = LumiHistoryBenchmarkConfig.load();
-        config.requireRunnableFixture();
+        config.requireRunnableFixture(false);
         String manifest = System.getProperty(COLD_MANIFEST_PROPERTY);
         if (manifest == null || manifest.isBlank()) {
             throw new IllegalArgumentException(
