@@ -136,9 +136,12 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
                     this, requestId -> accept(new OnboardingEvent.OperationStarted(
                             OnboardingEvent.OperationKind.SAVE, requestId)));
             case OPEN_DASHBOARD -> openDashboard();
-            case COMPLETE -> {
+            case COMPLETE, OPEN_HOTKEYS -> {
                 complete();
-                minecraft.setScreen(returnScreen);
+                minecraft.setScreen(effect == OnboardingController.Effect.OPEN_HOTKEYS
+                        ? new LumiHotkeyScreen(returnScreen,
+                                LumiHotkeys.shortcuts(minecraft.options.keyMappings))
+                        : returnScreen);
             }
         }
     }
@@ -239,6 +242,16 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
                         mappings, "key.lumi.open_dashboard", event)) {
             accept(new OnboardingEvent.Shortcut(
                     OnboardingEvent.ShortcutKind.DASHBOARD, true));
+            return true;
+        }
+        if (controller.current().kind() == OnboardingTour.Kind.INFO_MORE
+                && (actionDown || LumiHotkeys.bindingDown(
+                        mappings, "key.lumi.action_modifier"))
+                && LumiHotkeys.bindingMatches(
+                        mappings, "key.lumi.hotkey_info", event)) {
+            actionDown = false;
+            accept(new OnboardingEvent.Shortcut(
+                    OnboardingEvent.ShortcutKind.HOTKEYS, true));
             return true;
         }
         return super.keyPressed(event);

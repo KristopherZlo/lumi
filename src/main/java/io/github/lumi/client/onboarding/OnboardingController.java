@@ -91,6 +91,8 @@ public final class OnboardingController {
                     ? Effect.OPEN_SAVE : Effect.NONE;
             case DASHBOARD -> current().kind() == OnboardingTour.Kind.SHORTCUT_DASHBOARD
                     ? advance(Effect.OPEN_DASHBOARD) : Effect.NONE;
+            case HOTKEYS -> current().kind() == OnboardingTour.Kind.INFO_MORE
+                    ? complete(Effect.OPEN_HOTKEYS) : Effect.NONE;
         };
     }
 
@@ -167,7 +169,7 @@ public final class OnboardingController {
 
     public enum Effect {
         NONE, REFRESH, REOPEN, ENTER_WORLD, OPEN_SAVE,
-        OPEN_DASHBOARD, COMPLETE
+        OPEN_DASHBOARD, OPEN_HOTKEYS, COMPLETE
     }
 
     public enum UndoRedoPhase { UNDO, REDO, OBSERVE }

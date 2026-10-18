@@ -84,6 +84,25 @@ class OnboardingControllerTest {
         assertFalse(controller.completed());
     }
 
+    @Test
+    void hotkeyHelpCompletesOnlyTheFinalPageOnce() {
+        OnboardingTour tour = new OnboardingTour();
+        OnboardingController controller = new OnboardingController(tour);
+        var pressed = new OnboardingEvent.Shortcut(
+                OnboardingEvent.ShortcutKind.HOTKEYS, true);
+        for (int page = 1; page < OnboardingTour.pageCount(); page++) {
+            assertEquals(OnboardingController.Effect.NONE, controller.handle(pressed));
+            assertFalse(controller.completed());
+            tour.moveNext();
+        }
+        assertEquals(OnboardingController.Effect.NONE, controller.handle(
+                new OnboardingEvent.Shortcut(OnboardingEvent.ShortcutKind.HOTKEYS, false)));
+        assertFalse(controller.completed());
+        assertEquals(OnboardingController.Effect.OPEN_HOTKEYS, controller.handle(pressed));
+        assertTrue(controller.completed());
+        assertEquals(OnboardingController.Effect.NONE, controller.handle(pressed));
+    }
+
     private static OnboardingEvent navigate(OnboardingEvent.Direction direction) {
         return new OnboardingEvent.Navigation(direction);
     }

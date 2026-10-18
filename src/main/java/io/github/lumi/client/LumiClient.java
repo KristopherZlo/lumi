@@ -76,6 +76,7 @@ import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -121,6 +122,7 @@ public final class LumiClient implements ClientModInitializer {
     private static final LumiFallingPlayerOverlay FALLING_PLAYER =
             new LumiFallingPlayerOverlay();
     private static boolean onboardingShown;
+    private static boolean initialUiPending;
     private static OnboardingController activeOnboarding;
     private static final LumiClientNetworking NETWORKING =
             new LumiClientNetworking(
@@ -218,6 +220,7 @@ public final class LumiClient implements ClientModInitializer {
                         .map(BRANCH_SLOTS::keys).orElseGet(List::of),
                 LumiClient::acceptOnboardingEvent);
         hotkeys.register();
+        ClientTickEvents.END_CLIENT_TICK.register(LumiClient::showInitialUi);
         new LumiSelectionTool(
                 SELECTION, HISTORY, LumiClient::showFeedback,
                 NETWORKING::editActiveZone).register();
@@ -761,11 +764,17 @@ public final class LumiClient implements ClientModInitializer {
             NETWORKING.requestSurvivalSettings();
         }
         showRecovery(snapshot);
-        Minecraft client = Minecraft.getInstance();
-        if (snapshot.recoveryPending() || snapshot.operationActive()
+        initialUiPending = true;
+    }
+
+    private static void showInitialUi(Minecraft client) {
+        if (!initialUiPending) return;
+        HistorySnapshotPayload snapshot = HISTORY.state().snapshot().orElse(null);
+        if (snapshot == null || snapshot.recoveryPending() || snapshot.operationActive()
                 || client.player == null || client.screen != null) {
             return;
         }
+        initialUiPending = false;
         if (!onboardingShown && !ONBOARDING.completed()) {
             onboardingShown = true;
             openOnboarding(null);

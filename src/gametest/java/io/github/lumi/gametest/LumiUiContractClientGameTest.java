@@ -1,5 +1,10 @@
 package io.github.lumi.gametest;
 
+import com.mojang.blaze3d.platform.InputConstants;
+import io.github.lumi.client.LumiClient;
+import io.github.lumi.client.onboarding.ClientOnboardingStateRepository;
+import io.github.lumi.client.onboarding.OnboardingController;
+import io.github.lumi.client.onboarding.OnboardingTour;
 import io.github.lumi.client.ui.LumiBranchesScreen;
 import io.github.lumi.client.ui.LumiCleanupScreen;
 import io.github.lumi.client.ui.LumiComparePickerScreen;
@@ -15,9 +20,15 @@ import io.github.lumi.client.ui.LumiSettingsScreen;
 import io.github.lumi.client.ui.LumiSpecialThanksScreen;
 import io.github.lumi.client.ui.LumiUpdateScreen;
 import io.github.lumi.client.ui.LumiZonesScreen;
+import io.github.lumi.network.HistorySnapshotPayload;
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.nio.file.Files;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 /** In-game smoke contract for clean-state controls and every secondary page. */
 @SuppressWarnings("UnstableApiUsage")
@@ -32,10 +43,93 @@ public final class LumiUiContractClientGameTest implements FabricClientGameTest 
                 LumiUiTestDriver ui = new LumiUiTestDriver(test);
                 ui.completeOnboardingIfShown();
                 ui.awaitHistory();
+                verifyOnboarding(test, ui, report);
                 verifyCleanHistory(ui, report);
                 verifyPrimaryPages(ui, report);
                 verifyMorePages(ui, report);
             });
+        }
+    }
+
+    private static void verifyOnboarding(
+            ClientGameTestContext context, LumiUiTestDriver ui,
+            LumiBehaviorReport report) throws IOException {
+        var preference = FabricLoader.getInstance().getConfigDir().resolve("lumi-onboarding");
+        byte[] savedPreference = Files.exists(preference) ? Files.readAllBytes(preference) : null;
+        Field shown = field(LumiClient.class, "onboardingShown");
+        Field pending = field(LumiClient.class, "initialUiPending");
+        Field active = field(LumiClient.class, "activeOnboarding");
+        Object[] saved = context.computeOnClient(client -> {
+            try {
+                return new Object[]{shown.get(null), pending.get(null), active.get(null)};
+            } catch (IllegalAccessException failed) { throw new AssertionError(failed); }
+        });
+        Screen welcome = new Screen(Component.literal("Another mod's welcome")) { };
+        try {
+            Files.createDirectories(preference.getParent());
+            Files.writeString(preference, "0\n");
+            var snapshotReceiver = LumiClient.class.getDeclaredMethod(
+                    "acceptSnapshot", HistorySnapshotPayload.class);
+            snapshotReceiver.setAccessible(true);
+            context.runOnClient(client -> {
+                try {
+                    shown.setBoolean(null, false);
+                    active.set(null, null);
+                    client.setScreen(welcome);
+                    snapshotReceiver.invoke(null, LumiClient.history().state().snapshot().orElseThrow());
+                } catch (ReflectiveOperationException failed) { throw new AssertionError(failed); }
+            });
+            for (int tick = 0; tick < 5; tick++) {
+                context.waitTick();
+                if (!context.computeOnClient(client -> client.screen == welcome)) {
+                    throw new AssertionError("Onboarding replaced another mod's welcome");
+                }
+            }
+            context.runOnClient(client -> client.setScreen(null));
+            context.waitForScreen(LumiOnboardingScreen.class);
+            Field tourField = field(OnboardingController.class, "tour");
+            Field page = field(OnboardingTour.class, "index");
+            context.runOnClient(client -> {
+                try {
+                    page.setInt(tourField.get(active.get(null)), OnboardingTour.pageCount() - 1);
+                    client.setScreen(client.screen);
+                } catch (IllegalAccessException failed) { throw new AssertionError(failed); }
+            });
+            context.getInput().holdAlt();
+            try {
+                context.getInput().pressKey(InputConstants.KEY_I);
+                context.waitForScreen(LumiHotkeyScreen.class);
+            } finally {
+                context.getInput().releaseAlt();
+            }
+            if (!new ClientOnboardingStateRepository().completed()) {
+                throw new AssertionError("Final hotkey did not persist onboarding completion");
+            }
+            ui.closeScreen(LumiHotkeyScreen.class, null);
+            report.event("gate", "onboarding", "succeeded", 0, 0,
+                    "Deferred behind another screen; final Alt+I opened help and completed once");
+        } catch (ReflectiveOperationException failed) {
+            throw new AssertionError(failed);
+        } finally {
+            context.runOnClient(client -> {
+                try {
+                    shown.set(null, saved[0]);
+                    pending.set(null, saved[1]);
+                    active.set(null, saved[2]);
+                } catch (IllegalAccessException failed) { throw new AssertionError(failed); }
+            });
+            if (savedPreference == null) Files.deleteIfExists(preference);
+            else Files.write(preference, savedPreference);
+        }
+    }
+
+    private static Field field(Class<?> owner, String name) {
+        try {
+            Field field = owner.getDeclaredField(name);
+            field.setAccessible(true);
+            return field;
+        } catch (NoSuchFieldException failed) {
+            throw new AssertionError(failed);
         }
     }
 
