@@ -663,9 +663,9 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
             synchronized (this) {
                 durableIndexRevision = revision;
                 durableGenerations.clear();
-                durableGenerations.putAll(state.working().generations());
+                state.working().generations().forEach(durableGenerations::put);
                 durableBuilderGenerations.clear();
-                durableBuilderGenerations.putAll(state.builder().generations());
+                state.builder().generations().forEach(durableBuilderGenerations::put);
                 Set.copyOf(publicationRequirements.keySet()).forEach(this::releaseSatisfied);
                 notifyAll();
                 if (revision == indexRevision) {

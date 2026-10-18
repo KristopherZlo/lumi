@@ -1,15 +1,23 @@
 package io.github.lumi.domain.model;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
 public record WorkingIndexSnapshot(Map<HistoryKey, Long> generations) {
     public WorkingIndexSnapshot {
-        generations = Map.copyOf(Objects.requireNonNull(generations, "generations"));
-        if (generations.values().stream().anyMatch(value -> value == null || value < 1)) {
-            throw new IllegalArgumentException("Dirty generations must be positive");
-        }
+        Objects.requireNonNull(generations, "generations");
+        // Avoid Map.copyOf's costly copying and iteration for large spatial indexes.
+        generations = generations.isEmpty() ? Map.of()
+                : Collections.unmodifiableMap(new HashMap<>(generations));
+        generations.forEach((key, value) -> {
+            Objects.requireNonNull(key, "key");
+            if (Objects.requireNonNull(value, "generation") < 1) {
+                throw new IllegalArgumentException("Dirty generations must be positive");
+            }
+        });
     }
 
     public static WorkingIndexSnapshot empty() {

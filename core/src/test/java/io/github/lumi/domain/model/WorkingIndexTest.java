@@ -2,11 +2,46 @@ package io.github.lumi.domain.model;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.HashMap;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class WorkingIndexTest {
+    @Test
+    void snapshotOwnsReadOnlyGenerationEntries() {
+        SectionKey key = new SectionKey(1, 2, 3);
+        Map<HistoryKey, Long> source = new HashMap<>(Map.of(key, 1L));
+        WorkingIndexSnapshot snapshot = new WorkingIndexSnapshot(source);
+
+        source.put(key, 2L);
+        source.clear();
+
+        assertEquals(Map.of(key, 1L), snapshot.generations());
+        assertThrows(UnsupportedOperationException.class,
+                () -> snapshot.generations().put(key, 3L));
+        assertThrows(UnsupportedOperationException.class,
+                () -> snapshot.generations().entrySet().iterator().next().setValue(3L));
+    }
+
+    @Test
+    void snapshotRejectsInvalidGenerationEntries() {
+        SectionKey key = new SectionKey(1, 2, 3);
+        Map<HistoryKey, Long> source = new HashMap<>();
+        assertThrows(NullPointerException.class, () -> new WorkingIndexSnapshot(null));
+        source.put(null, 1L);
+        assertThrows(NullPointerException.class, () -> new WorkingIndexSnapshot(source));
+        source.clear();
+        source.put(key, null);
+        assertThrows(NullPointerException.class, () -> new WorkingIndexSnapshot(source));
+        source.put(key, 0L);
+        assertThrows(IllegalArgumentException.class, () -> new WorkingIndexSnapshot(source));
+        source.put(key, -1L);
+        assertThrows(IllegalArgumentException.class, () -> new WorkingIndexSnapshot(source));
+    }
+
     @Test
     void reportsPendingStateWithoutCreatingASnapshot() {
         WorkingIndex index = new WorkingIndex();
