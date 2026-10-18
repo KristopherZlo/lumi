@@ -1,5 +1,6 @@
 package io.github.lumi.observation;
 
+import com.sun.management.HotSpotDiagnosticMXBean;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
@@ -82,6 +83,12 @@ final class RuntimeObservation {
                     throw new IllegalStateException("Insufficient ordinary unpaused samples: " + measured + "/" + paused);
                 }
                 verify.run();
+                if (Boolean.getBoolean("lumi.observation.heapDump")) {
+                    String name = "after-live.hprof";
+                    ManagementFactory.getPlatformMXBean(HotSpotDiagnosticMXBean.class)
+                            .dumpHeap(directory.resolve(name).toString(), true);
+                    metadata.setProperty("heapDump", name);
+                }
                 complete(null);
                 return;
             }

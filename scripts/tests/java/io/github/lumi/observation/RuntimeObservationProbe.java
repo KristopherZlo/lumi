@@ -10,6 +10,7 @@ public final class RuntimeObservationProbe {
     public static void main(String[] args) throws Exception {
         System.setProperty("lumi.observation.warmupSeconds", "1");
         System.setProperty("lumi.observation.seconds", "3");
+        System.setProperty("lumi.observation.heapDump", "true");
         var cases = new RuntimeObservation.ClientState[] {
             new RuntimeObservation.ClientState(60, true, false, "none", false),
             new RuntimeObservation.ClientState(60, true, true, "test-pause", false),
@@ -37,6 +38,9 @@ public final class RuntimeObservationProbe {
             String expected = state.paused() || state.simulationFrozen()
                     || state.screen().equals("verification-failure") ? "failed" : "passed";
             if (!expected.equals(metadata.getProperty("status"))) throw new AssertionError(metadata);
+            if (Files.exists(directory.resolve("after-live.hprof")) != expected.equals("passed")) {
+                throw new AssertionError("Live heap dump must follow successful verification only");
+            }
             if (Files.readAllLines(directory.resolve("samples.csv")).size() < 3) {
                 throw new AssertionError("Missing raw warmup/measurement samples");
             }
