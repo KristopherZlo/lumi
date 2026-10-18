@@ -180,6 +180,7 @@ final class LumiExactRestoreScenario {
     private void assertEndpointMetadata(
             String name, Endpoint expected, BranchName expectedBranch)
             throws IOException {
+        fixture.assertDenseDerivedState();
         checks.assertValue(
                 name + "_derived",
                 fixture.derivedState().toString(),

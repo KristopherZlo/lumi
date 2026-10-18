@@ -11,6 +11,7 @@ import io.github.lumi.mixin.PersistentEntityManagerPersistenceAccessor;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.List;
+import java.util.stream.Collectors;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext;
 import net.minecraft.core.SectionPos;
@@ -21,6 +22,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.levelgen.Heightmap;
 
 /** Builds deterministic high-entropy benchmark data by replacing native sections. */
 final class LumiDenseSectionFixture {
@@ -161,6 +163,9 @@ final class LumiDenseSectionFixture {
                     replaceSection(chunk, level, area, key, paletteOffset);
                     runtime.mutations().markBuilderMutation(key);
                 }
+                Heightmap.primeHeightmaps(chunk, chunk.getHeightmaps().stream()
+                        .map(entry -> entry.getKey()).collect(Collectors.toSet()));
+                chunk.getSkyLightSources().fillFrom(chunk);
                 chunk.markUnsaved();
             }
         }

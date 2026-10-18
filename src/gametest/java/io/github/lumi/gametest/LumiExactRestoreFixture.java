@@ -19,6 +19,7 @@ import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.entity.SignText;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.lighting.ChunkSkyLightSources;
 import net.minecraft.world.level.storage.LevelData;
 import net.minecraft.world.phys.Vec3;
 
@@ -160,6 +161,41 @@ final class LumiExactRestoreFixture {
         });
     }
 
+    void assertDenseDerivedState() {
+        singleplayer.getServer().runOnServer(server -> {
+            ServerLevel level = server.getPlayerList().getPlayers().getFirst().level();
+            BlockPos.MutableBlockPos position = new BlockPos.MutableBlockPos();
+            for (BlockBox area : List.of(loadedArea, storedArea)) {
+                for (int z = area.minZ(); z <= area.maxZ(); z += 16) {
+                    for (int x = area.minX(); x <= area.maxX(); x += 16) {
+                        var chunk = level.getChunkSource().getChunkNow(x >> 4, z >> 4);
+                        if (chunk == null) continue;
+                        var sky = new ChunkSkyLightSources(level);
+                        sky.fillFrom(chunk);
+                        for (int localX : List.of(0, 7, 15)) {
+                            for (int localZ : List.of(0, 7, 15)) {
+                                for (var heightmap : chunk.getHeightmaps()) {
+                                    int y = chunk.getSectionYFromSectionIndex(
+                                            chunk.getHighestFilledSectionIndex()) * 16 + 15;
+                                    while (y >= level.getMinY() && !heightmap.getKey().isOpaque().test(
+                                            chunk.getBlockState(position.set(localX, y, localZ)))) y--;
+                                    if (heightmap.getValue().getFirstAvailable(localX, localZ) != y + 1) {
+                                        throw new AssertionError("Dense Restore heightmap mismatch: "
+                                                + chunk.getPos() + "/" + heightmap.getKey());
+                                    }
+                                }
+                                if (chunk.getSkyLightSources().getLowestSourceY(localX, localZ)
+                                        != sky.getLowestSourceY(localX, localZ)) {
+                                    throw new AssertionError("Dense Restore skylight source mismatch: " + chunk.getPos());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     private void configureFeatures(
             String label,
             Item item,
@@ -220,6 +256,13 @@ final class LumiExactRestoreFixture {
                 }
                 level.setBlockAndUpdate(
                         heightProbe.above(height), Blocks.STONE.defaultBlockState());
+                if (label.equals("B")) {
+                    BlockPos.MutableBlockPos empty = new BlockPos.MutableBlockPos();
+                    for (int y = level.getMinY(); y <= level.getMaxY(); y++) {
+                        level.setBlock(empty.set(loadedArea.minX(), y, loadedArea.minZ()),
+                                Blocks.AIR.defaultBlockState(), FIXTURE_FLAGS);
+                    }
+                }
             }
             var data = LevelData.RespawnData.of(
                     level.dimension(), respawn, yaw, pitch);

@@ -2,7 +2,9 @@ package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.SectionKey;
 import it.unimi.dsi.fastutil.shorts.ShortOpenHashSet;
+import java.util.Arrays;
 import java.util.BitSet;
+import java.util.EnumSet;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
@@ -15,6 +17,7 @@ import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.levelgen.Heightmap;
 
 /** Rewrites a loaded section directly, then repairs derived live-world state once. */
 @SuppressWarnings("deprecation")
@@ -52,7 +55,11 @@ final class MinecraftSectionRewriter {
                     key.chunkX(), key.sectionY(), key.chunkZ(), isOnlyAir);
         }
         if (delta.lightChanged()) {
-            updateSkyLightSources(chunk, key, delta.lightColumns());
+            if (delta.heightmapIndexes().length == 256) {
+                chunk.getSkyLightSources().fillFrom(chunk);
+            } else {
+                updateSkyLightSources(chunk, key, delta.lightColumns());
+            }
         }
         chunk.markUnsaved();
         return new SectionApplyResult(
@@ -69,6 +76,16 @@ final class MinecraftSectionRewriter {
             SectionKey key,
             LevelChunkSection section,
             int[] changedIndexes) {
+        if (changedIndexes.length == 256) {
+            var types = EnumSet.noneOf(Heightmap.Types.class);
+            for (var heightmap : chunk.getHeightmaps()) {
+                // Native priming leaves empty columns untouched, so clear the old heights first.
+                Arrays.fill(heightmap.getValue().getRawData(), 0L);
+                types.add(heightmap.getKey());
+            }
+            Heightmap.primeHeightmaps(chunk, types);
+            return;
+        }
         for (int changed = changedIndexes.length - 1; changed >= 0; changed--) {
             int localIndex = changedIndexes[changed];
             int x = localIndex & 15;
