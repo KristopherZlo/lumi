@@ -136,9 +136,10 @@ tasks.register('runOrdinaryClientObservation', lumiClientProductionRunTaskType) 
         config.mkdirs()
         new File(config, 'lumi-onboarding').text = '1\n'
         new File(config, 'lumi-telemetry.properties').text = 'enabled=false\nnoticeSeen=true\n'
-        new File(root, 'options.txt').text = 'lang:en_us\nrenderDistance:8\nsimulationDistance:5\nmaxFps:120\nenableVsync:false\npauseOnLostFocus:false\nfullscreen:false\n'
+        new File(root, 'options.txt').text = 'lang:en_us\nrenderDistance:8\nsimulationDistance:5\nmaxFps:120\ninactivityFpsLimit:"minimized"\nenableVsync:false\npauseOnLostFocus:false\nfullscreen:false\n'
         record.putAll([schema: 1, status: 'running', scope: 'ordinary-client-observation', game: game,
                 group: target.id(), lumi: enabled == 'true', graphicsBackend: backend ?: 'default',
+                inactivityFpsLimit: 'minimized',
                 source: source.absolutePath, artifact: [path: player.singleFile.absolutePath,
                 sha256: evidence.hash(player.singleFile.toPath())],
                 mods: mods.files.collect { [name: it.name, sha256: evidence.hash(it.toPath())] }])

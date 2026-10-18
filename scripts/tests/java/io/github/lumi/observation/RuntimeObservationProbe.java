@@ -13,7 +13,8 @@ public final class RuntimeObservationProbe {
         var cases = new RuntimeObservation.ClientState[] {
             new RuntimeObservation.ClientState(60, true, false, "none", false),
             new RuntimeObservation.ClientState(60, true, true, "test-pause", false),
-            new RuntimeObservation.ClientState(60, true, false, "none", true)
+            new RuntimeObservation.ClientState(60, true, false, "none", true),
+            new RuntimeObservation.ClientState(60, true, false, "verification-failure", false)
         };
         for (var state : cases) {
             var directory = Files.createTempDirectory("lumi-ordinary-observation-");
@@ -21,6 +22,11 @@ public final class RuntimeObservationProbe {
             var finished = new CountDownLatch(1);
             var observation = new RuntimeObservation(new Properties(),
                     () -> state, () -> 20,
+                    () -> {
+                        if (state.screen().equals("verification-failure")) {
+                            throw new AssertionError("Exact endpoint verification failed");
+                        }
+                    },
                     finished::countDown);
             observation.start();
             if (!finished.await(10, TimeUnit.SECONDS)) throw new AssertionError("Sampler did not finish");
@@ -28,7 +34,8 @@ public final class RuntimeObservationProbe {
             try (var reader = Files.newBufferedReader(directory.resolve("observation.properties"))) {
                 metadata.load(reader);
             }
-            String expected = state.paused() || state.simulationFrozen() ? "failed" : "passed";
+            String expected = state.paused() || state.simulationFrozen()
+                    || state.screen().equals("verification-failure") ? "failed" : "passed";
             if (!expected.equals(metadata.getProperty("status"))) throw new AssertionError(metadata);
             if (Files.readAllLines(directory.resolve("samples.csv")).size() < 3) {
                 throw new AssertionError("Missing raw warmup/measurement samples");
