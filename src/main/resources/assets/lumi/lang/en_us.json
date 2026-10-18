@@ -1,5 +1,4 @@
 {
-  "lumi.axiom.history_invalidated": "Lumi is synchronizing this world. Pending Axiom edits and Axiom Undo/Redo were cleared.",
   "lumi.axiom.sync_refused": "Axiom work could not stop safely. Axiom remains paused; reconnect before starting a new edit.",
   "key.category.lumi.general": "Lumi",
   "key.lumi.undo": "Undo",

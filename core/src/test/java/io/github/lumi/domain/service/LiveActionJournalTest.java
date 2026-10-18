@@ -370,6 +370,53 @@ class LiveActionJournalTest {
     }
 
     @Test
+    void lateChangeKeepsOverlappingNewerActionFirst() {
+        LiveActionJournal journal = new LiveActionJournal();
+        BlockPosition delayed = new BlockPosition(8, 4, 5);
+        UUID older = journal.begin(PLAYER_A);
+        journal.record(older, POSITION, block("stone"), block("dirt"));
+        journal.record(older, delayed, block("stone"), block("dirt"));
+        journal.recordEntity(older, ENTITY, Optional.empty(), Optional.of(entity(1)));
+        journal.retain(older);
+        journal.close(older);
+        UUID newer = journal.begin(PLAYER_A);
+        journal.record(newer, POSITION, block("dirt"), block("gold_block"));
+        journal.close(newer);
+
+        journal.record(older, delayed, block("dirt"), block("air"));
+        journal.recordEntity(older, ENTITY, Optional.of(entity(1)), Optional.of(entity(2)));
+        journal.release(older);
+
+        var undo = journal.prepareUndo(PLAYER_A).orElseThrow();
+        assertEquals(newer, undo.actionId());
+        journal.complete(undo);
+        var olderUndo = journal.prepareUndo(PLAYER_A).orElseThrow();
+        assertEquals(older, olderUndo.actionId());
+        assertEquals(block("air"), olderUndo.expected().get(delayed));
+        assertEquals(Optional.of(entity(2)), olderUndo.expectedEntities().get(ENTITY));
+        journal.complete(olderUndo);
+        journal.complete(journal.prepareRedo(PLAYER_A).orElseThrow());
+        assertEquals(newer, journal.prepareRedo(PLAYER_A).orElseThrow().actionId());
+    }
+
+    @Test
+    void mergingOlderGroupsKeepsLaterOverlappingActionFirst() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID first = add(journal, 1);
+        UUID second = add(journal, 2);
+        UUID later = journal.begin(PLAYER_A);
+        journal.record(later, new BlockPosition(1, 0, 0), block("stone"), block("gold_block"));
+        journal.close(later);
+
+        journal.mergeGroups(first, second);
+
+        var undo = journal.prepareUndo(PLAYER_A).orElseThrow();
+        assertEquals(later, undo.actionId());
+        journal.complete(undo);
+        assertEquals(List.of(first, second), journal.prepareUndo(PLAYER_A).orElseThrow().actionIds());
+    }
+
+    @Test
     void foldsLateOverlapIntoNewerVisibleAction() {
         LiveActionJournal journal = new LiveActionJournal();
         UUID older = journal.begin(PLAYER_A);
@@ -433,6 +480,22 @@ class LiveActionJournalTest {
         assertEquals(older, effective);
         assertThrows(IllegalStateException.class,
                 () -> journal.prepareUndo(PLAYER_A));
+    }
+
+    @Test
+    void closingAnOpenGroupMemberKeepsTheGroupContiguous() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID first = add(journal, 1);
+        UUID unrelated = add(journal, 2);
+        UUID second = journal.begin(PLAYER_A);
+        journal.record(second, new BlockPosition(3, 0, 0), block("air"), block("stone"));
+        journal.mergeGroups(first, second);
+        journal.close(second);
+
+        var undo = journal.prepareUndo(PLAYER_A).orElseThrow();
+        assertEquals(List.of(first, second), undo.actionIds());
+        journal.complete(undo);
+        assertEquals(unrelated, journal.prepareUndo(PLAYER_A).orElseThrow().actionId());
     }
 
     @Test

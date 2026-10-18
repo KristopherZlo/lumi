@@ -35,6 +35,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
@@ -59,6 +60,8 @@ public final class LumiAxiomGameTests {
                 .thenExecute(() -> {
                     player.set(helper.makeMockServerPlayerInLevel());
                     helper.setBlock(FIRST, Blocks.STONE);
+                    helper.setBlock(SECOND.below(), Blocks.STONE);
+                    helper.setBlock(SECOND, Blocks.REPEATER);
                     helper.getLevel().getServer().getPlayerList()
                             .op(player.get().nameAndId(),
                                     Optional.of(LevelBasedPermissionSet.OWNER),
@@ -73,7 +76,12 @@ public final class LumiAxiomGameTests {
                     helper.assertTrue(runtime.freeze().isMutationAllowed(),
                             "Lumi unexpectedly froze Axiom test mutations");
                     applyInfiniteReach(helper, player.get());
+                    applySetBlock(helper, player.get(), SECOND,
+                            Blocks.REPEATER.defaultBlockState().setValue(BlockStateProperties.DELAY, 3),
+                            false, AxiomServerboundSetBlock.REASON_TINKER);
                     helper.assertBlockState(FIRST, Blocks.GOLD_BLOCK.defaultBlockState());
+                    helper.assertBlockState(SECOND,
+                            Blocks.REPEATER.defaultBlockState().setValue(BlockStateProperties.DELAY, 3));
                     helper.assertTrue(runtime.liveActions()
                                     .prepareUndo(player.get().getUUID()).isPresent(),
                             "Axiom Infinite Reach did not create a live action");
@@ -89,6 +97,7 @@ public final class LumiAxiomGameTests {
                             undo.get().terminalState(),
                             "Axiom Infinite Reach Undo must succeed");
                     helper.assertBlockState(FIRST, Blocks.STONE.defaultBlockState());
+                    helper.assertBlockState(SECOND, Blocks.REPEATER.defaultBlockState());
                     redo.set(runtime.startLiveAction(player.get().getUUID(),
                             LiveActionJournal.Direction.REDO, ignored -> { }));
                 })
@@ -99,6 +108,8 @@ public final class LumiAxiomGameTests {
                                 redo.get().terminalState(),
                                 "Axiom Infinite Reach Redo must succeed");
                         helper.assertBlockState(FIRST, Blocks.GOLD_BLOCK.defaultBlockState());
+                        helper.assertBlockState(SECOND,
+                                Blocks.REPEATER.defaultBlockState().setValue(BlockStateProperties.DELAY, 3));
                     }
                     deactivateAxiom(player.get());
                     helper.getLevel().getServer().getPlayerList()
@@ -446,11 +457,17 @@ public final class LumiAxiomGameTests {
             ServerPlayer player,
             BlockPos relative,
             BlockState state) {
+        applySetBlock(helper, player, relative, state, true, AxiomServerboundSetBlock.REASON_INFINITEREACH);
+    }
+
+    private static void applySetBlock(
+            GameTestHelper helper, ServerPlayer player, BlockPos relative,
+            BlockState state, boolean updateNeighbors, int reason) {
         BlockPos position = helper.absolutePos(relative);
         new AxiomServerboundSetBlock(
                 Map.of(position, state),
-                true,
-                AxiomServerboundSetBlock.REASON_INFINITEREACH,
+                updateNeighbors,
+                reason,
                 false,
                 new BlockHitResult(
                         Vec3.atCenterOf(position), Direction.UP, position, false),

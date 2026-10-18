@@ -126,9 +126,7 @@ public final class AxiomClientWorkBarrier {
             if (Tool.sharedSingleThreadExecutor == null || singleExecutor == null) {
                 throw new IllegalStateException("Native Axiom worker is not tracked");
             }
-            Minecraft client = Minecraft.getInstance();
-            if (invalidateHistory && client.player != null) MinecraftPlayerMessages.chat(
-                    client.player, Component.translatable("lumi.axiom.history_invalidated"));
+            LumiMod.LOGGER.debug("Axiom work cancellation requested; native history invalidated={}", invalidateHistory);
         } catch (RuntimeException failure) {
             LumiMod.LOGGER.error("Cannot quiesce pending Axiom work", failure);
             finish(State.REFUSED);

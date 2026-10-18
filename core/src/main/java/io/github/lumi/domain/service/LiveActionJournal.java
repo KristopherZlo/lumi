@@ -134,7 +134,6 @@ public final class LiveActionJournal {
             else action.changes.put(position, updated);
             recorded = true;
             blockOwners.set(position, action, updatedBytes != 0 && action.applied);
-            touchClosedGroup(action);
             return action.id;
         } finally {
             if (!recorded && updatedBytes != 0) releaseBlockStates(updated);
@@ -188,7 +187,6 @@ public final class LiveActionJournal {
             else action.entities.put(entityId, updated);
             recorded = true;
             entityOwners.set(entityId, action, updatedBytes != 0 && action.applied);
-            touchClosedGroup(action);
             return action.id;
         } finally {
             if (!recorded && updatedBytes != 0) releaseEntityStates(updated);
@@ -237,7 +235,7 @@ public final class LiveActionJournal {
                     .filter(action -> action.groupId.equals(source))
                     .forEach(action -> action.groupId = first.groupId);
         }
-        touchClosedGroup(first);
+        coalesceClosedGroup(first);
     }
 
     public synchronized void refreshEntityBefore(
@@ -282,6 +280,7 @@ public final class LiveActionJournal {
         PlayerStacks stacks = stacks(action.player);
         stacks.undo.addLast(action.id);
         stacks.add(action.groupId);
+        if (stacks.groupMembers.get(action.groupId) > 1) coalesceClosedGroup(action);
         trimToActionLimit(action.player, action.groupId);
         return true;
     }
@@ -552,7 +551,7 @@ public final class LiveActionJournal {
                 .orElse(causalAction);
     }
 
-    private void touchClosedGroup(MutableAction action) {
+    private void coalesceClosedGroup(MutableAction action) {
         if (!action.closed || !action.applied) {
             return;
         }
@@ -565,8 +564,16 @@ public final class LiveActionJournal {
                         candidate -> candidate.sequence))
                 .map(candidate -> candidate.id)
                 .toList();
-        stacks.undo.removeAll(members);
-        members.forEach(stacks.undo::addLast);
+        // Keep the group at its latest member, below any later independent edits.
+        List<UUID> remaining = new java.util.ArrayList<>();
+        int insertion = 0;
+        for (UUID id : stacks.undo) {
+            if (requireAction(id).groupId.equals(action.groupId)) insertion = remaining.size();
+            else remaining.add(id);
+        }
+        remaining.addAll(insertion, members);
+        stacks.undo.clear();
+        stacks.undo.addAll(remaining);
     }
 
     private static boolean overlaps(
