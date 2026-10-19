@@ -14,6 +14,22 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class ClientHistoryStoreTest {
+    @Test void worldCursorWaitsForItsOwnConfirmationRatherThanAnotherBuildersRevision() {
+        var store = new ClientHistoryStore();
+        UUID epoch = UUID.randomUUID(), request = UUID.randomUUID();
+        store.accept(new io.github.lumi.network.WorldActionViewPayload("minecraft:overworld", epoch,
+                new io.github.lumi.domain.model.WorldActionView(4, java.util.List.of(), java.util.List.of())));
+        store.beginWorldAction(request);
+        store.accept(new io.github.lumi.network.WorldActionViewPayload("minecraft:overworld", epoch,
+                new io.github.lumi.domain.model.WorldActionView(5, java.util.List.of(), java.util.List.of()), Optional.of(UUID.randomUUID())));
+        assertEquals(Optional.of(request), store.worldActionRequest());
+        store.accept(new io.github.lumi.network.WorldActionViewPayload("minecraft:overworld", epoch,
+                new io.github.lumi.domain.model.WorldActionView(5, java.util.List.of(), java.util.List.of()), Optional.of(request)));
+        assertFalse(store.worldActionRequest().isPresent());
+        store.beginWorldAction(UUID.randomUUID());
+        store.clear();
+        assertFalse(store.worldActionRequest().isPresent());
+    }
     @Test
     void queuedProgressCannotRollBackOrSpeculativelyAdvanceThePublishedHead() {
         var store = new ClientHistoryStore();

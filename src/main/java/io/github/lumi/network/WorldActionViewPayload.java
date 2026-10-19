@@ -14,7 +14,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 
 /** The server cursor shown by editor history controls; replay data remains server-owned. */
-public record WorldActionViewPayload(String dimension, UUID epoch, WorldActionView view) implements CustomPacketPayload {
+public record WorldActionViewPayload(String dimension, UUID epoch, WorldActionView view, Optional<UUID> completedRequest) implements CustomPacketPayload {
     private static final int MAX_ENTRIES = 16_384;
     public static final Type<WorldActionViewPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(LumiMod.MOD_ID, "world_actions_v1"));
     public static final StreamCodec<FriendlyByteBuf, WorldActionViewPayload> CODEC = CustomPacketPayload.codec(WorldActionViewPayload::write, WorldActionViewPayload::read);
@@ -22,8 +22,12 @@ public record WorldActionViewPayload(String dimension, UUID epoch, WorldActionVi
     public WorldActionViewPayload {
         Objects.requireNonNull(epoch);
         Objects.requireNonNull(view);
+        Objects.requireNonNull(completedRequest);
         if (dimension == null || dimension.isBlank() || dimension.length() > 256) throw new IllegalArgumentException("Invalid action dimension");
         if ((long) view.undo().size() + view.redo().size() > MAX_ENTRIES) throw new IllegalArgumentException("Too many action entries");
+    }
+    public WorldActionViewPayload(String dimension, UUID epoch, WorldActionView view) {
+        this(dimension, epoch, view, Optional.empty());
     }
     private void write(FriendlyByteBuf buffer) {
         buffer.writeUtf(dimension, 256);
@@ -31,6 +35,8 @@ public record WorldActionViewPayload(String dimension, UUID epoch, WorldActionVi
         buffer.writeLong(view.revision());
         write(buffer, view.undo());
         write(buffer, view.redo());
+        buffer.writeBoolean(completedRequest.isPresent());
+        completedRequest.ifPresent(buffer::writeUUID);
     }
     private static void write(FriendlyByteBuf buffer, List<WorldActionView.Entry> entries) {
         buffer.writeVarInt(entries.size());
@@ -47,7 +53,8 @@ public record WorldActionViewPayload(String dimension, UUID epoch, WorldActionVi
         long revision = buffer.readLong();
         var undo = readEntries(buffer, MAX_ENTRIES);
         var redo = readEntries(buffer, MAX_ENTRIES - undo.size());
-        return new WorldActionViewPayload(dimension, epoch, new WorldActionView(revision, undo, redo));
+        return new WorldActionViewPayload(dimension, epoch, new WorldActionView(revision, undo, redo),
+                buffer.readBoolean() ? Optional.of(buffer.readUUID()) : Optional.empty());
     }
     private static List<WorldActionView.Entry> readEntries(FriendlyByteBuf buffer, int maximum) {
         int count = buffer.readVarInt();

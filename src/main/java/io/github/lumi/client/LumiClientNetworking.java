@@ -16,6 +16,7 @@ import io.github.lumi.domain.model.WorkspaceSettings;
 import io.github.lumi.domain.model.VersionTags;
 import io.github.lumi.domain.model.VersionDisplayName;
 import io.github.lumi.network.HistoryCommandPayload;
+import io.github.lumi.network.WorldActionViewPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.HistoryPagePayload;
 import io.github.lumi.network.HistoryPageRequestPayload;
@@ -113,6 +114,11 @@ public final class LumiClientNetworking {
         if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom")) {
             io.github.lumi.client.integration.AxiomClientWorkBarrier.register();
         }
+        ClientPlayNetworking.registerGlobalReceiver(
+                WorldActionViewPayload.TYPE, (payload, context) -> context.client().execute(() -> {
+                    if (context.client().level == null || !context.client().level.dimension().identifier().toString().equals(payload.dimension())) return;
+                    history.accept(payload);
+                }));
         ClientPlayNetworking.registerGlobalReceiver(
                 HistorySnapshotPayload.TYPE, (payload, context) ->
                         context.client().execute(() -> {
@@ -231,11 +237,23 @@ public final class LumiClientNetworking {
     }
 
     public UUID undo() {
-        return send(HistoryCommandPayload.Kind.UNDO, "");
+        return sendWorldAction(HistoryCommandPayload.Kind.UNDO);
     }
 
     public UUID redo() {
-        return send(HistoryCommandPayload.Kind.REDO, "");
+        return sendWorldAction(HistoryCommandPayload.Kind.REDO);
+    }
+
+    public Optional<WorldActionViewPayload> worldActions() { return history.worldActions(); }
+    public boolean worldActionPending() { return history.worldActionRequest().isPresent(); }
+    public Optional<UUID> worldActionRequest() { return history.worldActionRequest(); }
+
+    private UUID sendWorldAction(HistoryCommandPayload.Kind kind) {
+        if (history.worldActions().isEmpty()) return send(kind, "");
+        if (history.worldActionRequest().isPresent()) return history.worldActionRequest().orElseThrow();
+        UUID request = send(kind, "");
+        history.beginWorldAction(request);
+        return request;
     }
 
     public UUID switchBranch(String branchName) {

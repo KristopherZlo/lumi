@@ -22,7 +22,7 @@ class AxiomDispatchPayloadTest {
                 io.github.lumi.domain.model.WorldActionView.Kind.BRANCH_SWITCH,
                 java.util.Optional.of(new io.github.lumi.domain.model.BlockPosition(-16, 4, 27)));
         var payload = new WorldActionViewPayload("minecraft:overworld", UUID.randomUUID(),
-                new io.github.lumi.domain.model.WorldActionView(7, List.of(entry), List.of()));
+                new io.github.lumi.domain.model.WorldActionView(7, List.of(entry), List.of()), java.util.Optional.of(UUID.randomUUID()));
         var buffer = new FriendlyByteBuf(Unpooled.buffer());
         try {
             WorldActionViewPayload.CODEC.encode(buffer, payload);

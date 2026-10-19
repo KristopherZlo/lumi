@@ -1087,6 +1087,7 @@ public final class LumiServerNetworking {
                     restoreStatistics));
             if (state != OperationEventPayload.State.ACCEPTED
                     && state != OperationEventPayload.State.PROGRESS) {
+                sendWorldActions(player, runtime, Optional.of(requestId));
                 LumiMod.LOGGER.info(
                         "Lumi request finished: id={}, state={}, player={}, dimension={}",
                         requestId, state, player.getUUID(), dimension(runtime));
@@ -1163,9 +1164,15 @@ public final class LumiServerNetworking {
         if (!ServerPlayNetworking.canSend(player, WorldActionViewPayload.TYPE)) return;
         var current = new WorldActionsSent(dimension(runtime), runtime.worldActionEpoch(), runtime.liveActions().revision());
         if (!force && current.equals(WORLD_ACTION_REFRESHES.get(player.getUUID()))) return;
+        sendWorldActions(player, runtime, Optional.empty());
+    }
+
+    private static void sendWorldActions(ServerPlayer player, FabricDimensionRuntime runtime, Optional<UUID> completedRequest) {
+        if (!ServerPlayNetworking.canSend(player, WorldActionViewPayload.TYPE)) return;
         var view = runtime.liveActions().view(player.getUUID());
-        send(player, new WorldActionViewPayload(current.dimension(), current.epoch(), view));
-        WORLD_ACTION_REFRESHES.put(player.getUUID(), new WorldActionsSent(current.dimension(), current.epoch(), view.revision()));
+        var epoch = runtime.worldActionEpoch();
+        send(player, new WorldActionViewPayload(dimension(runtime), epoch, view, completedRequest));
+        WORLD_ACTION_REFRESHES.put(player.getUUID(), new WorldActionsSent(dimension(runtime), epoch, view.revision()));
     }
 
     private static void broadcastSnapshot(FabricDimensionRuntime runtime) {
