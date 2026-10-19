@@ -169,7 +169,17 @@ tasks.register('runPackagedGameTest', lumiServerProductionRunTaskType) {
         if (warmCache != null) {
             // Only vanilla bundler caches; Minecraft checks their hashes. Worlds and mods stay isolated.
             ['libraries', 'versions'].each { name ->
-                copy { from new File(warmCache, name); into new File(directory, name) }
+                fileTree(new File(warmCache, name)).visit { entry ->
+                    def destination = new File(directory, "${name}/${entry.relativePath}").toPath()
+                    if (!entry.directory) {
+                        java.nio.file.Files.createDirectories(destination.parent)
+                        try {
+                            java.nio.file.Files.createLink(destination, entry.file.toPath())
+                        } catch (IOException | UnsupportedOperationException unavailable) {
+                            java.nio.file.Files.copy(entry.file.toPath(), destination, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                        }
+                    }
+                }
             }
         }
         record.putAll([schema: 1, status: 'running', group: target.id(), game: game,
