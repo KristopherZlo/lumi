@@ -17,8 +17,16 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
 
-/** Merges decoded leaves; a true conflict always selects the source value. */
+/** Merges decoded leaves, with strict expected-state checks for action replay. */
 public final class ThreeWayMerge {
+    private final boolean requireExpected;
+
+    public ThreeWayMerge() { this(false); }
+
+    private ThreeWayMerge(boolean requireExpected) { this.requireExpected = requireExpected; }
+
+    public static ThreeWayMerge forActionReplay() { return new ThreeWayMerge(true); }
+
     public SectionResult sections(
             SectionBlob base, SectionBlob current, SectionBlob source) {
         Objects.requireNonNull(base, "base");
@@ -157,7 +165,11 @@ public final class ThreeWayMerge {
         return placements;
     }
 
-    private static <T> Choice<T> choose(T base, T current, T source) {
+    private <T> Choice<T> choose(T base, T current, T source) {
+        if (requireExpected && !Objects.equals(source, base)
+                && !Objects.equals(current, base)) {
+            throw new IllegalStateException("World action conflicts with visible state");
+        }
         if (Objects.equals(current, source)) {
             return new Choice<>(current, false);
         }

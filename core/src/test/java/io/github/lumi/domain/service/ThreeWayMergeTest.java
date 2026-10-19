@@ -1,6 +1,7 @@
 package io.github.lumi.domain.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.lumi.domain.model.CanonicalNbt;
 import io.github.lumi.domain.model.EntityChunkBlob;
@@ -15,6 +16,58 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class ThreeWayMergeTest {
+    @Test
+    void replayRestoresOnlyChangedCellsAndPreservesDisjointNbt() {
+        var nbt = new CanonicalNbt(new byte[] {1});
+        var expected = section("minecraft:gold_block", "minecraft:stone");
+        var current = new SectionBlob(
+                section("minecraft:gold_block", "minecraft:barrel").blockStates(), Map.of(1, nbt));
+        var replacement = section("minecraft:dirt", "minecraft:stone");
+        var replay = ThreeWayMerge.forActionReplay();
+
+        var restored = replay.sections(expected, current, replacement).value();
+
+        assertEquals("minecraft:dirt", restored.blockStates().get(0));
+        assertEquals("minecraft:barrel", restored.blockStates().get(1));
+        assertEquals(Map.of(1, nbt), restored.blockEntities());
+        assertEquals(current, replay.sections(replacement, restored, expected).value());
+    }
+
+    @Test
+    void replayRefusesChangedExpectedStateEvenWhenItAlreadyEqualsTheReplacement() {
+        var expected = section("minecraft:gold_block");
+        var replacement = section("minecraft:stone");
+        var replay = ThreeWayMerge.forActionReplay();
+
+        assertThrows(IllegalStateException.class, () -> replay.sections(
+                expected, replacement, replacement));
+        var modifiedNbt = new SectionBlob(expected.blockStates(),
+                Map.of(0, new CanonicalNbt(new byte[] {2})));
+        assertThrows(IllegalStateException.class, () -> replay.sections(
+                expected, modifiedNbt, replacement));
+    }
+
+    @Test
+    void replayMovesOneEntityAcrossChunksWithoutRemovingLaterDisjointEntities() {
+        UUID moved = new UUID(0, 8);
+        UUID later = new UUID(0, 9);
+        var origin = new EntityChunkKey(0, 0);
+        var target = new EntityChunkKey(1, 0);
+        var expected = Map.of(origin, entities(entity(moved, 0)), target, entities());
+        var current = Map.of(origin, entities(entity(moved, 0), entity(later, 1)), target, entities());
+        var replacement = Map.of(origin, entities(), target, entities(entity(moved, 2)));
+        var replay = ThreeWayMerge.forActionReplay();
+
+        var result = replay.entityChunks(expected, current, replacement).value();
+
+        assertEquals(List.of(entity(later, 1)), result.get(origin).entities());
+        assertEquals(List.of(entity(moved, 2)), result.get(target).entities());
+        assertEquals(current, replay.entityChunks(replacement, result, expected).value());
+        var conflict = Map.of(origin, entities(entity(moved, 3)), target, entities());
+        assertThrows(IllegalStateException.class,
+                () -> replay.entityChunks(expected, conflict, replacement));
+    }
+
     @Test
     void combinesIndependentCellsAndUsesSourceForConflict() {
         SectionBlob base = section("minecraft:air", "minecraft:air", "minecraft:air");

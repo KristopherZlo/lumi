@@ -26,7 +26,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Prepares an immutable two-parent merge commit without moving a branch ref. */
+/** Prepares immutable three-way results without moving a branch ref. */
 public final class MergeService {
     private final WorldObjectRepository objects;
     private final CommitRepository commits;
@@ -49,11 +49,18 @@ public final class MergeService {
 
     public Result prepare(Request request) throws IOException {
         try (var publication = objects.beginPublication()) {
-            return prepareCommit(request);
+            return prepareCommit(request, Optional.empty());
         }
     }
 
-    private Result prepareCommit(Request request) throws IOException {
+    /** Applies recorded endpoints onto a captured world without moving saved refs. */
+    public Result prepareReplay(Request request, CommitId expected) throws IOException {
+        try (var publication = objects.beginPublication()) {
+            return prepareCommit(request, Optional.of(Objects.requireNonNull(expected, "expected")));
+        }
+    }
+
+    private Result prepareCommit(Request request, Optional<CommitId> replayBase) throws IOException {
         Objects.requireNonNull(request, "request");
         Commit currentCommit = commits.read(request.current.commit());
         Commit sourceCommit = commits.read(request.source.commit());
@@ -61,9 +68,13 @@ public final class MergeService {
                 || !sourceCommit.workspaceId().equals(request.workspaceId)) {
             throw new IOException("Merge branches do not belong to the requested workspace");
         }
-        CommitId base = graph.nearestCommonAncestor(
-                request.current.commit(), request.source.commit());
+        CommitId base = replayBase.isPresent() ? replayBase.orElseThrow()
+                : graph.nearestCommonAncestor(request.current.commit(), request.source.commit());
         Commit baseCommit = commits.read(base);
+        if (replayBase.isPresent() && !baseCommit.workspaceId().equals(request.workspaceId)) {
+            throw new IOException("Merge base does not belong to the requested workspace");
+        }
+        ThreeWayMerge merge = replayBase.isPresent() ? ThreeWayMerge.forActionReplay() : this.merge;
         var currentDifference = compare.compare(base, request.current.commit());
         var sourceDifference = compare.compare(base, request.source.commit());
         Map<HistoryKey, ObjectId> changes = new HashMap<>();
@@ -74,7 +85,7 @@ public final class MergeService {
             ObjectChange sourceChange = entry.getValue();
             ObjectChange currentChange = currentDifference.sections().get(key);
             ObjectId currentId = currentId(sourceChange, currentChange);
-            if (currentId.equals(sourceChange.after())) {
+            if (currentId.equals(sourceChange.after()) && replayBase.isEmpty()) {
                 continue;
             }
             var merged = merge.sections(
@@ -128,9 +139,11 @@ public final class MergeService {
         CommitStatistics statistics = new CommitStatistics(
                 totals.sections, totals.entityChunks, totals.blocks, totals.entities);
         CommitId commit = commits.write(new Commit(
-                tree, List.of(request.current.commit(), request.source.commit()),
+                tree, replayBase.isPresent() ? List.of(request.current.commit())
+                        : List.of(request.current.commit(), request.source.commit()),
                 request.author, request.message, request.timestamp, request.workspaceId,
-                request.zoneId, CommitKind.MERGE, statistics, playerSpawns.value()));
+                request.zoneId, replayBase.isPresent() ? CommitKind.HIDDEN_RETURN : CommitKind.MERGE,
+                statistics, playerSpawns.value()));
         return new Result(base, commit, totals.conflicts, statistics);
     }
 
