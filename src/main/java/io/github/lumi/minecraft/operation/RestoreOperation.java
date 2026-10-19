@@ -626,7 +626,7 @@ public final class RestoreOperation implements DimensionMutation {
         OperationJournal journal = new OperationJournal(
                 Objects.requireNonNull(operationId, "operationId"),
                 Objects.requireNonNull(kind, "kind"), OperationPhase.PREPARED,
-                Objects.requireNonNull(target, "target"),
+                publication.historyContext(Objects.requireNonNull(target, "target")),
                 Objects.requireNonNull(capturedGenerations, "capturedGenerations"), publication.historyTarget());
         return new RestoreOperation(
                 restore, world, publication, journals, journal, false,
@@ -668,7 +668,7 @@ public final class RestoreOperation implements DimensionMutation {
         OperationJournal journal = new OperationJournal(
                 Objects.requireNonNull(operationId, "operationId"),
                 Objects.requireNonNull(kind, "kind"), OperationPhase.PREPARED,
-                Objects.requireNonNull(target, "target"),
+                publication.historyContext(Objects.requireNonNull(target, "target")),
                 Objects.requireNonNull(capturedGenerations, "capturedGenerations"), publication.historyTarget());
         return new RestoreOperation(
                 restore, world, publication, journals, journal, false,

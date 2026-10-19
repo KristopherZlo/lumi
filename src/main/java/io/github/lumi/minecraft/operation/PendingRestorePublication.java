@@ -13,14 +13,25 @@ import java.io.UncheckedIOException;
 /** Publishes an applied partial Restore as ordinary pending world work. */
 public final class PendingRestorePublication implements RestorePublication {
     private final MutationDurabilityTracker mutations;
+    private final RestorePublication context;
     private MutationDurabilityTracker.DurabilityBoundary boundary;
 
     public PendingRestorePublication(MutationDurabilityTracker mutations) {
+        this(mutations, ignored -> { });
+    }
+
+    public PendingRestorePublication(MutationDurabilityTracker mutations, RestorePublication context) {
         this.mutations = Objects.requireNonNull(mutations, "mutations");
+        this.context = Objects.requireNonNull(context, "context");
     }
 
     @Override
-    public void persist(PreparedRestore restore) { }
+    public void persist(PreparedRestore restore) throws IOException { context.persist(restore); }
+
+    @Override public void persistReturn(PreparedRestore restore) throws IOException { context.persistReturn(restore); }
+    @Override public void installed() throws IOException { context.installed(); }
+    @Override public void finishReturnOnServer(PreparedRestore restore) throws IOException { context.installed(); }
+    @Override public io.github.lumi.domain.model.OperationTarget historyContext(io.github.lumi.domain.model.OperationTarget target) { return context.historyContext(target); }
 
     @Override
     public void finishOnServer(PreparedRestore restore) throws IOException { publish(restore); }

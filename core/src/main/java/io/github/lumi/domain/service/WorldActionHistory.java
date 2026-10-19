@@ -39,7 +39,12 @@ public final class WorldActionHistory {
         if (!persisted.workspace().equals(workspace) || !persisted.branch().equals(branch)) {
             throw new IOException("Undo history belongs to another active workspace or branch");
         }
-        journal.restore(persisted.index(), metadata -> readRecord(persisted, metadata));
+        restoreDuringRecovery(journal);
+    }
+
+    /** Its existing world journal owns the freeze; pointer publication may be interrupted between selections. */
+    public synchronized void restoreDuringRecovery(LiveActionJournal journal) throws IOException {
+        if (persisted != null) journal.restore(persisted.index(), metadata -> readRecord(persisted, metadata));
     }
 
     public synchronized WorldActionRecord readRecord(WorldActionIndexCodec.State state, WorldActionRecord.Metadata metadata) throws IOException {

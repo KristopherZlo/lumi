@@ -49,6 +49,7 @@ public final class ActionReplayPublication implements RestorePublication {
         target = preparation.prepare(restore);
     }
     @Override public Optional<ActionReplayTarget> historyTarget() { return Optional.ofNullable(target); }
+    @Override public io.github.lumi.domain.model.OperationTarget historyContext(io.github.lumi.domain.model.OperationTarget target) { return world.historyContext(target); }
     @Override public void publish(PreparedRestore restore) throws IOException { persist(restore); finishOnServer(restore); }
     @Override public void persist(PreparedRestore restore) throws IOException {
         world.persist(restore);

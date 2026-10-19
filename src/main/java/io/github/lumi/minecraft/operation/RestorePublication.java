@@ -11,6 +11,8 @@ public interface RestorePublication {
 
     default java.util.Optional<io.github.lumi.domain.model.ActionReplayTarget> historyTarget() { return java.util.Optional.empty(); }
 
+    default io.github.lumi.domain.model.OperationTarget historyContext(io.github.lumi.domain.model.OperationTarget target) { return target; }
+
     /** Synchronous standalone publication, retained for repository callers. */
     void publish(PreparedRestore restore) throws IOException;
 

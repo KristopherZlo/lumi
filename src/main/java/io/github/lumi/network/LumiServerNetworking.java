@@ -783,7 +783,7 @@ public final class LumiServerNetworking {
             case REDO -> runtime.startLiveAction(
                     player.getUUID(), LiveActionJournal.Direction.REDO, terminal);
             case BRANCH_SWITCH -> runtime.startBranchSwitch(
-                    expected, new BranchName(payload.argument()), terminal);
+                    expected, new BranchName(payload.argument()), player.getUUID(), terminal);
             case BRANCH_CREATE -> runtime.startBranchCreation(
                     new BranchName(payload.argument().trim()), terminal);
             case BRANCH_CREATE_AT -> {
@@ -792,7 +792,7 @@ public final class LumiServerNetworking {
                         branch.name(), branch.startingPoint(), terminal);
             }
             case WORKSPACE_SWITCH -> runtime.startWorkspaceSwitch(
-                    expected, UUID.fromString(payload.argument()), terminal);
+                    expected, UUID.fromString(payload.argument()), player.getUUID(), terminal);
             case RECOVER_RESUME -> runtime.startRecovery(
                     RecoveryChoice.RESUME_TARGET, terminal);
             case RECOVER_RETURN -> runtime.startRecovery(

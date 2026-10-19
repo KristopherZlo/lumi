@@ -72,9 +72,20 @@ class BranchServiceTest {
         var builder = new WorkingIndexSnapshot(Map.of(new SectionKey(1, 0, 0), 2L));
         var pending = new WorkingIndexRepository.State(builder, builder);
         working.write(pending);
+        var replay = branches.prepareReplaySwitch(main.name());
+        branches.publishReplaySwitch(replay, true);
+        branches.publishReplaySwitch(replay, true);
+        assertEquals(main, branches.active());
+        assertEquals(pending, working.readState());
+        branches.publishReplaySwitch(replay, false);
+        branches.publishReplaySwitch(replay, false);
+        assertEquals(created, branches.active());
+        assertEquals(Optional.of(main), refs.read(main.name()));
+        assertEquals(Optional.of(created), refs.read(created.name()));
         var idea = branches.createAndActivate(
                 new BranchName("active-idea"), created.commit());
         assertEquals(idea, branches.active());
+        assertThrows(IOException.class, () -> branches.publishReplaySwitch(replay, true));
         assertEquals(pending, working.readState());
 
         assertThrows(IllegalStateException.class,

@@ -122,13 +122,17 @@ public final class WorkspaceService {
     }
 
     public WorkspaceSwitchPlan prepareSwitch(UUID targetId, BranchSwitchPlan branch) throws IOException {
+        if (!branch.target().name().equals(mainBranch(targetId))) {
+            throw new IOException("Workspace switch does not target its main branch");
+        }
+        return prepareReplaySwitch(targetId, branch);
+    }
+
+    public WorkspaceSwitchPlan prepareReplaySwitch(UUID targetId, BranchSwitchPlan branch) throws IOException {
         Objects.requireNonNull(branch, "branch");
         Workspace target = require(targetId);
         var expected = active.read().orElseThrow(
                 () -> new IOException("Active workspace is missing"));
-        if (!branch.target().name().equals(mainBranch(target.id()))) {
-            throw new IOException("Workspace switch does not target its main branch");
-        }
         if (!commits.read(branch.source().commit()).workspaceId().equals(expected.id())) {
             throw new IOException("Active branch does not belong to active workspace");
         }
@@ -136,6 +140,17 @@ public final class WorkspaceService {
             throw new IOException("Target branch does not belong to target workspace");
         }
         return new WorkspaceSwitchPlan(expected, target.id(), branch);
+    }
+
+    /** Reuses pointer CAS for an already journaled Restore; saved branch refs remain unchanged. */
+    public synchronized void publishReplaySwitch(WorkspaceSwitchPlan plan, boolean applied) throws IOException {
+        var selected = active.read().orElseThrow(() -> new RefConflictException("Active workspace is missing"));
+        long offset = selected.revision() - plan.expectedActive().revision();
+        UUID owner = (offset & 1) == 0 ? plan.expectedActive().id() : plan.targetWorkspace();
+        if (offset < 0 || !selected.id().equals(owner)) throw new RefConflictException("Active workspace changed outside the replay");
+        var desired = require(applied ? plan.targetWorkspace() : plan.expectedActive().id());
+        if (!selected.id().equals(desired.id())) active.compareAndSet(selected, desired.id());
+        cachedSettings = desired.settings();
     }
 
     public synchronized void completeSwitchIdempotent(WorkspaceSwitchPlan plan) throws IOException {

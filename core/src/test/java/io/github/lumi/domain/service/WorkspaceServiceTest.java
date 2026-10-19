@@ -62,7 +62,16 @@ class WorkspaceServiceTest {
                         projectId, defaultId, new BranchName("main")));
         assertEquals(List.of(defaultId, projectId),
                 service.list().stream().map(workspace -> workspace.id()).toList());
-        active.compareAndSet(active.read().orElseThrow(), projectId);
+        var branch = new io.github.lumi.domain.model.BranchSwitchPlan(new io.github.lumi.domain.model.ActiveBranch(main.name(), 0), main, created.main());
+        var replay = service.prepareReplaySwitch(projectId, branch);
+        service.publishReplaySwitch(replay, true);
+        service.publishReplaySwitch(replay, true);
+        assertEquals(projectId, service.active().id());
+        service.publishReplaySwitch(replay, false);
+        assertEquals(defaultId, service.active().id());
+        service.publishReplaySwitch(replay, true);
+        assertEquals(Optional.of(main), refs.read(main.name()));
+        assertEquals(Optional.of(created.main()), refs.read(created.main().name()));
 
         assertEquals(defaultId, service.defaultWorkspaceId());
         assertEquals(projectId, service.active().id());

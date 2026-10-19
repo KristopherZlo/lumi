@@ -98,8 +98,13 @@ public final class BranchService {
     }
 
     public BranchSwitchPlan prepareSwitch(BranchName target) throws IOException {
-        Objects.requireNonNull(target, "target");
         ensureClean();
+        return prepareReplaySwitch(target);
+    }
+
+    /** Replay keeps restored contents pending while selecting their recorded context. */
+    public BranchSwitchPlan prepareReplaySwitch(BranchName target) throws IOException {
+        Objects.requireNonNull(target, "target");
         var expectedActive = active.read().orElseThrow(
                 () -> new IOException("Active Lumi branch is missing"));
         BranchRef sourceRef = refs.read(expectedActive.name()).orElseThrow(
@@ -110,6 +115,17 @@ public final class BranchService {
         commits.read(sourceRef.commit());
         commits.read(targetRef.commit());
         return new BranchSwitchPlan(expectedActive, sourceRef, targetRef);
+    }
+
+    /** Only the existing journaled world operation may call this while its dimension is frozen. */
+    public void publishReplaySwitch(BranchSwitchPlan plan, boolean applied) throws IOException {
+        validateRefs(plan);
+        var selected = active.read().orElseThrow(() -> new RefConflictException("Active branch is missing"));
+        long offset = selected.revision() - plan.expectedActive().revision();
+        BranchName owner = (offset & 1) == 0 ? plan.source().name() : plan.target().name();
+        if (offset < 0 || !selected.name().equals(owner)) throw new RefConflictException("Active branch changed outside the replay");
+        BranchName desired = applied ? plan.target().name() : plan.source().name();
+        if (!selected.name().equals(desired)) active.compareAndSet(selected, desired);
     }
 
     public BranchSwitchPlan prepareSwitch(BranchName target, UUID workspaceId) throws IOException {
