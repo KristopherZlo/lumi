@@ -110,7 +110,7 @@ public final class WorldActionHistory {
         if (checkpoint.context().isPresent() && !checkpoint.context().orElseThrow().before().equals(currentContext)) {
             throw new IOException("Active context changed before recording its switch");
         }
-        var index = persisted.index().appendCheckpoint(operation, actor, checkpoint);
+        var index = persisted.index().appendCheckpoint(operation, actor, checkpoint, LiveActionJournal.Limits.DEFAULT.maxActionsPerPlayer());
         var blobs = retainedPayloads(index);
         var context = checkpoint.context().map(WorldActionContext.Change::after).orElse(new WorldActionContext(workspace, branch));
         var next = new WorldActionIndexCodec.State(epoch, version, context.workspace(), context.branch(), index, blobs, persisted.publication());

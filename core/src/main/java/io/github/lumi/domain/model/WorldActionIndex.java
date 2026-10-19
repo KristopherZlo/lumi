@@ -71,7 +71,8 @@ public record WorldActionIndex(
                 actions.stream().filter(action -> !action.actor().equals(actor)).toList(), cursors);
     }
 
-    public WorldActionIndex appendCheckpoint(UUID actionId, UUID actor, WorldActionCheckpoint checkpoint) {
+    public WorldActionIndex appendCheckpoint(UUID actionId, UUID actor, WorldActionCheckpoint checkpoint, int maximumGroups) {
+        if (maximumGroups < 1) throw new IllegalArgumentException("Invalid action retention limit");
         if (actions.stream().anyMatch(action -> action.id().equals(actionId))) throw new IllegalStateException("Action was already recorded");
         var stacks = players.getOrDefault(actor, new Stacks(List.of(), List.of()));
         var abandoned = new HashSet<>(stacks.redo());
@@ -81,9 +82,22 @@ public record WorldActionIndex(
                 java.util.Optional.of(checkpoint)));
         var undo = new ArrayList<>(stacks.undo());
         undo.add(actionId);
+        var active = retained.stream().filter(action -> !action.closed() || action.pending())
+                .map(WorldActionRecord.Metadata::group).collect(java.util.stream.Collectors.toSet());
+        var groups = retained.stream().filter(action -> action.actor().equals(actor) && !active.contains(action.group()))
+                .map(WorldActionRecord.Metadata::group).distinct().toList();
+        long boundary = unsafeBeforeSequence;
+        if (groups.size() > maximumGroups) {
+            var expired = new HashSet<>(groups.subList(0, groups.size() - maximumGroups));
+            var removed = retained.stream().filter(action -> expired.contains(action.group())).toList();
+            var ids = removed.stream().map(WorldActionRecord.Metadata::id).collect(java.util.stream.Collectors.toSet());
+            boundary = Math.max(boundary, removed.stream().mapToLong(WorldActionRecord.Metadata::sequence).max().orElse(0));
+            retained.removeIf(action -> ids.contains(action.id()));
+            undo.removeIf(ids::contains);
+        }
         var cursors = new HashMap<>(players);
         cursors.put(actor, new Stacks(undo, List.of()));
-        return new WorldActionIndex(Math.addExact(revision, 1), sequence, unsafeBeforeSequence, retained, cursors);
+        return new WorldActionIndex(Math.addExact(revision, 1), sequence, boundary, retained, cursors);
     }
 
     /** Projects one whole group; publication can retry without moving the cursor twice. */

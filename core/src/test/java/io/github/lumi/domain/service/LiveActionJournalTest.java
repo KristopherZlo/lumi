@@ -126,6 +126,10 @@ class LiveActionJournalTest {
         journal.installIndex(appliedReplacement.index(), metadata -> history.readRecord(appliedReplacement, metadata));
         assertEquals(replacement, journal.prepareUndo(PLAYER_A).orElseThrow().actionId());
         assertEquals(appliedReplacement, history.publishCheckpoint(replacement, true));
+        var trimmed = appliedReplacement.index().appendCheckpoint(UUID.randomUUID(), PLAYER_A,
+                appliedReplacement.index().actions().getLast().checkpoint().orElseThrow(), 1);
+        assertEquals(1, trimmed.players().get(PLAYER_A).undo().size());
+        assertTrue(trimmed.unsafeBeforeSequence() >= appliedReplacement.index().nextSequence());
         var switchStep = new io.github.lumi.domain.model.ActionReplayTarget(PLAYER_A, replacement, true);
         history.publishReplay(UUID.randomUUID(), switchStep, false);
         assertEquals(workspace, repository.readIndex().orElseThrow().workspace());
