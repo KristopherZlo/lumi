@@ -27,6 +27,33 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class RestorePublicationThreadTest {
+    @Test void publishesTheActionCursorBeforeRemovingTheExistingRestoreJournal(@TempDir Path root) throws Exception {
+        var journal = new io.github.lumi.domain.service.LiveActionJournal();
+        UUID actor = UUID.randomUUID(), action = journal.begin(actor);
+        journal.record(action, new io.github.lumi.domain.model.BlockPosition(0, 0, 0),
+                new io.github.lumi.domain.model.BlockSnapshot("minecraft:stone", Optional.empty()),
+                new io.github.lumi.domain.model.BlockSnapshot("minecraft:gold_block", Optional.empty()));
+        journal.close(action);
+        var repository = new io.github.lumi.storage.repository.WorldActionHistoryRepository(root);
+        var history = new io.github.lumi.domain.service.WorldActionHistory(repository,
+                io.github.lumi.domain.model.WorldDataVersion.LEGACY_12111);
+        history.flush(UUID.randomUUID(), new BranchName("main"), journal.snapshotIndex(), journal::snapshotAction, () -> true);
+        var step = new io.github.lumi.domain.model.ActionReplayTarget(actor, action, true);
+        var publication = new ActionReplayPublication(ignored -> { }, history, UUID.randomUUID(), step, false,
+                applied -> journal.installCursor(step, applied));
+        var restore = new PreparedRestore(new BranchRef(new BranchName("main"), id('1'), 0), id('2'),
+                Map.of(), Map.of(), Map.of(), Map.of());
+        publication.persist(restore);
+        assertTrue(!repository.readIndex().orElseThrow().index().actions().getFirst().applied());
+        assertTrue(journal.prepareUndo(actor).isPresent());
+        publication.installed();
+        assertTrue(journal.prepareRedo(actor).isPresent());
+        publication.persistReturn(restore);
+        assertTrue(publication.awaitReturnDurable(Long.MAX_VALUE));
+        assertTrue(repository.readIndex().orElseThrow().index().actions().getFirst().applied());
+        assertTrue(journal.prepareUndo(actor).isPresent());
+    }
+
     @TempDir Path root;
 
     @Test

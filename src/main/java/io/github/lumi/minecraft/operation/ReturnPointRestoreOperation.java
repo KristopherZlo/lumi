@@ -24,6 +24,8 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
     private SaveResult returnPoint;
     private Throwable failure;
     private boolean cancelled;
+    private Consumer<SaveResult> releaseReturnPoint = ignored -> { };
+    private boolean returnPointReleased;
 
     public ReturnPointRestoreOperation(
             SaveCaptureOperation returnPointSave,
@@ -38,6 +40,12 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
         this.returnPointSave = Objects.requireNonNull(returnPointSave, "returnPointSave");
         this.prewarm = prewarm;
         this.restorePreparation = Objects.requireNonNull(restorePreparation, "restorePreparation");
+    }
+
+    public ReturnPointRestoreOperation(SaveCaptureOperation capture, RestorePreparation preparation,
+            Consumer<SaveResult> releaseReturnPoint) {
+        this(capture, null, preparation);
+        this.releaseReturnPoint = Objects.requireNonNull(releaseReturnPoint, "releaseReturnPoint");
     }
 
     public ReturnPointRestoreOperation(
@@ -165,6 +173,7 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
 
     @Override
     public void close() throws IOException {
+        boolean safe = isSafeToRelease();
         returnPointSave.close();
         releasePrewarm();
         if (restore != null) {
@@ -173,6 +182,10 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
             preparation.close();
         }
         cancelled = true;
+        if (safe && !returnPointReleased && returnPoint != null) {
+            releaseReturnPoint.accept(returnPoint);
+            returnPointReleased = true;
+        }
     }
 
     private boolean cancelPreparedRestore() throws IOException {

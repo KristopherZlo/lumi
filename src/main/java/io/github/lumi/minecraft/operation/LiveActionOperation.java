@@ -29,12 +29,15 @@ public final class LiveActionOperation implements DimensionMutation {
     private final LongSupplier nanoTime;
     private final PendingCancellation cancelPending;
     private final Consumer<LiveActionJournal.Plan> publication;
+    private ReplayFactory replay;
+    private DimensionMutation replayOperation;
     private final List<WorldChange<?>> mismatches = new ArrayList<>();
     private List<WorldChange<?>> changes = List.of();
     private Phase phase = Phase.SELECTING;
     private boolean mutationAdmitted;
 
     @Override public OperationProgress progress() {
+        if (replayOperation != null) return replayOperation.progress();
         return OperationProgress.indeterminate("Live action: " + phase.name().toLowerCase());
     }
     private LiveActionJournal.Plan plan;
@@ -86,6 +89,13 @@ public final class LiveActionOperation implements DimensionMutation {
             Consumer<LiveActionJournal.Plan> publication) {
         this(journal, player, direction, world, entities,
                 System::nanoTime, cancelPending, publication);
+    }
+
+    public LiveActionOperation(LiveActionJournal journal, UUID player, LiveActionJournal.Direction direction,
+            LiveBlockWorldAccess world, LiveEntityWorldAccess entities, PendingCancellation cancelPending,
+            Consumer<LiveActionJournal.Plan> publication, ReplayFactory replay) {
+        this(journal, player, direction, world, entities, cancelPending, publication);
+        this.replay = Objects.requireNonNull(replay, "replay");
     }
 
     LiveActionOperation(
@@ -141,10 +151,22 @@ public final class LiveActionOperation implements DimensionMutation {
                     if (!world.awaitMutationAdmission()) return;
                     mutationAdmitted = true;
                 }
+                if (replayOperation != null) {
+                    replayOperation.advance(deadlineNanos);
+                    if (replayOperation.isTerminal()) {
+                        if (replayOperation.terminalState() == MutationTerminalState.SUCCEEDED) finishAction();
+                        else {
+                            failure = replayOperation.failure().orElse(null);
+                            phase = replayOperation.isSafeToRelease() ? Phase.FAILED : Phase.DEGRADED;
+                        }
+                    }
+                    break;
+                }
                 step();
             } catch (IOException | RuntimeException exception) {
                 failure = exception;
-                phase = beforeMutation() ? Phase.FAILED : Phase.DEGRADED;
+                phase = replayOperation != null ? (replayOperation.unhandledFailureState() == MutationTerminalState.FAILED
+                        ? Phase.FAILED : Phase.DEGRADED) : beforeMutation() ? Phase.FAILED : Phase.DEGRADED;
             }
         }
         if (isTerminal() && !retainedActions.isEmpty()) {
@@ -255,6 +277,10 @@ public final class LiveActionOperation implements DimensionMutation {
 
     private void validateOne() throws IOException {
         if (!cursor.hasNext()) {
+            if (replay != null) {
+                replayOperation = Objects.requireNonNull(replay.prepare(plan), "replay operation");
+                return;
+            }
             cursor = changes.iterator();
             phase = Phase.APPLYING;
             return;
@@ -377,11 +403,30 @@ public final class LiveActionOperation implements DimensionMutation {
             return;
         }
         lighting.join();
+        finishAction();
+    }
+
+    private void finishAction() {
         publication.accept(plan);
         journal.complete(plan);
         releaseRetainedActions();
         phase = Phase.SUCCEEDED;
     }
+
+    @Override public void close() throws IOException {
+        try {
+            if (replayOperation != null) replayOperation.close();
+        } finally {
+            releaseRetainedActions();
+        }
+    }
+
+    @Override public Optional<io.github.lumi.minecraft.world.RestoreApplyStatistics> restoreStatistics() {
+        return replayOperation == null ? Optional.empty() : replayOperation.restoreStatistics();
+    }
+
+    @FunctionalInterface
+    public interface ReplayFactory { DimensionMutation prepare(LiveActionJournal.Plan plan) throws IOException; }
 
     private abstract static class WorldChange<S> {
         private final S expected;

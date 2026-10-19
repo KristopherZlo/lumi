@@ -364,16 +364,30 @@ public final class LiveActionJournal {
         }
         for (UUID actionId : plan.actionIds) {
             MutableAction action = requireAction(actionId);
-            action.applied = plan.direction == Direction.REDO;
-            action.changes.keySet().forEach(position ->
-                    blockOwners.set(position, action, action.applied));
-            action.entities.keySet().forEach(entity ->
-                    entityOwners.set(entity, action, action.applied));
+            setApplied(action, plan.direction == Direction.REDO);
         }
         for (int index = 0; index < plan.actionIds.size(); index++) {
             source.removeLast();
         }
         plan.actionIds.forEach(target::addLast);
+    }
+
+    /** Installs a recovered durable cursor without executing the world operation again. */
+    public synchronized void installCursor(io.github.lumi.domain.model.ActionReplayTarget step, boolean applied) {
+        WorldActionIndex index = snapshotIndex().move(step, applied);
+        index.actions().forEach(metadata -> setApplied(requireAction(metadata.id()), metadata.applied()));
+        index.players().forEach((actor, cursor) -> {
+            var stacks = stacks(actor);
+            stacks.undo.clear(); stacks.undo.addAll(cursor.undo());
+            stacks.redo.clear(); stacks.redo.addAll(cursor.redo());
+        });
+        revision = Math.max(revision + 1, index.revision());
+    }
+
+    private void setApplied(MutableAction action, boolean applied) {
+        action.applied = applied;
+        action.changes.keySet().forEach(position -> blockOwners.set(position, action, applied));
+        action.entities.keySet().forEach(entity -> entityOwners.set(entity, action, applied));
     }
 
     public synchronized void clear() {

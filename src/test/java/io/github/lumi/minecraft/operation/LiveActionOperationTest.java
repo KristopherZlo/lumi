@@ -21,6 +21,36 @@ import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 
 class LiveActionOperationTest {
+    @Test void delegatesOnlyAfterSettlingTheProducerAndKeepsTheCursorOnRefusal() throws Exception {
+        for (boolean success : new boolean[] {false, true}) {
+            var journal = action(block("stone"), block("gold_block"));
+            var world = new FakeWorld(block("gold_block"));
+            var events = new ArrayList<String>();
+            var operation = new LiveActionOperation(journal, PLAYER, LiveActionJournal.Direction.UNDO,
+                    world, LiveEntityWorldAccess.UNSUPPORTED, action -> { events.add("cancel"); return false; },
+                    plan -> events.add("publish"), plan -> {
+                        events.add("prepare");
+                        return new DimensionMutation() {
+                            private boolean terminal;
+                            @Override public void advance(long deadline) { events.add("apply"); terminal = true; }
+                            @Override public boolean isTerminal() { return terminal; }
+                            @Override public boolean isSafeToRelease() { return true; }
+                            @Override public MutationTerminalState terminalState() {
+                                return success ? MutationTerminalState.SUCCEEDED : MutationTerminalState.FAILED;
+                            }
+                            @Override public void close() { events.add("close"); }
+                        };
+                    });
+            for (int tick = 0; tick < 3 && !operation.isTerminal(); tick++) operation.advance(Long.MAX_VALUE);
+            assertEquals(success ? MutationTerminalState.SUCCEEDED : MutationTerminalState.FAILED, operation.terminalState());
+            assertEquals(success, journal.prepareRedo(PLAYER).isPresent());
+            assertEquals(0, world.writes);
+            operation.close();
+            assertEquals(success ? java.util.List.of("cancel", "prepare", "apply", "publish", "close")
+                    : java.util.List.of("cancel", "prepare", "apply", "close"), events);
+        }
+    }
+
     private static final UUID PLAYER = new UUID(0, 7);
     private static final UUID ENTITY = new UUID(0, 8);
     private static final BlockPosition POSITION = new BlockPosition(1, 2, 3);
