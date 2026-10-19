@@ -112,6 +112,12 @@ class LiveActionJournalTest {
         var index = journal.snapshotIndex();
         assertTrue(history.flush(workspace, branch, index, journal::snapshotAction, () -> true));
         var beforeReplacement = repository.readIndex().orElseThrow();
+        var file = root.resolve("actions/index.bin.gz");
+        java.nio.file.Files.setLastModifiedTime(file, java.nio.file.attribute.FileTime.fromMillis(12_000));
+        var unchanged = java.nio.file.Files.getLastModifiedTime(file);
+        assertTrue(history.flush(workspace, branch, index, journal::snapshotAction, () -> true));
+        assertTrue(!history.flush(workspace, branch, index, journal::snapshotAction, () -> false));
+        assertEquals(unchanged, java.nio.file.Files.getLastModifiedTime(file));
         UUID replacement = UUID.randomUUID();
         var nextContext = new io.github.lumi.domain.model.WorldActionContext(UUID.randomUUID(), new BranchName("next"));
         var context = new io.github.lumi.domain.model.WorldActionContext.Change(

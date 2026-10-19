@@ -56,6 +56,8 @@ public final class WorldActionHistory {
     public synchronized boolean flush(UUID workspace, BranchName branch, WorldActionIndex index,
             LiveActionJournal.ActionSource source, BooleanSupplier current) throws IOException {
         if (persisted != null && index.revision() < persisted.index().revision()) return false;
+        if (persisted != null && persisted.workspace().equals(workspace) && persisted.branch().equals(branch)
+                && persisted.index().equals(index)) return current.getAsBoolean();
         try (var publication = repository.beginPublication()) {
             var blobs = new HashMap<UUID, UUID>();
             var previous = new HashMap<UUID, WorldActionRecord.Metadata>();
