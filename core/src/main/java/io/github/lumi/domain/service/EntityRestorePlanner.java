@@ -4,6 +4,7 @@ import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
+import io.github.lumi.domain.model.EntityPlacement;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.OriginStore;
@@ -92,6 +93,12 @@ final class EntityRestorePlanner {
             targetChunks.put(key, targetChunk);
         }
         return new Plan(targetChunks, beforeChunks);
+    }
+
+    Map<UUID, EntityPlacement> locate(CommitId commit, Set<UUID> identities) throws IOException {
+        var result = new HashMap<UUID, EntityPlacement>();
+        select(commit, identities).forEach((id, value) -> result.put(id, new EntityPlacement(value.chunk(), value.state())));
+        return result;
     }
 
     private Map<UUID, Placement> select(CommitId commit, Set<UUID> identities)

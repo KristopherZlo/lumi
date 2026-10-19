@@ -77,7 +77,7 @@ public final class ActionReplayPreparation {
                 }
                 changes.put(entry.getKey(), objects.write(new SectionBlob(blocks, nbt, before.dataVersion())));
             }
-            int entityChunks = projectEntities(plan, locations, leaves, changes);
+            int entityChunks = projectEntities(captured, plan, locations, leaves, changes);
             ObjectId tree = new MerkleTreeEditor(objects).update(Optional.of(current.tree()), changes);
             return commits.write(new Commit(tree, List.of(captured), author,
                     plan.direction() == LiveActionJournal.Direction.UNDO ? "Undo action" : "Redo action", Instant.now(),
@@ -87,26 +87,27 @@ public final class ActionReplayPreparation {
         }
     }
 
-    private int projectEntities(LiveActionJournal.Plan plan, Map<EntityState, EntityChunkKey> locations,
+    private int projectEntities(CommitId captured, LiveActionJournal.Plan plan, Map<EntityState, EntityChunkKey> locations,
             Map<HistoryKey, ObjectId> leaves, Map<HistoryKey, ObjectId> changes) throws IOException {
         if (plan.expectedEntities().isEmpty()) return 0;
         var known = new HashMap<>(origins.entityEntries());
         leaves.forEach((key, id) -> { if (key instanceof EntityChunkKey chunk) known.put(chunk, id); });
-        var observed = new HashMap<UUID, EntityState>();
+        Map<UUID, EntityPlacement> observed;
+        try (var reader = objects.beginReadSession()) {
+            observed = new EntityRestorePlanner(objects, reader, commits, origins).locate(captured, plan.expectedEntities().keySet());
+        }
         var edited = new HashMap<EntityChunkKey, Map<UUID, EntityState>>();
         for (var entry : known.entrySet()) {
             var chunk = objects.readEntities(entry.getValue());
             if (chunk.entities().stream().noneMatch(entity -> plan.expectedEntities().containsKey(entity.id()))) continue;
             var retained = new HashMap<UUID, EntityState>();
             for (var entity : chunk.entities()) {
-                if (plan.expectedEntities().containsKey(entity.id())) {
-                    if (observed.put(entity.id(), entity) != null) throw new IOException("Duplicate action entity: " + entity.id());
-                } else retained.put(entity.id(), entity);
+                if (!plan.expectedEntities().containsKey(entity.id())) retained.put(entity.id(), entity);
             }
             edited.put(entry.getKey(), retained);
         }
         for (var entry : plan.expectedEntities().entrySet()) {
-            if (!entry.getValue().equals(Optional.ofNullable(observed.get(entry.getKey())))) {
+            if (!entry.getValue().equals(Optional.ofNullable(observed.get(entry.getKey())).map(EntityPlacement::state))) {
                 throw new IOException("Action entity changed: " + entry.getKey());
             }
             var replacement = plan.replacementEntities().get(entry.getKey());
