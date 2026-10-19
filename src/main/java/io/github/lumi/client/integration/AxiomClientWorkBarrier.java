@@ -4,7 +4,6 @@ import com.moulberry.axiom.clipboard.Placement;
 import com.moulberry.axiom.tools.Tool;
 import com.moulberry.axiom.tools.ToolManager;
 import com.moulberry.axiom.world_modification.Dispatcher;
-import com.moulberry.axiom.world_modification.HistoryIO;
 import io.github.lumi.LumiMod;
 import io.github.lumi.mixin.client.AxiomDispatcherPendingAccess;
 import io.github.lumi.minecraft.runtime.MinecraftPlayerMessages;
@@ -65,7 +64,7 @@ public final class AxiomClientWorkBarrier {
     private void registerNetworking() {
         ClientPlayNetworking.registerGlobalReceiver(BuilderToolBarrierPayload.TYPE,
                 (payload, context) -> context.client().execute(() -> accept(payload)));
-        ClientTickEvents.END_CLIENT_TICK.register(this::tick);
+        ClientTickEvents.END_CLIENT_TICK.register(client -> { tick(client); AxiomWorldHistory.INSTANCE.tick(); });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             paused = true;
             try {
@@ -79,6 +78,7 @@ public final class AxiomClientWorkBarrier {
                 managedConnection = false;
                 localAdmission = false;
                 historyIdentifier = null;
+                AxiomWorldHistory.INSTANCE.disconnect();
                 generation++;
             }
         });
@@ -118,15 +118,13 @@ public final class AxiomClientWorkBarrier {
         try {
             cancelPending();
             if (invalidateHistory) {
-                AxiomDispatcherPendingAccess.lumi$applyPendingHistory();
-                if (Dispatcher.historyIdentifier != null) HistoryIO.clear(AxiomDispatcherPendingAccess.lumi$historyPath());
                 AxiomDispatcherPendingAccess.lumi$history().clear();
                 Dispatcher.clearActiveSelectionHistory();
             }
             if (Tool.sharedSingleThreadExecutor == null || singleExecutor == null) {
                 throw new IllegalStateException("Native Axiom worker is not tracked");
             }
-            LumiMod.LOGGER.debug("Axiom work cancellation requested; native history invalidated={}", invalidateHistory);
+            LumiMod.LOGGER.debug("Axiom work cancellation requested; transient cursor reset={}", invalidateHistory);
         } catch (RuntimeException failure) {
             LumiMod.LOGGER.error("Cannot quiesce pending Axiom work", failure);
             finish(State.REFUSED);

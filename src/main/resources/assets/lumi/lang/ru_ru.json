@@ -1,4 +1,8 @@
 {
+  "lumi.history.action.edit": "Изменение мира",
+  "lumi.history.action.restore": "Восстановление / Слияние",
+  "lumi.history.action.branch_switch": "Переключение ветки",
+  "lumi.history.action.workspace_switch": "Переключение рабочего пространства",
   "lumi.axiom.sync_refused": "Не удалось безопасно остановить задачи Axiom. Axiom остаётся приостановлен: переподключитесь перед новой правкой.",
   "key.category.lumi.general": "Lumi",
   "key.lumi.undo": "Отменить",

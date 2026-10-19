@@ -5,7 +5,6 @@ import com.moulberry.axiom.world_modification.Dispatcher;
 import com.moulberry.axiom.world_modification.HistoryBuffer;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
-import java.nio.file.Path;
 import java.util.List;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
@@ -23,6 +22,5 @@ public interface AxiomDispatcherPendingAccess {
     @Accessor("pendingEntityData") static Long2ObjectMap<?> lumi$pendingEntities() { throw new AssertionError(); }
     @Accessor("entityDataTime") static Long2LongOpenHashMap lumi$entityTimes() { throw new AssertionError(); }
     @Accessor("history") static HistoryBuffer<BlockOrBiomeBuffer> lumi$history() { throw new AssertionError(); }
-    @Invoker("getHistoryPath") static Path lumi$historyPath() { throw new AssertionError(); }
     @Invoker("applyPendingHistory") static void lumi$applyPendingHistory() { throw new AssertionError(); }
 }

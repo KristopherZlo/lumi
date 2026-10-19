@@ -266,6 +266,29 @@ final class LumiBehaviorOperations {
         runOperation("redo_" + name, () -> ui.pressChord("key.lumi.redo"));
     }
 
+    void nativeHistoryStep(String name, boolean undo) throws IOException {
+        runOperation(name, () -> {
+            context.waitFor(client -> !io.github.lumi.client.integration.AxiomClientWorkBarrier.isPaused()
+                    && !LumiClient.networking().worldActionPending());
+            context.runOnClient(client -> com.moulberry.axiom.world_modification.Dispatcher.callAction(
+                    undo ? com.moulberry.axiom.UserAction.UNDO : com.moulberry.axiom.UserAction.REDO, null));
+        });
+    }
+
+    void nativeHistoryJump(String name, int stepsBack) throws IOException {
+        context.waitFor(client -> !io.github.lumi.client.integration.AxiomClientWorkBarrier.isPaused()
+                && !LumiClient.networking().worldActionPending());
+        int target = context.computeOnClient(client -> {
+            var view = LumiClient.networking().worldActions().orElseThrow().view();
+            int position = view.undo().size() - 1 - stepsBack;
+            com.moulberry.axiom.world_modification.Dispatcher.setHistoryPosition(position);
+            return position;
+        });
+        context.waitFor(client -> !LumiClient.networking().worldActionPending()
+                && LumiClient.networking().worldActions().orElseThrow().view().undo().size() == target + 1, OPERATION_TIMEOUT_TICKS);
+        awaitDurability(name);
+    }
+
     OperationBoundary redo(String name, List<BlockBox> areas) throws IOException {
         return runOperation(
                 "redo_" + name, areas, () -> ui.pressChord("key.lumi.redo"));

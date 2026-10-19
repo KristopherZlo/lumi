@@ -70,7 +70,7 @@ final class LumiAxiomEntityClientScenario {
         operations.awaitDurability("axiom_entity_edited");
         var editedState = checks.snapshot("axiom_entities_edited", area);
         long generation = context.computeOnClient(client -> AxiomClientWorkBarrier.generation());
-        operations.undo("axiom_entities");
+        operations.nativeHistoryStep("axiom_native_entities_undo", true);
         context.waitFor(client -> !AxiomClientWorkBarrier.isPaused());
         if (context.computeOnClient(client -> AxiomClientWorkBarrier.generation())
                 <= generation) throw new AssertionError("Axiom replacement barrier was not exercised");

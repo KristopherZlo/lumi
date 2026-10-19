@@ -128,6 +128,9 @@ public final class LumiClientNetworking {
         ClientPlayNetworking.registerGlobalReceiver(
                 OperationEventPayload.TYPE, (payload, context) ->
                         context.client().execute(() -> {
+                            if (history.worldActionRequest().filter(payload.requestId()::equals).isPresent()
+                                    && net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom"))
+                                io.github.lumi.client.integration.AxiomWorldHistory.INSTANCE.accept(payload);
                             history.accept(payload);
                             zonePreviews.reject(payload);
                             acceptMetadataEdit(payload);
@@ -237,16 +240,28 @@ public final class LumiClientNetworking {
     }
 
     public UUID undo() {
-        return sendWorldAction(HistoryCommandPayload.Kind.UNDO);
+        cancelWorldNavigation();
+        return replayWorldStep(true);
     }
 
     public UUID redo() {
-        return sendWorldAction(HistoryCommandPayload.Kind.REDO);
+        cancelWorldNavigation();
+        return replayWorldStep(false);
     }
+
+    public UUID replayWorldStep(boolean undo) {
+        return sendWorldAction(undo ? HistoryCommandPayload.Kind.UNDO : HistoryCommandPayload.Kind.REDO);
+    }
+
+    private static void cancelWorldNavigation() {
+        if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom"))
+            io.github.lumi.client.integration.AxiomWorldHistory.INSTANCE.cancelNavigation();
+    }
+
+    public UUID clearWorldActions() { return sendWorldAction(HistoryCommandPayload.Kind.WORLD_ACTIONS_CLEAR); }
 
     public Optional<WorldActionViewPayload> worldActions() { return history.worldActions(); }
     public boolean worldActionPending() { return history.worldActionRequest().isPresent(); }
-    public Optional<UUID> worldActionRequest() { return history.worldActionRequest(); }
 
     private UUID sendWorldAction(HistoryCommandPayload.Kind kind) {
         if (history.worldActions().isEmpty()) return send(kind, "");
@@ -648,6 +663,7 @@ public final class LumiClientNetworking {
     }
 
     private UUID send(HistoryCommandPayload.Kind kind, String argument) {
+        if (kind != HistoryCommandPayload.Kind.UNDO && kind != HistoryCommandPayload.Kind.REDO) cancelWorldNavigation();
         var snapshot = history.state().snapshot().orElseThrow(
                 () -> new IllegalStateException("Lumi history has not synchronized yet"));
         if (!ClientPlayNetworking.canSend(HistoryCommandPayload.TYPE)) {

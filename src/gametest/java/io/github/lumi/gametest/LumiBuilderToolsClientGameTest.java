@@ -18,6 +18,7 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
     private BlockPos origin;
     private List<BlockBox> area;
     private LumiWorldSnapshot expected;
+    private LumiWorldSnapshot redoExpected;
     private boolean expectedDesert;
 
     @Override public void runTest(ClientGameTestContext context) {
@@ -87,9 +88,13 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
                     () -> context.runOnClient(client -> AxiomClientEdits.apply(target)));
             new LumiAxiomEntityClientScenario().run(context, world, report, origin, area);
             new LumiAxiomSplitDispatchClientScenario().run(context, world, report, origin, area);
-            new LumiAxiomEditorClientGameTest().run(context, world, report);
         }
-        expected = new LumiBehaviorChecks(context, world, report).snapshot("tools_final", area);
+        var checks = new LumiBehaviorChecks(context, world, report);
+        if (loaded("axiom")) {
+            redoExpected = checks.snapshot("tools_before_reopen_undo", area);
+            operations.undo("axiom_before_reopen");
+        }
+        expected = checks.snapshot("tools_final", area);
         if (loaded("axiom")) assertBiomes(world);
         report.assertNoRuntimeFailures();
     }
@@ -117,11 +122,17 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
         }
         operations.awaitDurability(tool + "_edited");
         var editedState = checks.snapshot(tool + "_edited", area);
-        operations.undo(tool);
+        if (tool.equals("axiom")) operations.nativeHistoryStep("axiom_native_undo", true); else operations.undo(tool);
         checks.assertSnapshot(tool + "_undo", area, baseline.snapshot());
         operations.redo(tool);
         checks.assertSnapshot(tool + "_redo", area, editedState);
         var edited = operations.save(tool + "-after", area);
+        if (tool.equals("axiom")) {
+            operations.undo("axiom_after_save");
+            checks.assertSnapshot("axiom_after_save_undo", area, baseline.snapshot());
+            operations.nativeHistoryStep("axiom_native_redo_after_save", false);
+            checks.assertSnapshot("axiom_native_redo_after_save", area, editedState);
+        }
         var comparison = server.computeOnServer(minecraft -> LumiMod.serverRuntime()
                 .find(minecraft.getPlayerList().getPlayers().getFirst().level()).orElseThrow()
                 .compare(baseline.commit(), edited.commit()));
@@ -134,6 +145,14 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
         checks.assertSnapshot(tool + "_restore_before", area, baseline.snapshot());
         operations.restore(tool + "_after", edited.commit());
         checks.assertSnapshot(tool + "_restore_after", area, edited.snapshot());
+        if (tool.equals("axiom")) {
+            operations.nativeHistoryJump("axiom_two_restore_undo", 2);
+            checks.assertSnapshot("axiom_two_restore_undo", area, edited.snapshot());
+            operations.redo("axiom_restore_before");
+            checks.assertSnapshot("axiom_restore_before_redo", area, baseline.snapshot());
+            operations.nativeHistoryStep("axiom_restore_after_redo", false);
+            checks.assertSnapshot("axiom_restore_after_redo", area, edited.snapshot());
+        }
         if (tool.equals("axiom")) assertBiomes(world);
         checks.finish();
         report.event("gate", tool + "_client_history", "succeeded", 0, 0,
@@ -145,6 +164,12 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
         new LumiUiTestDriver(context).completeOnboardingIfShown();
         var checks = new LumiBehaviorChecks(context, world, report);
         checks.assertSnapshot("tools_reopened", area, expected);
+        if (loaded("axiom")) {
+            new LumiUiTestDriver(context).awaitHistory();
+            var operations = new LumiBehaviorOperations(context, world.getServer(), report);
+            operations.nativeHistoryStep("axiom_redo_after_reopen", false);
+            checks.assertSnapshot("axiom_redo_after_reopen", area, redoExpected);
+        }
         if (loaded("axiom")) assertBiomes(world);
         checks.finish();
         report.event("gate", "builder_tools_reopen", "succeeded", 0, 0, "exact world state");
@@ -211,7 +236,9 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
             var buffer = new com.moulberry.axiom.world_modification.BlockBuffer();
             for (int x = 0; x < 2; x++) buffer.set(position.getX() + x,
                     position.getY(), position.getZ(), Blocks.GOLD_BLOCK.defaultBlockState());
-            com.moulberry.axiom.world_modification.Dispatcher.applyBlockBuffer(buffer, false);
+            com.moulberry.axiom.world_modification.Dispatcher.push(new com.moulberry.axiom.world_modification.HistoryEntry<>(
+                    buffer, new com.moulberry.axiom.world_modification.BlockBuffer(), position, "Shared history fixture",
+                    com.moulberry.axiom.world_modification.HistoryEntry.MODIFIER_CAN_BE_UNDONE_INGAME));
         }
     }
 }

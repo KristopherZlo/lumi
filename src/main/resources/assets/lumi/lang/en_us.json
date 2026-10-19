@@ -1,4 +1,8 @@
 {
+  "lumi.history.action.edit": "World edit",
+  "lumi.history.action.restore": "Restore / Merge",
+  "lumi.history.action.branch_switch": "Branch switch",
+  "lumi.history.action.workspace_switch": "Workspace switch",
   "lumi.axiom.sync_refused": "Axiom work could not stop safely. Axiom remains paused; reconnect before starting a new edit.",
   "key.category.lumi.general": "Lumi",
   "key.lumi.undo": "Undo",

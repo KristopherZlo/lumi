@@ -11,7 +11,6 @@ import com.moulberry.axiom.world_modification.EntityDataConsumer;
 import com.moulberry.axiom.world_modification.HistoryEntry;
 import com.moulberry.axiom.world_modification.DummyBuffer;
 import com.moulberry.axiom.clipboard.SelectionHistoryElement;
-import com.moulberry.axiom.UserAction;
 import com.moulberry.axiom.world_modification.DispatchTask;
 import com.moulberry.axiom.world_modification.Dispatcher;
 import io.github.lumi.client.integration.AxiomClientWorkBarrier;
@@ -67,21 +66,13 @@ final class LumiAxiomPendingWork implements AutoCloseable {
         this.context = context;
         context.runOnClient(client -> {
             try {
+                int size = AxiomDispatcherPendingAccess.lumi$history().getSize();
+                int position = AxiomDispatcherPendingAccess.lumi$history().getPosition();
                 Dispatcher.push(new HistoryEntry<BlockOrBiomeBuffer>(new BlockBuffer(), new BlockBuffer(),
                         ghost, "Lumi stale history fixture", 0));
-                if (AxiomDispatcherPendingAccess.lumi$history().getSize() == 0) {
-                    throw new AssertionError("Native Axiom history fixture was not accepted");
-                }
-                Dispatcher.clearActiveSelectionHistory();
-                int position = AxiomDispatcherPendingAccess.lumi$history().getPosition();
-                nativeHistoryStep(true);
-                if (AxiomDispatcherPendingAccess.lumi$history().getPosition() != position - 1) {
-                    throw new AssertionError("Native world Undo control was not exercised");
-                }
-                nativeHistoryStep(false);
-                if (AxiomDispatcherPendingAccess.lumi$history().getPosition() != position) {
-                    throw new AssertionError("Native world Redo control was not exercised");
-                }
+                if (AxiomDispatcherPendingAccess.lumi$history().getSize() != size
+                        || AxiomDispatcherPendingAccess.lumi$history().getPosition() != position)
+                    throw new AssertionError("A native no-op changed the server-owned world cursor");
                 ((Long2ObjectMap<ChunkDataConsumer>) (Long2ObjectMap<?>) AxiomDispatcherPendingAccess.lumi$chunkCallbacks())
                         .put(chunkRequest, (entities, sections) -> callbacks.incrementAndGet());
                 ((Long2ObjectMap<EntityDataConsumer>) (Long2ObjectMap<?>) AxiomDispatcherPendingAccess.lumi$entityCallbacks())
@@ -241,11 +232,14 @@ final class LumiAxiomPendingWork implements AutoCloseable {
             Dispatcher.finishRequestChunkData(chunkRequest, true, new Long2ObjectOpenHashMap<>(), new Long2ObjectOpenHashMap<>());
             Dispatcher.finishRequestEntityData(entityRequest, false, Map.of());
             Dispatcher.finishRequestEntityData(entityRequest, true, Map.of());
-            if (callbacks.get() != 0 || AxiomDispatcherPendingAccess.lumi$history().getSize() != 0) {
-                throw new AssertionError("Stale native callbacks/history survived replacement");
+            if (callbacks.get() != 0) {
+                throw new AssertionError("Stale native callbacks survived replacement");
             }
-            Dispatcher.callAction(UserAction.UNDO, null);
-            Dispatcher.callAction(UserAction.REDO, null);
+            var view = io.github.lumi.client.LumiClient.networking().worldActions().orElseThrow().view();
+            var history = AxiomDispatcherPendingAccess.lumi$history();
+            if (history.getSize() != view.undo().size() + view.redo().size()
+                    || history.getPosition() != view.undo().size() - 1)
+                throw new AssertionError("Axiom history does not mirror the retained server cursor");
         });
         context.waitTicks(3);
     }
