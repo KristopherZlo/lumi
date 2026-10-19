@@ -785,11 +785,11 @@ public final class LumiServerNetworking {
             case BRANCH_SWITCH -> runtime.startBranchSwitch(
                     expected, new BranchName(payload.argument()), player.getUUID(), terminal);
             case BRANCH_CREATE -> runtime.startBranchCreation(
-                    new BranchName(payload.argument().trim()), terminal);
+                    new BranchName(payload.argument().trim()), Optional.empty(), player.getUUID(), terminal);
             case BRANCH_CREATE_AT -> {
                 BranchCreateArgument branch = BranchCreateArgument.parse(payload.argument());
                 yield runtime.startBranchCreation(
-                        branch.name(), branch.startingPoint(), terminal);
+                        branch.name(), Optional.of(branch.startingPoint()), player.getUUID(), terminal);
             }
             case WORKSPACE_SWITCH -> runtime.startWorkspaceSwitch(
                     expected, UUID.fromString(payload.argument()), player.getUUID(), terminal);

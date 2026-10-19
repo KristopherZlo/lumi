@@ -517,7 +517,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         if (!operationBusy && level.getGameTime() % 40 == 0 && historyWrite.isDone()
                 && storedActionRevision != liveActions.revision()) {
             historyWrite = CompletableFuture.runAsync(() -> {
-                try { persistActionHistory(); }
+                try { persistActionHistory(true); }
                 catch (IOException failure) { throw new CompletionException(failure); }
             }, background).exceptionally(failure -> {
                 LumiMod.LOGGER.error("Cannot persist shared Undo history; the previous root was retained", failure);
@@ -711,6 +711,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         new ActiveWorkspace(value.expectedWorkspace(), value.expectedRevision()), value.targetWorkspace(), branch));
                 world = replayContextPublication(branch, workspace, choice == RecoveryChoice.RESUME_TARGET);
             }
+            if (actionHistory.hasPreparedCheckpoint(journal.operationId())) return world;
             return new ActionReplayPublication(world, actionHistory,
                     journal.operationId(), step, applied, value -> liveActions.installCursor(step, value));
         }
@@ -1240,9 +1241,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     private boolean persistActionHistory() throws IOException {
+        return persistActionHistory(false);
+    }
+
+    private boolean persistActionHistory(boolean idleOnly) throws IOException {
+        if (idleOnly && freeze.isFrozen()) return false;
         var index = liveActions.snapshotIndex();
         boolean stored = actionHistory.flush(selectedWorkspaceId, activeRef().name(), index,
-                liveActions::snapshotAction, () -> liveActions.revision() == index.revision());
+                liveActions::snapshotAction, () -> liveActions.revision() == index.revision() && (!idleOnly || !freeze.isFrozen()));
         if (stored) storedActionRevision = index.revision();
         return stored;
     }
@@ -1354,22 +1360,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
     public MinecraftLiveEntityTracker liveEntities() { return liveEntities; }
     public MinecraftCausalTickTracker causalTicks() { return causalTicks; }
-
-    private Consumer<DimensionMutation> clearingLiveHistory(
-            Consumer<DimensionMutation> observer) {
-        return operation -> {
-            if (operation.terminalState() == io.github.lumi.minecraft.operation.MutationTerminalState.SUCCEEDED) {
-                liveEntities.clear();
-                axiomSetBlockActions.clear();
-                axiomBufferActions.clear();
-                liveActions.clear();
-                liveWorld.clear();
-                liveEntityWorld.clear();
-                causalTicks.cancelAll();
-            }
-            observer.accept(operation);
-        };
-    }
 
     private boolean cancelLiveAction(UUID action) {
         boolean changed = causalTicks.cancel(
@@ -1497,11 +1487,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return operation;
     }
 
-    private ReturnPointRestoreOperation createBranchSwitch(
-            BranchName target) throws IOException {
-        return createBranchSwitch(target, AUTO_AUTHOR.id());
-    }
-
     private ReturnPointRestoreOperation createBranchSwitch(BranchName target, UUID actor) throws IOException {
         liveEntities.finalizeOwned();
         BranchSwitchPlan plan = branches.prepareSwitch(target, activeWorkspaceId());
@@ -1570,7 +1555,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public synchronized DimensionMutation startBranchCreation(
             BranchName name,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
-        return startBranchCreation(name, Optional.empty(), terminalObserver);
+        return startBranchCreation(name, Optional.empty(), AUTO_AUTHOR.id(), terminalObserver);
     }
 
     public synchronized DimensionMutation startBranchCreation(
@@ -1578,36 +1563,34 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             CommitId startingPoint,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
         return startBranchCreation(name, Optional.of(
-                Objects.requireNonNull(startingPoint, "startingPoint")), terminalObserver);
+                Objects.requireNonNull(startingPoint, "startingPoint")), AUTO_AUTHOR.id(), terminalObserver);
     }
 
-    private DimensionMutation startBranchCreation(
+    public synchronized DimensionMutation startBranchCreation(
             BranchName name,
             Optional<CommitId> startingPoint,
+            UUID actor,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
         Objects.requireNonNull(name, "name");
         var operation = DeferredDimensionMutation.awaitingAdmission(
-                freeze::awaitReplacementAdmission, () -> createAndSwitchBranch(name, startingPoint));
+                freeze::awaitReplacementAdmission, () -> createAndSwitchBranch(name, startingPoint, actor));
         enqueueForeground(
-                operation, OperationPriority.NORMAL, clearingLiveHistory(terminalObserver));
+                operation, OperationPriority.NORMAL, terminalObserver);
         return operation;
     }
 
     private DimensionMutation createAndSwitchBranch(
-            BranchName name, Optional<CommitId> requestedStartingPoint) throws IOException {
+            BranchName name, Optional<CommitId> requestedStartingPoint, UUID actor) throws IOException {
         CommitId startingPoint = requestedStartingPoint.isPresent()
                 ? requestedStartingPoint.get() : activeRef().commit();
         UUID workspaceId = activeWorkspaceId();
         restores.requireTargetInWorkspace(startingPoint, workspaceId);
         BranchName qualified = WorkspaceService.branchName(workspaceId, name);
-        if (activeRef().commit().equals(startingPoint)) {
-            branches.createAndActivate(qualified, startingPoint);
-            return new NoChangeMutation("luma.status.variant_created");
-        }
         BranchRef created = branches.create(qualified, startingPoint);
         try {
-            return createBranchSwitch(created.name());
+            return activeRef().commit().equals(startingPoint)
+                    ? createBranchSelection(created.name(), actor) : createBranchSwitch(created.name(), actor);
         } catch (IOException | RuntimeException failed) {
             try {
                 branches.delete(created.name(), workspaceId);
@@ -1616,6 +1599,30 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             }
             throw failed;
         }
+    }
+
+    private ReturnPointRestoreOperation createBranchSelection(BranchName target, UUID actor) throws IOException {
+        liveEntities.finalizeOwned();
+        var plan = branches.prepareReplaySwitch(target);
+        UUID operation = UUID.randomUUID();
+        var request = new SaveRequest(plan.source(), AUTO_AUTHOR, "Checkpoint before branch creation", Instant.now(),
+                selectedWorkspaceId, Optional.empty(), CommitKind.HIDDEN_RETURN);
+        var capture = createChunkReadySave(request, scopedReturnPointPreparation(request),
+                (value, captured) -> saves.checkpoint(value, captured, sessionCheckpoints.name(operation)), ignored -> { });
+        return new ReturnPointRestoreOperation(capture, (saved, progress) -> CompletableFuture.supplyAsync(() -> {
+            try {
+                requireExpectedRef(plan.source());
+                var prepared = restores.prepare(plan.source(), saved.commitId(), saved.commitId(),
+                        value -> publishRestoreDiffProgress(progress, value));
+                var publication = recordingPublication(replayContextPublication(plan, Optional.empty(), true), operation, actor,
+                        saved.branchRef(), Optional.of(new WorldActionContext.Change(
+                                new WorldActionContext(selectedWorkspaceId, plan.source().name()),
+                                new WorldActionContext(selectedWorkspaceId, target))));
+                return RestoreOperation.startCheckpointAction(prepared, worldApply, publication, journals, operation,
+                        restoreStateListener, OperationKind.ACTION_REPLAY, saved.commitId(),
+                        Optional.of(new ActionReplayTarget(actor, operation, false)), progress);
+            } catch (IOException failure) { throw new CompletionException(failure); }
+        }, background));
     }
 
     public synchronized DimensionMutation startWorkspaceSwitch(

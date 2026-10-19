@@ -194,7 +194,7 @@ public final class LumiCommands {
             return 0;
         }
         try {
-            runtime.startBranchCreation(new BranchName(name), ignored -> { });
+            runtime.startBranchCreation(new BranchName(name), java.util.Optional.empty(), author(source).id(), ignored -> { });
             source.sendSuccess(() -> Component.literal(
                     "Lumi branch creation started: " + name), false);
             return 1;
@@ -212,7 +212,7 @@ public final class LumiCommands {
             return 0;
         }
         try {
-            runtime.startBranchSwitch(runtime.visibleBranchName(new BranchName(name)));
+            runtime.startBranchSwitch(runtime.activeRef(), runtime.visibleBranchName(new BranchName(name)), author(source).id(), ignored -> { });
             source.sendSuccess(() -> Component.literal("Lumi branch switch started: " + name), false);
             return 1;
         } catch (IOException | IllegalStateException | IllegalArgumentException failed) {

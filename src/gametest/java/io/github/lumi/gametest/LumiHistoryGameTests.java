@@ -53,6 +53,8 @@ public final class LumiHistoryGameTests {
         var terminal = new AtomicReference<MutationTerminalState>();
         var current = new AtomicReference<DimensionMutation>();
         var savedHead = new AtomicReference<CommitId>();
+        var originalBranch = new AtomicReference<io.github.lumi.domain.model.BranchName>();
+        var createdBranch = new AtomicReference<io.github.lumi.domain.model.BranchName>();
         BlockPos changed = helper.absolutePos(new BlockPos(2, 2, 2));
         BlockPos disjoint = changed.north();
         BlockPos pending = changed.east(32);
@@ -131,6 +133,52 @@ public final class LumiHistoryGameTests {
                     assertBlock(helper, level, disjoint, Blocks.DIAMOND_BLOCK);
                     helper.assertValueEqual(savedHead.get(), activeCommit(helper, runtime),
                             "Action replay moved the saved branch pointer");
+                    try {
+                        originalBranch.set(runtime.activeRef().name());
+                        try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), AUTHOR.id())) {
+                            level.setBlockAndUpdate(changed, Blocks.EMERALD_BLOCK.defaultBlockState());
+                        }
+                        current.set(runtime.startBranchCreation(new io.github.lumi.domain.model.BranchName("pending-" + lease),
+                                java.util.Optional.empty(), AUTHOR.id(), operation -> terminal.set(operation.terminalState())));
+                    } catch (IOException failed) { throw new java.io.UncheckedIOException(failed); }
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime, current))
+                .thenExecute(() -> {
+                    requireSucceeded(helper, terminal.get(), "Create branch with pending work");
+                    try { createdBranch.set(runtime.activeRef().name()); }
+                    catch (IOException failed) { throw new java.io.UncheckedIOException(failed); }
+                    helper.assertFalse(originalBranch.get().equals(createdBranch.get()), "Branch creation did not select the new branch");
+                    assertBlock(helper, level, changed, Blocks.EMERALD_BLOCK);
+                    startAction(runtime, LiveActionJournal.Direction.UNDO, terminal, current);
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime, current))
+                .thenExecute(() -> {
+                    requireSucceeded(helper, terminal.get(), "Undo branch creation");
+                    try { helper.assertValueEqual(originalBranch.get(), runtime.activeRef().name(), "Undo selected the wrong branch"); }
+                    catch (IOException failed) { throw new java.io.UncheckedIOException(failed); }
+                    assertBlock(helper, level, changed, Blocks.EMERALD_BLOCK);
+                    startAction(runtime, LiveActionJournal.Direction.UNDO, terminal, current);
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime, current))
+                .thenExecute(() -> {
+                    requireSucceeded(helper, terminal.get(), "Undo work retained across branch creation");
+                    assertBlock(helper, level, changed, Blocks.STONE);
+                    startAction(runtime, LiveActionJournal.Direction.REDO, terminal, current);
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime, current))
+                .thenExecute(() -> {
+                    requireSucceeded(helper, terminal.get(), "Redo work before branch creation");
+                    assertBlock(helper, level, changed, Blocks.EMERALD_BLOCK);
+                    startAction(runtime, LiveActionJournal.Direction.REDO, terminal, current);
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime, current))
+                .thenExecute(() -> {
+                    requireSucceeded(helper, terminal.get(), "Redo branch creation");
+                    try { helper.assertValueEqual(createdBranch.get(), runtime.activeRef().name(), "Redo selected the wrong branch"); }
+                    catch (IOException failed) { throw new java.io.UncheckedIOException(failed); }
+                    helper.assertValueEqual(savedHead.get(), activeCommit(helper, runtime), "Branch replay moved saved HEAD");
+                    assertBlock(helper, level, changed, Blocks.EMERALD_BLOCK);
+                    assertBlock(helper, level, disjoint, Blocks.DIAMOND_BLOCK);
                     LumiGameTestLease.release(lease);
                 })
                 .thenSucceed();
