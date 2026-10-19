@@ -59,11 +59,7 @@ final class LumiAxiomSplitDispatchClientScenario {
                 try {
                     var plan = LumiMod.serverRuntime().find(player.level()).orElseThrow().liveActions()
                             .prepareUndo(player.getUUID()).orElseThrow();
-                    int cells = plan.expected().size();
-                    for (var section : plan.sections().values())
-                        for (int cell = 0; cell < io.github.lumi.domain.model.SectionBlob.BLOCK_COUNT; cell++)
-                            if (section.changed(cell)) cells++;
-                    return cells == 3;
+                    return LumiAxiomDispatchTestDriver.changedCells(plan) == 3;
                 } catch (IllegalStateException waiting) {
                     if (!waiting.getMessage().contains("still arriving")) throw waiting;
                     return false;

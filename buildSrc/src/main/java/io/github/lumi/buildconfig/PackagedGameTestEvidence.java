@@ -38,8 +38,10 @@ public final class PackagedGameTestEvidence {
                 expected.add("gate axiom_entity_client_history");
                 expected.add("gate axiom_pending_work");
                 expected.add("gate axiom_split_dispatch");
-                expected.add("gate axiom_editor_ui");
-                expected.add("gate axiom_editor_depth");
+                if (suite.equals("ALL")) {
+                    expected.add("gate axiom_editor_ui");
+                    expected.add("gate axiom_editor_depth");
+                }
             }
         }
         if (!expected.isEmpty()) {

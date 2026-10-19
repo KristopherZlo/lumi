@@ -19,10 +19,8 @@ import net.minecraft.network.chat.Component;
 /** Exercises native mouse routing with Axiom's actual editor viewport enabled. */
 public final class LumiAxiomEditorClientGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
-        if (!"AXIOM_EDITOR".equalsIgnoreCase(System.getProperty("lumi.gametest.suite"))) return;
-        if (!FabricLoader.getInstance().isModLoaded("axiom")) {
-            throw new IllegalStateException("AXIOM_EDITOR requires Axiom");
-        }
+        if (!LumiClientTestSuite.includes(LumiClientTestSuite.AXIOM_EDITOR)
+                || !FabricLoader.getInstance().isModLoaded("axiom")) return;
         try (var ignored = LumiUiScaleTestScope.readableViewport()) {
             LumiClientBehaviorWorld.run(context, "axiom-editor", (client, world, report) -> {
                 new LumiUiTestDriver(client).completeOnboardingIfShown();

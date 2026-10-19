@@ -61,7 +61,7 @@ final class LumiAxiomMultiplayerScenario {
         awaitComplete();
         server.runOnServer(minecraft -> {
             for (UUID actor : List.of(owner, peer)) {
-                if (runtime(minecraft).liveActions().prepareUndo(actor).orElseThrow().expected().size() != 3) {
+                if (LumiAxiomDispatchTestDriver.changedCells(runtime(minecraft).liveActions().prepareUndo(actor).orElseThrow()) != 3) {
                     throw new AssertionError("TCP dispatch was not one three-block action");
                 }
             }

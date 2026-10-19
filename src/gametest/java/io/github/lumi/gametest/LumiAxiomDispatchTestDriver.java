@@ -16,6 +16,14 @@ final class LumiAxiomDispatchTestDriver {
 
     LumiAxiomDispatchTestDriver(ClientGameTestContext context) { this.context = context; }
 
+    static int changedCells(io.github.lumi.domain.service.LiveActionJournal.Plan plan) {
+        int cells = plan.expected().size();
+        for (var section : plan.sections().values())
+            for (int cell = 0; cell < io.github.lumi.domain.model.SectionBlob.BLOCK_COUNT; cell++)
+                if (section.changed(cell)) cells++;
+        return cells;
+    }
+
     void begin(BlockPos origin, BlockState state) {
         ready("");
         context.runOnClient(client -> {
