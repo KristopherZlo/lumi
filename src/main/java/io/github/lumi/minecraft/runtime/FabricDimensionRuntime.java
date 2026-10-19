@@ -27,6 +27,7 @@ import io.github.lumi.minecraft.operation.WorkingIndexClearPublication;
 import io.github.lumi.minecraft.operation.WorkingIndexRecoveryPublication;
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.BranchRef;
+import io.github.lumi.domain.model.WorldActionScope;
 import io.github.lumi.domain.model.BranchSwitchPlan;
 import io.github.lumi.domain.model.ActiveBranch;
 import io.github.lumi.domain.model.ActiveWorkspace;
@@ -2137,6 +2138,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         Objects.requireNonNull(expected, "expected");
         Objects.requireNonNull(author, "author");
         var context = new AtomicReference<QuickRollbackContext>();
+        var scope = new AtomicReference<WorldActionScope>();
         var operation = new DeferredDimensionMutation(
                 true,
                 () -> requireExpectedRef(expected),
@@ -2153,8 +2155,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         return new NoChangeMutation("luma.status.nothing_to_restore");
                     }
                     ReturnPointRestoreOperation rollback =
-                            createQuickRollback(author, pending, expected);
-                    context.set(new QuickRollbackContext(expected, workspace, rollback));
+                            createQuickRollback(author, pending, expected, scope);
+                    context.set(new QuickRollbackContext(expected, workspace, rollback, scope));
                     return rollback;
                 });
         enqueueForeground(operation, OperationPriority.URGENT, completed -> {
@@ -2170,7 +2172,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         liveActions.pushCheckpoint(
                                 author.id(), new LiveActionJournal.Checkpoint(
                                         value.expectedRef(), saved.commitId(),
-                                        saved.branchRef()));
+                                        saved.branchRef(), value.scope().get()));
                     }
                 }
             } finally {
@@ -2245,7 +2247,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private ReturnPointRestoreOperation createQuickRollback(
             CommitAuthor author,
             WorkingIndexSnapshot pending,
-            BranchRef expected)
+            BranchRef expected,
+            AtomicReference<WorldActionScope> scope)
             throws IOException {
         UUID operationId = UUID.randomUUID();
         BranchName hidden = sessionCheckpoints.name(operationId);
@@ -2272,6 +2275,18 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     var prepared = restores.prepare(
                             expected, saved.commitId(), expected.commit(),
                             value -> publishRestoreDiffProgress(progress, value));
+                    try {
+                        scope.set(WorldActionScope.between(
+                                prepared.returnSections(), prepared.sections(),
+                                prepared.returnEntities(), prepared.entities()));
+                    } catch (RuntimeException failed) {
+                        try {
+                            prepared.close();
+                        } catch (IOException closeFailure) {
+                            failed.addSuppressed(closeFailure);
+                        }
+                        throw failed;
+                    }
                     return RestoreOperation.startQuickRollback(
                             prepared, worldApply, new WorkingIndexClearPublication(
                                     mutations, saved.capturedGenerations()),
@@ -2313,7 +2328,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private record QuickRollbackContext(
             BranchRef expectedRef,
             Workspace workspace,
-            ReturnPointRestoreOperation operation) { }
+            ReturnPointRestoreOperation operation,
+            AtomicReference<WorldActionScope> scope) { }
 
     private static void publishRestoreDiffProgress(
             Consumer<OperationProgress> target,

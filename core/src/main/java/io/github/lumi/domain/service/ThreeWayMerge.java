@@ -4,6 +4,7 @@ import io.github.lumi.domain.model.CanonicalNbt;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
+import io.github.lumi.domain.model.EntityPlacement;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.WorldDataVersion;
 import io.github.lumi.domain.model.PlayerSpawn;
@@ -85,9 +86,9 @@ public final class ThreeWayMerge {
         keys.addAll(base.keySet());
         keys.addAll(current.keySet());
         keys.addAll(source.keySet());
-        Map<UUID, Placement> baseById = placements(base);
-        Map<UUID, Placement> currentById = placements(current);
-        Map<UUID, Placement> sourceById = placements(source);
+        Map<UUID, EntityPlacement> baseById = EntityPlacement.index(base);
+        Map<UUID, EntityPlacement> currentById = EntityPlacement.index(current);
+        Map<UUID, EntityPlacement> sourceById = EntityPlacement.index(source);
         var ids = new TreeSet<UUID>();
         ids.addAll(baseById.keySet());
         ids.addAll(currentById.keySet());
@@ -102,16 +103,16 @@ public final class ThreeWayMerge {
         int conflicts = 0;
         int changed = 0;
         for (UUID id : ids) {
-            Optional<Placement> currentValue = Optional.ofNullable(currentById.get(id));
-            Choice<Optional<Placement>> choice = choose(
+            Optional<EntityPlacement> currentValue = Optional.ofNullable(currentById.get(id));
+            Choice<Optional<EntityPlacement>> choice = choose(
                     Optional.ofNullable(baseById.get(id)), currentValue,
                     Optional.ofNullable(sourceById.get(id)));
             conflicts += choice.conflict ? 1 : 0;
             if (!choice.value.equals(currentValue)) {
                 changed++;
-                currentValue.ifPresent(value -> merged.get(value.chunk).remove(id));
+                currentValue.ifPresent(value -> merged.get(value.chunk()).remove(id));
                 choice.value.ifPresent(value ->
-                        merged.get(value.chunk).put(id, value.state));
+                        merged.get(value.chunk()).put(id, value.state()));
             }
         }
         Map<EntityChunkKey, EntityChunkBlob> result = new HashMap<>();
@@ -153,18 +154,6 @@ public final class ThreeWayMerge {
                 Optional.ofNullable(section.blockEntities().get(index)));
     }
 
-    private static Map<UUID, Placement> placements(
-            Map<EntityChunkKey, EntityChunkBlob> chunks) {
-        Map<UUID, Placement> placements = new HashMap<>();
-        chunks.forEach((key, chunk) -> chunk.entities().forEach(entity -> {
-            if (placements.putIfAbsent(entity.id(), new Placement(key, entity)) != null) {
-                throw new IllegalArgumentException(
-                        "Entity UUID appears in multiple chunks: " + entity.id());
-            }
-        }));
-        return placements;
-    }
-
     private <T> Choice<T> choose(T base, T current, T source) {
         if (requireExpected && !Objects.equals(source, base)
                 && !Objects.equals(current, base)) {
@@ -202,8 +191,6 @@ public final class ThreeWayMerge {
     }
 
     private record Cell(String state, Optional<CanonicalNbt> blockEntity) { }
-
-    private record Placement(EntityChunkKey chunk, EntityState state) { }
 
     private record Choice<T>(T value, boolean conflict) { }
 }

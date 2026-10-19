@@ -13,7 +13,7 @@ class QuickRollbackScopeTest {
                 "src/main/java/io/github/lumi/minecraft/runtime/FabricDimensionRuntime.java"));
 
         assertTrue(source.contains(
-                "createQuickRollback(author, pending, expected)"));
+                "createQuickRollback(author, pending, expected, scope)"));
         assertTrue(source.contains("mutations.snapshot().generations()"));
         assertTrue(!source.contains("clearableQuickRollbackKeys("));
         assertTrue(source.contains("liveActions.pushCheckpoint("));

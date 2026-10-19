@@ -5,6 +5,7 @@ import io.github.lumi.domain.model.BlockSnapshot;
 import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.EntityState;
+import io.github.lumi.domain.model.WorldActionScope;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.Collections;
@@ -195,7 +196,7 @@ public final class LiveActionJournal {
         }
     }
 
-    /** Adds one constant-size durable Restore pair to the session stack. */
+    /** Adds durable Restore endpoints and their compact conflict scope to the stack. */
     public synchronized UUID pushCheckpoint(UUID player, Checkpoint checkpoint) {
         Objects.requireNonNull(checkpoint, "checkpoint");
         UUID actionId = begin(player);
@@ -203,6 +204,7 @@ public final class LiveActionJournal {
             MutableAction action = requireAction(actionId);
             startRecording(action);
             action.checkpoint = checkpoint;
+            resize(action, checkpoint.scope().estimatedBytes());
             return actionId;
         } finally {
             close(actionId);
@@ -422,6 +424,10 @@ public final class LiveActionJournal {
         if (group.stream().anyMatch(action -> pendingChanges.contains(action.id))) {
             throw new IllegalStateException("The selected builder edit is still arriving");
         }
+        if (group.stream().anyMatch(action -> action.sequence <= unsafeBeforeSequence)) {
+            throw new IllegalStateException("A newer evicted action makes this live action unsafe");
+        }
+        requireNoCheckpointOverlap(group);
         if (selected.checkpoint != null) {
             if (group.size() != 1) {
                 throw new IllegalStateException(
@@ -431,10 +437,6 @@ public final class LiveActionJournal {
                     player, List.of(selected.id), direction,
                     Map.of(), Map.of(), Map.of(), Map.of(),
                     Optional.of(selected.checkpoint)));
-        }
-        if (group.stream().anyMatch(action ->
-                action.sequence <= unsafeBeforeSequence)) {
-            throw new IllegalStateException("A newer evicted action makes this live action unsafe");
         }
         Set<UUID> groupIds = group.stream()
                 .map(action -> action.id)
@@ -501,6 +503,18 @@ public final class LiveActionJournal {
             throw new IllegalArgumentException("Unknown live action: " + id);
         }
         return action;
+    }
+
+    private void requireNoCheckpointOverlap(List<MutableAction> group) {
+        for (MutableAction selected : group) {
+            for (MutableAction later : actions.values()) {
+                if (!later.applied || !later.available || later.sequence <= selected.sequence
+                        || later.groupId.equals(selected.groupId)) continue;
+                if (selected.overlapsCheckpoint(later)) {
+                    throw new IllegalStateException("A newer action overlaps the selected live action");
+                }
+            }
+        }
     }
 
     private <K> MutableAction effectiveAction(
@@ -846,15 +860,32 @@ public final class LiveActionJournal {
     public record Checkpoint(
             BranchRef expectedRef,
             CommitId dirtyCommit,
-            BranchRef hiddenRef) {
+            BranchRef hiddenRef,
+            WorldActionScope scope) {
+        public Checkpoint(BranchRef expectedRef, CommitId dirtyCommit, BranchRef hiddenRef) {
+            this(expectedRef, dirtyCommit, hiddenRef, WorldActionScope.unknown());
+        }
+
         public Checkpoint {
             Objects.requireNonNull(expectedRef, "expectedRef");
             Objects.requireNonNull(dirtyCommit, "dirtyCommit");
             Objects.requireNonNull(hiddenRef, "hiddenRef");
+            Objects.requireNonNull(scope, "scope");
         }
     }
 
     private static final class MutableAction {
+        private boolean overlapsCheckpoint(MutableAction other) {
+            if (checkpoint != null && other.checkpoint != null) {
+                return checkpoint.scope().intersects(other.checkpoint.scope());
+            }
+            if (checkpoint != null) {
+                return checkpoint.scope().intersects(other.changes.keySet(), other.entities.keySet());
+            }
+            return other.checkpoint != null
+                    && other.checkpoint.scope().intersects(changes.keySet(), entities.keySet());
+        }
+
         private final UUID id;
         private final UUID player;
         private final long sequence;

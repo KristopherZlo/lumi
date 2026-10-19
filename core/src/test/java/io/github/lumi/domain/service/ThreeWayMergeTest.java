@@ -2,16 +2,19 @@ package io.github.lumi.domain.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.CanonicalNbt;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.SectionBlob;
+import io.github.lumi.domain.model.WorldActionScope;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -63,6 +66,10 @@ class ThreeWayMergeTest {
         assertEquals(List.of(entity(later, 1)), result.get(origin).entities());
         assertEquals(List.of(entity(moved, 2)), result.get(target).entities());
         assertEquals(current, replay.entityChunks(replacement, result, expected).value());
+        var unchangedNbtMove = Map.of(origin, entities(), target, entities(entity(moved, 0)));
+        var scope = WorldActionScope.between(Map.of(), Map.of(), expected, unchangedNbtMove);
+        assertTrue(scope.intersects(Set.of(), Set.of(moved)));
+        assertTrue(!scope.intersects(Set.of(), Set.of(later)));
         var conflict = Map.of(origin, entities(entity(moved, 3)), target, entities());
         assertThrows(IllegalStateException.class,
                 () -> replay.entityChunks(expected, conflict, replacement));

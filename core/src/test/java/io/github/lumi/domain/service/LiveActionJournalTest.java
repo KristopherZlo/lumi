@@ -11,8 +11,12 @@ import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.CanonicalNbt;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.EntityState;
+import io.github.lumi.domain.model.SectionBlob;
+import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.WorldActionScope;
 import io.github.lumi.domain.model.ObjectId;
 import java.util.List;
+import java.util.Map;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.UUID;
@@ -282,6 +286,65 @@ class LiveActionJournalTest {
                 redoRestore.checkpoint());
         journal.complete(redoRestore);
         assertTrue(journal.prepareRedo(PLAYER_A).isEmpty());
+    }
+
+    @Test
+    void checkpointRejectsLaterOverlapButAllowsDisjointCellsInTheSameSection() {
+        var journal = new LiveActionJournal();
+        journal.pushCheckpoint(PLAYER_A, scopedCheckpoint(POSITION));
+        var disjoint = new BlockPosition(POSITION.x() + 1, POSITION.y(), POSITION.z());
+        UUID other = journal.begin(PLAYER_B);
+        journal.record(other, disjoint, block("air"), block("diamond_block"));
+        journal.close(other);
+        assertTrue(journal.prepareUndo(PLAYER_A).isPresent());
+
+        for (String[] change : List.of(new String[] {"gold_block", "dirt"},
+                new String[] {"dirt", "gold_block"})) {
+            other = journal.begin(PLAYER_B);
+            journal.record(other, POSITION, block(change[0]), block(change[1]));
+            journal.close(other);
+        }
+        assertThrows(IllegalStateException.class, () -> journal.prepareUndo(PLAYER_A));
+    }
+
+    @Test
+    void newerCheckpointProtectsOlderBuildersUntilItIsUndone() {
+        var journal = new LiveActionJournal();
+        UUID older = journal.begin(PLAYER_A);
+        journal.record(older, POSITION, block("stone"), block("gold_block"));
+        journal.close(older);
+        journal.pushCheckpoint(PLAYER_B, scopedCheckpoint(POSITION));
+
+        assertThrows(IllegalStateException.class, () -> journal.prepareUndo(PLAYER_A));
+        journal.complete(journal.prepareUndo(PLAYER_B).orElseThrow());
+        assertEquals(older, journal.prepareUndo(PLAYER_A).orElseThrow().actionId());
+    }
+
+    @Test
+    void checkpointPairsUseTheirChangedCellsIncludingNegativeCoordinates() {
+        var journal = new LiveActionJournal();
+        var negative = new BlockPosition(-1, -1, -1);
+        assertTrue(scopedCheckpoint(negative).scope().intersects(
+                java.util.Set.of(negative), java.util.Set.of()));
+        journal.pushCheckpoint(PLAYER_A, scopedCheckpoint(negative));
+        journal.pushCheckpoint(PLAYER_B, scopedCheckpoint(new BlockPosition(-2, -1, -1)));
+        assertTrue(journal.prepareUndo(PLAYER_A).isPresent());
+        journal.pushCheckpoint(PLAYER_B, scopedCheckpoint(negative));
+        assertThrows(IllegalStateException.class, () -> journal.prepareUndo(PLAYER_A));
+    }
+
+    private static LiveActionJournal.Checkpoint scopedCheckpoint(BlockPosition position) {
+        var key = new SectionKey(position.x() >> 4, position.y() >> 4, position.z() >> 4);
+        var before = new SectionBlob(java.util.Collections.nCopies(SectionBlob.BLOCK_COUNT,
+                "minecraft:stone"), Map.of());
+        var states = new java.util.ArrayList<>(before.blockStates());
+        int index = (position.y() & 15) << 8 | (position.z() & 15) << 4 | position.x() & 15;
+        states.set(index, "minecraft:gold_block");
+        var scope = WorldActionScope.between(Map.of(key, before),
+                Map.of(key, new SectionBlob(states, Map.of())), Map.of(), Map.of());
+        var checkpoint = checkpoint('1');
+        return new LiveActionJournal.Checkpoint(checkpoint.expectedRef(), checkpoint.dirtyCommit(),
+                checkpoint.hiddenRef(), scope);
     }
 
     @Test
