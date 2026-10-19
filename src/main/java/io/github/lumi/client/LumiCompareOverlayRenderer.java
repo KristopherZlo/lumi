@@ -135,12 +135,11 @@ final class LumiCompareOverlayRenderer implements AutoCloseable {
                 return true;
             });
         }
-        int uploads = 0;
         ready = true;
         for (var section : visible) {
             if (meshes.containsKey(section)
                     || gpuBytes + CompareOverlayGpuMesh.estimatedBytes(section) > residentByteLimit
-                    || uploads >= 2 || System.nanoTime() - uploadStarted >= 4_000_000) continue;
+                    || System.nanoTime() - uploadStarted >= 4_000_000) continue;
             CompareOverlayGpuMesh mesh = new CompareOverlayGpuMesh(section);
             if (gpuBytes + mesh.bytes() > residentByteLimit) {
                 mesh.close();
@@ -148,7 +147,6 @@ final class LumiCompareOverlayRenderer implements AutoCloseable {
             }
             meshes.put(section, mesh);
             gpuBytes += mesh.bytes();
-            uploads++;
         }
         visibleBlocks = 0;
         uploadedBlocks = 0;
