@@ -151,7 +151,7 @@ class GarbageCollectorTest {
         var commitId = commits.write(commit(tree));
         TombstoneRepository tombstones = new TombstoneRepository(repositoryRoot);
         UUID actor = new UUID(0, 7), action = new UUID(0, 8);
-        var history = new WorldActionHistoryRepository(repositoryRoot);
+        var history = new WorldActionHistoryRepository(repositoryRoot, new WorldDataVersion(5000));
         var checkpoint = new WorldActionCheckpoint(new BranchName("main"), commitId, commitId,
                 new BranchRef(new BranchName("hidden/session-undo/test"), commitId, 0), WorldActionScope.empty());
         var index = new WorldActionIndex(1, 1, 0, List.of(new WorldActionRecord.Metadata(action, actor, 1,

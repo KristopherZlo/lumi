@@ -13,6 +13,10 @@ import io.github.lumi.minecraft.operation.BranchRefRestorePublication;
 import io.github.lumi.minecraft.operation.CapturedGenerationCompletion;
 import io.github.lumi.minecraft.operation.CheckpointActionOperation;
 import io.github.lumi.minecraft.operation.PendingRestorePublication;
+import io.github.lumi.minecraft.operation.ActionReplayPublication;
+import io.github.lumi.domain.service.ActionReplayPreparation;
+import io.github.lumi.domain.service.WorldActionHistory;
+import io.github.lumi.storage.repository.WorldActionHistoryRepository;
 import io.github.lumi.minecraft.operation.PendingStatisticsOperation;
 import io.github.lumi.minecraft.operation.OperationPriority;
 import io.github.lumi.minecraft.operation.OperationProgress;
@@ -201,6 +205,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final SessionCheckpointRefService sessionCheckpoints;
     private final UUID defaultWorkspaceId;
     private final LiveActionJournal liveActions;
+    private final WorldActionHistory actionHistory;
+    private CompletableFuture<Void> historyWrite = CompletableFuture.completedFuture(null);
+    private volatile long storedActionRevision = -1;
     private final AxiomSetBlockActionGrouper axiomSetBlockActions;
     private final AxiomBufferActionGrouper axiomBufferActions;
     private final MinecraftLiveBlockWorldAccess liveWorld;
@@ -244,7 +251,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             UUID defaultWorkspaceId,
             UUID activeWorkspaceId,
             OperationJournal pendingRecovery,
-            io.github.lumi.minecraft.world.DimensionFreeze.Lease recoveryLease) {
+            io.github.lumi.minecraft.world.DimensionFreeze.Lease recoveryLease) throws IOException {
         this.level = level;
         this.repository = repository;
         this.freeze = freeze;
@@ -289,6 +296,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         liveActions = new LiveActionJournal(LiveActionJournal.Limits.DEFAULT,
                 checkpoint -> releaseSessionCheckpoint(checkpoint.retainedRef()),
                 liveWorld::releasePrepared, liveEntityWorld.references());
+        var actionVersion = new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version());
+        actionHistory = new WorldActionHistory(new WorldActionHistoryRepository(repository, actionVersion), actionVersion);
         axiomSetBlockActions = new AxiomSetBlockActionGrouper(liveActions);
         axiomBufferActions = new AxiomBufferActionGrouper(liveActions);
         axiomBarrier = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom")
@@ -420,8 +429,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 new ZoneService(new ZoneRepository(repository)),
                 defaultWorkspaceId, activeWorkspaceId,
                 interrupted.orElse(null), recoveryLease);
-        runtime.pruneSessionCheckpointRefs(
-                retainedSessionCheckpointCommits(interrupted.orElse(null)));
+        runtime.restoreActionHistory();
+        var retainedActions = new java.util.HashSet<>(retainedSessionCheckpointCommits(interrupted.orElse(null)));
+        retainedActions.addAll(new WorldActionHistoryRepository(repository).retainedCommits());
+        runtime.pruneSessionCheckpointRefs(retainedActions);
         LumiMod.LOGGER.info(
                 "Lumi opened dimension {} in {} ms",
                 level.dimension().identifier(),
@@ -495,6 +506,16 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         boolean operationBusy = recoveryJournal().isPresent()
                 || operations.hasActiveOperation()
                 || operations.queuedCount() > 0;
+        if (!operationBusy && level.getGameTime() % 40 == 0 && historyWrite.isDone()
+                && storedActionRevision != liveActions.revision()) {
+            historyWrite = CompletableFuture.runAsync(() -> {
+                try { persistActionHistory(); }
+                catch (IOException failure) { throw new CompletionException(failure); }
+            }, background).exceptionally(failure -> {
+                LumiMod.LOGGER.error("Cannot persist shared Undo history; the previous root was retained", failure);
+                return null;
+            });
+        }
         garbageCollection.tick(level.getGameTime(), operationBusy,
                 mutations.hasPendingChanges());
     }
@@ -652,6 +673,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                                     branches, plan, mutations, captured))
                     .orElseGet(() -> new BranchSwitchRestorePublication(
                             branches, plan));
+        }
+        if (journal.kind() == OperationKind.ACTION_REPLAY && journal.actionReplay().isPresent()) {
+            var step = journal.actionReplay().orElseThrow();
+            boolean applied = choice == RecoveryChoice.RESUME_TARGET ? !step.undo() : step.undo();
+            return new ActionReplayPublication(new PendingRestorePublication(mutations), actionHistory,
+                    journal.operationId(), step, applied, value -> liveActions.installCursor(step, value));
         }
         if (journal.target().blockArea().isPresent()
                 || journal.target().zoneRestore().isPresent()
@@ -1071,7 +1098,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         ? liveActions.prepareUndo(player)
                         : liveActions.prepareRedo(player);
         if (selected.flatMap(LiveActionJournal.Plan::checkpoint).isPresent()) {
-            return createCheckpointAction(selected.orElseThrow());
+            var plan = selected.orElseThrow();
+        return new CheckpointActionOperation(liveActions, plan, createActionReplay(plan));
         }
         if (direction == LiveActionJournal.Direction.UNDO && selected.isPresent()) {
             int activeTntRoots = causalTicks.joinActiveTntRoots(
@@ -1096,19 +1124,17 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     public boolean mayChangeBlocks(UUID action) {
                         return causalTicks.cancellationMayChangeBlocks(action);
                     }
-                }, this::publishLiveAction);
+                }, this::publishLiveAction, this::createActionReplay);
     }
 
-    private CheckpointActionOperation createCheckpointAction(
+    private ReturnPointRestoreOperation createActionReplay(
             LiveActionJournal.Plan plan) throws IOException {
-        WorldActionCheckpoint checkpoint = plan.checkpoint().orElseThrow();
+        WorldActionCheckpoint checkpoint = plan.checkpoint().orElse(null);
         BranchRef expected = activeRef();
-        if (!expected.name().equals(checkpoint.branch())) {
+        if (checkpoint != null && !expected.name().equals(checkpoint.branch())) {
             throw new IOException("Checkpoint action belongs to another branch");
         }
         boolean undo = plan.direction() == LiveActionJournal.Direction.UNDO;
-        CommitId source = undo ? checkpoint.after() : checkpoint.before();
-        CommitId target = undo ? checkpoint.before() : checkpoint.after();
         UUID operationId = UUID.randomUUID();
         var workspace = activeWorkspace();
         var player = level.getServer().getPlayerList().getPlayer(plan.player());
@@ -1125,23 +1151,65 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         if (!selectedPlan(plan.player(), plan.direction()).equals(Optional.of(plan))) {
                             throw new IOException("Checkpoint action changed during preparation");
                         }
-                        var replay = merges.prepareReplay(new MergeService.ReplayRequest(
-                                saved.commitId(), source, target, author, undo ? "Undo action" : "Redo action",
-                                Instant.now(), workspace.id()));
+                        if (!persistActionHistory()) throw new IOException("Action changed during durable capture");
+                        CommitId replay;
+                        if (checkpoint != null) {
+                            replay = merges.prepareReplay(new MergeService.ReplayRequest(saved.commitId(),
+                                    undo ? checkpoint.after() : checkpoint.before(), undo ? checkpoint.before() : checkpoint.after(),
+                                    author, undo ? "Undo action" : "Redo action", Instant.now(), workspace.id())).commit();
+                        } else {
+                            var locations = new java.util.HashMap<io.github.lumi.domain.model.EntityState,
+                                    io.github.lumi.domain.model.EntityChunkKey>();
+                            for (var value : plan.replacementEntities().values()) {
+                                if (value.isPresent()) locations.put(value.orElseThrow(), liveEntityWorld.chunk(value.orElseThrow()));
+                            }
+                            replay = new ActionReplayPreparation(new WorldObjectRepository(repository),
+                                    new CommitRepository(repository), new OriginStore(repository),
+                                    new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version()))
+                                    .prepare(saved.commitId(), plan, locations, author);
+                        }
                         PreparedRestore prepared = restores.prepare(
-                                expected, saved.commitId(), replay.commit(),
+                                expected, saved.commitId(), replay,
                                 value -> publishRestoreDiffProgress(progress, value));
                         return RestoreOperation.startCheckpointAction(
-                                prepared, worldApply, new PendingRestorePublication(mutations),
+                                prepared, worldApply, new ActionReplayPublication(new PendingRestorePublication(mutations),
+                                        actionHistory, operationId, new ActionReplayTarget(plan.player(), plan.actionId(), undo), !undo, ignored -> { }),
                                 journals, operationId, restoreStateListener,
                                 OperationKind.ACTION_REPLAY, saved.commitId(),
                                 Optional.of(new ActionReplayTarget(plan.player(), plan.actionId(), undo)), progress);
                     } catch (IOException failed) {
                         throw new CompletionException(failed);
                     }
-                }, background));
-        return new CheckpointActionOperation(liveActions, plan, restore, () ->
-                restore.returnPoint().ifPresent(saved -> releaseSessionCheckpoint(saved.branchRef())));
+                }, background), saved -> releaseSessionCheckpoint(saved.branchRef()));
+        return restore;
+    }
+
+    private boolean persistActionHistory() throws IOException {
+        var index = liveActions.snapshotIndex();
+        boolean stored = actionHistory.flush(selectedWorkspaceId, activeRef().name(), index,
+                liveActions::snapshotAction, () -> liveActions.revision() == index.revision());
+        if (stored) storedActionRevision = index.revision();
+        return stored;
+    }
+
+    private void restoreActionHistory() throws IOException {
+        actionHistory.restore(liveActions, selectedWorkspaceId, activeRef().name());
+        for (var metadata : liveActions.snapshotIndex().actions()) {
+            var record = liveActions.snapshotAction(metadata);
+            for (var delta : record.payload().blocks().values()) {
+                liveWorld.prepare(delta.before()); liveWorld.prepare(delta.after());
+            }
+            var before = new java.util.HashMap<UUID, Optional<io.github.lumi.domain.model.EntityState>>();
+            var after = new java.util.HashMap<UUID, Optional<io.github.lumi.domain.model.EntityState>>();
+            for (var entry : record.payload().entities().entrySet()) {
+                var delta = entry.getValue();
+                if (delta.before().isPresent()) liveEntityWorld.prepare(delta.before().orElseThrow());
+                if (delta.after().isPresent()) liveEntityWorld.prepare(delta.after().orElseThrow());
+                before.put(entry.getKey(), delta.before()); after.put(entry.getKey(), delta.after());
+            }
+            liveEntities.trackApplied(metadata.id(), metadata.applied() ? LiveActionJournal.Direction.REDO : LiveActionJournal.Direction.UNDO,
+                    metadata.applied() ? before : after, metadata.applied() ? after : before);
+        }
     }
 
     private Optional<LiveActionJournal.Plan> selectedPlan(
@@ -2397,8 +2465,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 recoveryLease = null;
             }
             try {
-                causalTicks.close();
-                liveEntities.clear();
+                try {
+                    liveEntities.finalizeOwned();
+                    historyWrite.join();
+                    if (recoveryJournal().isEmpty()) persistActionHistory();
+                } finally {
+                    causalTicks.close();
+                    liveEntities.clear();
+                }
             } finally {
                 axiomSetBlockActions.clear();
                 axiomBufferActions.clear();

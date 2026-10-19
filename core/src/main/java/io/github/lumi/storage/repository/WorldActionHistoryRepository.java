@@ -33,6 +33,12 @@ public final class WorldActionHistoryRepository {
         maintenance = RepositoryMaintenance.forRepository(dimensionRepository);
     }
 
+    /** Undo payloads stay with their original game data; saved versions use normal conversion. */
+    public WorldActionHistoryRepository(Path dimensionRepository, WorldDataVersion version) {
+        root = dimensionRepository.resolve("actions").resolve(Integer.toString(version.value()));
+        maintenance = RepositoryMaintenance.forRepository(dimensionRepository);
+    }
+
     public RepositoryMaintenance.Publication beginPublication() {
         return maintenance.beginPublication();
     }
@@ -77,6 +83,14 @@ public final class WorldActionHistoryRepository {
             retained.add(checkpoint.before());
             retained.add(checkpoint.after());
         }));
+        if (Files.isDirectory(root)) try (var directories = Files.newDirectoryStream(root)) {
+            for (Path directory : directories) {
+                if (Files.isDirectory(directory) && directory.getFileName().toString().matches("[0-9]+")) {
+                    retained.addAll(new WorldActionHistoryRepository(root.getParent(),
+                            new WorldDataVersion(Integer.parseInt(directory.getFileName().toString()))).retainedCommits());
+                }
+            }
+        }
         return Set.copyOf(retained);
     }
 

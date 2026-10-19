@@ -63,6 +63,26 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
 
     public LiveEntityStateReferences references() { return references; }
 
+    /** Reopens a portable action endpoint off-thread, before any frozen apply begins. */
+    public void prepare(EntityState state) throws IOException {
+        if (prepared.containsKey(state)) return;
+        var decoded = decoder.decode(new EntityChunkBlob(java.util.List.of(state), MinecraftWorldDataVersion.current()));
+        if (decoded.entities().size() != 1 || !decoded.entities().getFirst().state().equals(state)) {
+            throw new IOException("Action entity endpoint changed during normalization: " + state.id());
+        }
+        var value = decoded.entities().getFirst();
+        var position = value.nbt().getListOrEmpty("Pos");
+        if (position.size() != 3 || !(position.get(0) instanceof net.minecraft.nbt.DoubleTag x)
+                || !(position.get(2) instanceof net.minecraft.nbt.DoubleTag z)
+                || !Double.isFinite(x.value()) || !Double.isFinite(z.value())
+                || Math.abs(x.value()) > 30_000_000 || Math.abs(z.value()) > 30_000_000) {
+            throw new IOException("Invalid action entity position: " + state.id());
+        }
+        chunks.put(state, new EntityChunkKey(Math.floorDiv((int) Math.floor(x.value()), 16),
+                Math.floorDiv((int) Math.floor(z.value()), 16)));
+        prepared.put(state, value);
+    }
+
     private Optional<EntityState> capture(Entity entity, boolean prepare) throws IOException {
         if (!MinecraftEntityChunkCapture.isDurableRoot(entity) || entity.isRemoved()) {
             return Optional.empty();
