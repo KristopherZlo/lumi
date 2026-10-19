@@ -52,21 +52,19 @@ class MergeServiceTest {
         var refs = new BranchRefRepository(repositoryRoot);
         var active = refs.create(new BranchName("main"), saved);
         var service = new MergeService(objects, commits, origins, new MerkleTreeEditor(objects));
-        var request = new MergeService.Request(active,
-                new BranchRef(new BranchName("recorded"), replacement, 0), author(),
-                "Undo action", Instant.EPOCH, new UUID(0, 2), Optional.empty());
+        var request = new MergeService.ReplayRequest(saved, expected, replacement, author(),
+                "Undo action", Instant.EPOCH, new UUID(0, 2));
 
-        var result = service.prepareReplay(request, expected);
+        var result = service.prepareReplay(request);
 
         Commit undo = commits.read(result.commit());
         assertEquals(section("minecraft:dirt", "minecraft:barrel"), readSection(objects, undo));
         assertEquals(List.of(saved), undo.parents());
         assertEquals(CommitKind.HIDDEN_RETURN, undo.kind());
         assertEquals(Optional.of(active), refs.read(active.name()));
-        var redo = service.prepareReplay(new MergeService.Request(
-                new BranchRef(active.name(), result.commit(), active.revision()),
-                new BranchRef(new BranchName("recorded"), expected, 0), author(),
-                "Redo action", Instant.EPOCH, new UUID(0, 2), Optional.empty()), replacement);
+        var redo = service.prepareReplay(new MergeService.ReplayRequest(
+                result.commit(), replacement, expected, author(),
+                "Redo action", Instant.EPOCH, new UUID(0, 2)));
         assertEquals(section("minecraft:gold_block", "minecraft:barrel"),
                 readSection(objects, commits.read(redo.commit())));
         assertEquals(Optional.of(active), refs.read(active.name()));
@@ -80,14 +78,12 @@ class MergeServiceTest {
                 section("minecraft:gold_block"), "After action"));
         CommitId replacement = commits.write(commit(objects, List.of(),
                 section("minecraft:dirt"), "Before action"));
-        var active = new BranchRef(new BranchName("main"), replacement, 1);
         var service = new MergeService(objects, commits,
                 new OriginStore(repositoryRoot), new MerkleTreeEditor(objects));
 
         assertThrows(IllegalStateException.class, () -> service.prepareReplay(
-                new MergeService.Request(active,
-                        new BranchRef(new BranchName("recorded"), replacement, 0), author(), "Undo action",
-                        Instant.EPOCH, new UUID(0, 2), Optional.empty()), expected));
+                new MergeService.ReplayRequest(replacement, expected, replacement, author(), "Undo action",
+                        Instant.EPOCH, new UUID(0, 2))));
     }
 
     @Test

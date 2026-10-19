@@ -209,9 +209,9 @@ class LiveActionJournalTest {
     void checkpointMovesAsOneConstantSizeStackEntry() {
         LiveActionJournal journal = new LiveActionJournal();
         var checkpoint = new LiveActionJournal.Checkpoint(
-                new BranchRef(new BranchName("main"), commit('1'), 4),
-                commit('2'), new BranchRef(
-                        new BranchName("hidden/session-undo/checkpoint"), commit('2'), 0));
+                new BranchName("main"), commit('2'), commit('1'), new BranchRef(
+                        new BranchName("hidden/session-undo/checkpoint"), commit('2'), 0),
+                WorldActionScope.empty());
 
         UUID action = journal.pushCheckpoint(PLAYER_A, checkpoint);
 
@@ -231,6 +231,10 @@ class LiveActionJournalTest {
 
         assertThrows(NullPointerException.class,
                 () -> journal.pushCheckpoint(PLAYER_A, null));
+        assertThrows(IllegalArgumentException.class, () -> new LiveActionJournal.Checkpoint(
+                new BranchName("main"), commit('1'), commit('2'),
+                new BranchRef(new BranchName("hidden/session-undo/invalid"), commit('3'), 0),
+                WorldActionScope.empty()));
 
         UUID action = journal.begin(PLAYER_A);
         assertTrue(!journal.close(action));
@@ -343,8 +347,8 @@ class LiveActionJournalTest {
         var scope = WorldActionScope.between(Map.of(key, before),
                 Map.of(key, new SectionBlob(states, Map.of())), Map.of(), Map.of());
         var checkpoint = checkpoint('1');
-        return new LiveActionJournal.Checkpoint(checkpoint.expectedRef(), checkpoint.dirtyCommit(),
-                checkpoint.hiddenRef(), scope);
+        return new LiveActionJournal.Checkpoint(checkpoint.branch(), checkpoint.before(), checkpoint.after(),
+                checkpoint.retainedRef(), scope);
     }
 
     @Test
@@ -835,9 +839,8 @@ class LiveActionJournalTest {
     private static LiveActionJournal.Checkpoint checkpoint(char value) {
         CommitId dirty = commit(value);
         return new LiveActionJournal.Checkpoint(
-                new BranchRef(new BranchName("main"), commit('0'), 1),
-                dirty, new BranchRef(
-                        new BranchName("hidden/session-undo/" + value), dirty, 0));
+                new BranchName("main"), dirty, commit('0'), new BranchRef(
+                        new BranchName("hidden/session-undo/" + value), dirty, 0), WorldActionScope.empty());
     }
 
     private static BlockSnapshot block(String id) {

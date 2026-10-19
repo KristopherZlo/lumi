@@ -285,7 +285,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         liveWorld = new MinecraftLiveBlockWorldAccess(level, freeze);
         liveEntityWorld = new MinecraftLiveEntityWorldAccess(level, freeze);
         liveActions = new LiveActionJournal(LiveActionJournal.Limits.DEFAULT,
-                checkpoint -> releaseSessionCheckpoint(checkpoint.hiddenRef()),
+                checkpoint -> releaseSessionCheckpoint(checkpoint.retainedRef()),
                 liveWorld::releasePrepared, liveEntityWorld.references());
         axiomSetBlockActions = new AxiomSetBlockActionGrouper(liveActions);
         axiomBufferActions = new AxiomBufferActionGrouper(liveActions);
@@ -1101,12 +1101,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             LiveActionJournal.Plan plan) throws IOException {
         LiveActionJournal.Checkpoint checkpoint = plan.checkpoint().orElseThrow();
         BranchRef expected = activeRef();
-        if (!expected.name().equals(checkpoint.expectedRef().name())) {
+        if (!expected.name().equals(checkpoint.branch())) {
             throw new IOException("Checkpoint action belongs to another branch");
         }
         boolean undo = plan.direction() == LiveActionJournal.Direction.UNDO;
-        CommitId source = undo ? checkpoint.expectedRef().commit() : checkpoint.dirtyCommit();
-        BranchRef target = undo ? checkpoint.hiddenRef() : checkpoint.expectedRef();
+        CommitId source = undo ? checkpoint.after() : checkpoint.before();
+        CommitId target = undo ? checkpoint.before() : checkpoint.after();
         UUID operationId = UUID.randomUUID();
         var workspace = activeWorkspace();
         var player = level.getServer().getPlayerList().getPlayer(plan.player());
@@ -1123,9 +1123,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         if (!selectedPlan(plan.player(), plan.direction()).equals(Optional.of(plan))) {
                             throw new IOException("Checkpoint action changed during preparation");
                         }
-                        var replay = merges.prepareReplay(new MergeService.Request(
-                                saved.branchRef(), target, author, undo ? "Undo action" : "Redo action",
-                                Instant.now(), workspace.id(), Optional.empty()), source);
+                        var replay = merges.prepareReplay(new MergeService.ReplayRequest(
+                                saved.commitId(), source, target, author, undo ? "Undo action" : "Redo action",
+                                Instant.now(), workspace.id()));
                         PreparedRestore prepared = restores.prepare(
                                 expected, saved.commitId(), replay.commit(),
                                 value -> publishRestoreDiffProgress(progress, value));
@@ -2170,7 +2170,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                                 liveActions, author.id());
                         liveActions.pushCheckpoint(
                                 author.id(), new LiveActionJournal.Checkpoint(
-                                        value.expectedRef(), saved.commitId(),
+                                        value.expectedRef().name(), saved.commitId(), value.expectedRef().commit(),
                                         saved.branchRef(), value.scope().get()));
                     }
                 }

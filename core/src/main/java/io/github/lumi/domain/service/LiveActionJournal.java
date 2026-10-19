@@ -3,6 +3,7 @@ package io.github.lumi.domain.service;
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.BlockSnapshot;
 import io.github.lumi.domain.model.BranchRef;
+import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.WorldActionScope;
@@ -858,19 +859,20 @@ public final class LiveActionJournal {
             int delayedReferences) { }
 
     public record Checkpoint(
-            BranchRef expectedRef,
-            CommitId dirtyCommit,
-            BranchRef hiddenRef,
+            BranchName branch,
+            CommitId before,
+            CommitId after,
+            BranchRef retainedRef,
             WorldActionScope scope) {
-        public Checkpoint(BranchRef expectedRef, CommitId dirtyCommit, BranchRef hiddenRef) {
-            this(expectedRef, dirtyCommit, hiddenRef, WorldActionScope.unknown());
-        }
-
         public Checkpoint {
-            Objects.requireNonNull(expectedRef, "expectedRef");
-            Objects.requireNonNull(dirtyCommit, "dirtyCommit");
-            Objects.requireNonNull(hiddenRef, "hiddenRef");
+            Objects.requireNonNull(branch, "branch");
+            Objects.requireNonNull(before, "before");
+            Objects.requireNonNull(after, "after");
+            Objects.requireNonNull(retainedRef, "retainedRef");
             Objects.requireNonNull(scope, "scope");
+            if (!retainedRef.commit().equals(before) && !retainedRef.commit().equals(after)) {
+                throw new IllegalArgumentException("Checkpoint ref must retain one of its endpoints");
+            }
         }
     }
 
