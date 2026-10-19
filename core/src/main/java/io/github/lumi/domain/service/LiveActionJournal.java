@@ -2,11 +2,12 @@ package io.github.lumi.domain.service;
 
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.BlockSnapshot;
-import io.github.lumi.domain.model.BranchRef;
-import io.github.lumi.domain.model.BranchName;
-import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.EntityState;
-import io.github.lumi.domain.model.WorldActionScope;
+import io.github.lumi.domain.model.WorldActionCheckpoint;
+import io.github.lumi.domain.model.WorldActionRecord;
+import io.github.lumi.domain.model.WorldActionRecord.BlockDelta;
+import io.github.lumi.domain.model.WorldActionRecord.EntityDelta;
+import io.github.lumi.domain.model.WorldActionIndex;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.Collections;
@@ -37,9 +38,10 @@ public final class LiveActionJournal {
     private final Map<UUID, String> unavailableReasons = new HashMap<>();
     private final Map<BlockSnapshot, Integer> blockStateReferences = new HashMap<>();
     private final Limits limits;
-    private final Consumer<Checkpoint> checkpointRelease;
+    private final Consumer<WorldActionCheckpoint> checkpointRelease;
     private final Consumer<BlockSnapshot> blockStateRelease;
     private final LiveEntityStateReferences entityStates;
+    private long revision;
     private long nextSequence;
     private long retainedBytes;
     private long unsafeBeforeSequence;
@@ -52,26 +54,26 @@ public final class LiveActionJournal {
         this(limits, ignored -> { });
     }
 
-    public LiveActionJournal(Consumer<Checkpoint> checkpointRelease) {
+    public LiveActionJournal(Consumer<WorldActionCheckpoint> checkpointRelease) {
         this(Limits.DEFAULT, checkpointRelease);
     }
 
     public LiveActionJournal(
             Limits limits,
-            Consumer<Checkpoint> checkpointRelease) {
+            Consumer<WorldActionCheckpoint> checkpointRelease) {
         this(limits, checkpointRelease, ignored -> { });
     }
 
     /** Release callbacks must be idempotent and must not throw or reenter the journal. */
     public LiveActionJournal(
             Limits limits,
-            Consumer<Checkpoint> checkpointRelease,
+            Consumer<WorldActionCheckpoint> checkpointRelease,
             Consumer<BlockSnapshot> blockStateRelease) {
         this(limits, checkpointRelease, blockStateRelease, new LiveEntityStateReferences(ignored -> { }));
     }
 
     public LiveActionJournal(
-            Limits limits, Consumer<Checkpoint> checkpointRelease,
+            Limits limits, Consumer<WorldActionCheckpoint> checkpointRelease,
             Consumer<BlockSnapshot> blockStateRelease, LiveEntityStateReferences entityStates) {
         this.limits = Objects.requireNonNull(limits, "limits");
         this.checkpointRelease = Objects.requireNonNull(
@@ -81,6 +83,7 @@ public final class LiveActionJournal {
     }
 
     public synchronized UUID begin(UUID player) {
+        revision++;
         Objects.requireNonNull(player, "player");
         if (openActions.containsKey(player)) {
             throw new IllegalStateException("Player already has an open live action");
@@ -109,6 +112,7 @@ public final class LiveActionJournal {
             BlockPosition position,
             BlockSnapshot before,
             BlockSnapshot after) {
+        revision++;
         MutableAction causalAction = requireAction(actionId);
         Objects.requireNonNull(position, "position");
         Objects.requireNonNull(before, "before");
@@ -120,10 +124,10 @@ public final class LiveActionJournal {
         }
         MutableAction action = effectiveAction(
                 causalAction, position, blockOwners);
-        Change previous = action.changes.get(position);
-        Change updated = new Change(previous == null ? before : previous.before, after);
+        BlockDelta previous = action.changes.get(position);
+        BlockDelta updated = new BlockDelta(previous == null ? before : previous.before(), after);
         long previousBytes = previous == null ? 0 : estimatedBytes(previous);
-        long updatedBytes = updated.before.equals(updated.after) ? 0 : estimatedBytes(updated);
+        long updatedBytes = updated.before().equals(updated.after()) ? 0 : estimatedBytes(updated);
         // Pin the new endpoints before clearing Redo or evicting another owner.
         if (updatedBytes != 0) retainBlockStates(updated);
         boolean recorded = false;
@@ -135,6 +139,7 @@ public final class LiveActionJournal {
             if (updatedBytes == 0) action.changes.remove(position);
             else action.changes.put(position, updated);
             recorded = true;
+            action.revision++;
             blockOwners.set(position, action, updatedBytes != 0 && action.applied);
             return action.id;
         } finally {
@@ -149,6 +154,7 @@ public final class LiveActionJournal {
             UUID entityId,
             Optional<EntityState> before,
             Optional<EntityState> after) {
+        revision++;
         MutableAction causalAction = requireAction(actionId);
         if (!causalAction.available) {
             entityStates.discardUnowned(before);
@@ -160,9 +166,9 @@ public final class LiveActionJournal {
         validateEntityId(entityId, after);
         MutableAction action = effectiveAction(
                 causalAction, entityId, entityOwners);
-        EntityChange previous = action.entities.get(entityId);
-        EntityChange updated = new EntityChange(
-                previous == null ? before : previous.before, after);
+        EntityDelta previous = action.entities.get(entityId);
+        EntityDelta updated = new EntityDelta(
+                previous == null ? before : previous.before(), after);
         try {
             return replaceEntity(action, entityId, updated);
         } finally {
@@ -171,13 +177,13 @@ public final class LiveActionJournal {
         }
     }
 
-    private UUID replaceEntity(MutableAction action, UUID entityId, EntityChange updated) {
-        EntityChange previous = action.entities.get(entityId);
+    private UUID replaceEntity(MutableAction action, UUID entityId, EntityDelta updated) {
+        EntityDelta previous = action.entities.get(entityId);
         long previousBytes = previous == null ? 0 : estimatedBytes(previous);
-        long updatedBytes = updated.before.equals(updated.after) ? 0 : estimatedBytes(updated);
+        long updatedBytes = updated.before().equals(updated.after()) ? 0 : estimatedBytes(updated);
         if (updatedBytes != 0) {
-            entityStates.retain(updated.before);
-            entityStates.retain(updated.after);
+            entityStates.retain(updated.before());
+            entityStates.retain(updated.after());
         }
         boolean recorded = false;
         try {
@@ -188,23 +194,26 @@ public final class LiveActionJournal {
             if (updatedBytes == 0) action.entities.remove(entityId);
             else action.entities.put(entityId, updated);
             recorded = true;
+            action.revision++;
             entityOwners.set(entityId, action, updatedBytes != 0 && action.applied);
             return action.id;
         } finally {
             if (!recorded && updatedBytes != 0) releaseEntityStates(updated);
-            entityStates.discardUnowned(updated.before);
-            entityStates.discardUnowned(updated.after);
+            entityStates.discardUnowned(updated.before());
+            entityStates.discardUnowned(updated.after());
         }
     }
 
     /** Adds durable Restore endpoints and their compact conflict scope to the stack. */
-    public synchronized UUID pushCheckpoint(UUID player, Checkpoint checkpoint) {
+    public synchronized UUID pushCheckpoint(UUID player, WorldActionCheckpoint checkpoint) {
+        revision++;
         Objects.requireNonNull(checkpoint, "checkpoint");
         UUID actionId = begin(player);
         try {
             MutableAction action = requireAction(actionId);
             startRecording(action);
             action.checkpoint = checkpoint;
+            action.revision++;
             resize(action, checkpoint.scope().estimatedBytes());
             return actionId;
         } finally {
@@ -214,6 +223,7 @@ public final class LiveActionJournal {
 
     /** Joins causally inseparable actions into one session Undo/Redo entry. */
     public synchronized void mergeGroups(UUID firstAction, UUID secondAction) {
+        revision++;
         MutableAction first = requireAction(firstAction);
         MutableAction second = requireAction(secondAction);
         if (first.checkpoint != null || second.checkpoint != null) {
@@ -245,6 +255,7 @@ public final class LiveActionJournal {
             UUID actionId,
             UUID entityId,
             Optional<EntityState> before) {
+        revision++;
         MutableAction selected = requireAction(actionId);
         MutableAction action = actions.values().stream()
                 .filter(candidate -> candidate.groupId.equals(selected.groupId)
@@ -261,11 +272,12 @@ public final class LiveActionJournal {
         }
         Objects.requireNonNull(entityId, "entityId");
         validateEntityId(entityId, before);
-        EntityChange previous = action.entities.get(entityId);
-        replaceEntity(action, entityId, new EntityChange(before, previous.after));
+        EntityDelta previous = action.entities.get(entityId);
+        replaceEntity(action, entityId, new EntityDelta(before, previous.after()));
     }
 
     public synchronized boolean close(UUID actionId) {
+        revision++;
         MutableAction action = requireAction(actionId);
         if (action.closed) {
             return action.available && (!isEmpty(action) || action.causalReferences > 0);
@@ -289,16 +301,19 @@ public final class LiveActionJournal {
     }
 
     public synchronized void retain(UUID actionId) {
+        revision++;
         requireAction(actionId).causalReferences++;
     }
 
     /** A streamed edit is not undoable until its producer finishes or drains. */
     public synchronized void holdForMoreChanges(UUID actionId) {
+        revision++;
         requireAction(actionId);
         if (pendingChanges.add(actionId)) retain(actionId);
     }
 
     public synchronized void finishChanges(UUID actionId) {
+        revision++;
         if (pendingChanges.remove(actionId)) release(actionId);
     }
 
@@ -308,6 +323,7 @@ public final class LiveActionJournal {
     }
 
     public synchronized void release(UUID actionId) {
+        revision++;
         MutableAction action = actions.get(Objects.requireNonNull(actionId, "actionId"));
         if (action == null) {
             return;
@@ -332,6 +348,7 @@ public final class LiveActionJournal {
     }
 
     public synchronized void complete(Plan plan) {
+        revision++;
         Objects.requireNonNull(plan, "plan");
         PlayerStacks stacks = stacks(plan.player);
         Deque<UUID> source = plan.direction == Direction.UNDO ? stacks.undo : stacks.redo;
@@ -359,7 +376,8 @@ public final class LiveActionJournal {
     }
 
     public synchronized void clear() {
-        List<Checkpoint> checkpoints = actions.values().stream()
+        revision++;
+        List<WorldActionCheckpoint> checkpoints = actions.values().stream()
                 .map(action -> action.checkpoint)
                 .filter(Objects::nonNull)
                 .toList();
@@ -383,6 +401,33 @@ public final class LiveActionJournal {
         return Optional.ofNullable(unavailableReasons.get(Objects.requireNonNull(player, "player")));
     }
 
+    public synchronized long revision() { return revision; }
+
+    /** Captures only order/ownership metadata; payloads are copied individually off-thread. */
+    public synchronized WorldActionIndex snapshotIndex() {
+        var records = actions.values().stream().filter(action -> action.available)
+                .sorted(java.util.Comparator.comparingLong(action -> action.sequence))
+                .map(action -> new WorldActionRecord.Metadata(
+                        action.id, action.player, action.sequence, action.groupId, action.revision,
+                        action.applied, action.closed, !action.closed || action.causalReferences > 0
+                                || pendingChanges.contains(action.id), Optional.ofNullable(action.checkpoint)))
+                .toList();
+        var players = new HashMap<UUID, WorldActionIndex.Stacks>();
+        playerStacks.forEach((player, stacks) -> players.put(player,
+                new WorldActionIndex.Stacks(List.copyOf(stacks.undo), List.copyOf(stacks.redo))));
+        return new WorldActionIndex(revision, nextSequence, unsafeBeforeSequence, records, players);
+    }
+
+    /** A changed action retries next pass rather than publishing mismatched payload and cursor. */
+    public synchronized WorldActionRecord snapshotAction(WorldActionRecord.Metadata expected) {
+        MutableAction action = actions.get(expected.id());
+        if (action == null || !action.available || action.revision != expected.revision()
+                || !action.player.equals(expected.actor()) || action.sequence != expected.sequence()) {
+            throw new java.util.ConcurrentModificationException("Action changed during history capture");
+        }
+        return new WorldActionRecord(expected, new WorldActionRecord.Payload(action.changes, action.entities));
+    }
+
     public synchronized boolean hasEntityChange(UUID actionId, UUID entityId) {
         MutableAction action = actions.get(Objects.requireNonNull(actionId, "actionId"));
         return action != null && action.available && action.entities.containsKey(entityId);
@@ -401,6 +446,7 @@ public final class LiveActionJournal {
     }
 
     public synchronized void makeUnavailable(UUID actionId, String reason) {
+        revision++;
         MutableAction action = requireAction(actionId);
         if (action.closed) {
             throw new IllegalStateException("Cannot disable a closed live action");
@@ -458,17 +504,17 @@ public final class LiveActionJournal {
                 }
             }
         }
-        Map<BlockPosition, Change> blocks = new LinkedHashMap<>();
-        Map<UUID, EntityChange> entities = new LinkedHashMap<>();
+        Map<BlockPosition, BlockDelta> blocks = new LinkedHashMap<>();
+        Map<UUID, EntityDelta> entities = new LinkedHashMap<>();
         for (MutableAction action : group) {
             action.changes.forEach((position, change) -> blocks.merge(
                     position, change,
                     (previous, latest) ->
-                            new Change(previous.before, latest.after)));
+                            new BlockDelta(previous.before(), latest.after())));
             action.entities.forEach((entity, change) -> entities.merge(
                     entity, change,
                     (previous, latest) ->
-                            new EntityChange(previous.before, latest.after)));
+                            new EntityDelta(previous.before(), latest.after())));
         }
         List<MutableAction> applicationOrder = direction == Direction.UNDO
                 ? group.reversed() : group;
@@ -483,14 +529,14 @@ public final class LiveActionJournal {
         Map<UUID, Optional<EntityState>> expectedEntities = new LinkedHashMap<>();
         Map<UUID, Optional<EntityState>> replacementEntities = new LinkedHashMap<>();
         blockOrder.forEach(position -> {
-            Change change = blocks.get(position);
-            expected.put(position, direction == Direction.UNDO ? change.after : change.before);
-            replacement.put(position, direction == Direction.UNDO ? change.before : change.after);
+            BlockDelta change = blocks.get(position);
+            expected.put(position, direction == Direction.UNDO ? change.after() : change.before());
+            replacement.put(position, direction == Direction.UNDO ? change.before() : change.after());
         });
         entityOrder.forEach(id -> {
-            EntityChange change = entities.get(id);
-            expectedEntities.put(id, direction == Direction.UNDO ? change.after : change.before);
-            replacementEntities.put(id, direction == Direction.UNDO ? change.before : change.after);
+            EntityDelta change = entities.get(id);
+            expectedEntities.put(id, direction == Direction.UNDO ? change.after() : change.before());
+            replacementEntities.put(id, direction == Direction.UNDO ? change.before() : change.after());
         });
         return Optional.of(new Plan(
                 player, group.stream().map(action -> action.id).toList(),
@@ -726,19 +772,19 @@ public final class LiveActionJournal {
         }
     }
 
-    private void releaseEntityStates(EntityChange change) {
-        entityStates.release(change.before);
-        entityStates.release(change.after);
+    private void releaseEntityStates(EntityDelta change) {
+        entityStates.release(change.before());
+        entityStates.release(change.after());
     }
 
-    private void retainBlockStates(Change change) {
-        blockStateReferences.merge(change.before, 1, Integer::sum);
-        blockStateReferences.merge(change.after, 1, Integer::sum);
+    private void retainBlockStates(BlockDelta change) {
+        blockStateReferences.merge(change.before(), 1, Integer::sum);
+        blockStateReferences.merge(change.after(), 1, Integer::sum);
     }
 
-    private void releaseBlockStates(Change change) {
-        releaseBlockState(change.before);
-        releaseBlockState(change.after);
+    private void releaseBlockStates(BlockDelta change) {
+        releaseBlockState(change.before());
+        releaseBlockState(change.after());
     }
 
     private void releaseBlockState(BlockSnapshot snapshot) {
@@ -765,8 +811,8 @@ public final class LiveActionJournal {
         }
     }
 
-    private static long estimatedBytes(Change change) {
-        return 24L + estimatedBytes(change.before) + estimatedBytes(change.after);
+    private static long estimatedBytes(BlockDelta change) {
+        return 24L + estimatedBytes(change.before()) + estimatedBytes(change.after());
     }
 
     private static long estimatedBytes(BlockSnapshot snapshot) {
@@ -774,9 +820,9 @@ public final class LiveActionJournal {
                 + snapshot.blockEntity().map(nbt -> nbt.byteSize()).orElse(0);
     }
 
-    private static long estimatedBytes(EntityChange change) {
-        return 24L + change.before.map(LiveActionJournal::estimatedBytes).orElse(0L)
-                + change.after.map(LiveActionJournal::estimatedBytes).orElse(0L);
+    private static long estimatedBytes(EntityDelta change) {
+        return 24L + change.before().map(LiveActionJournal::estimatedBytes).orElse(0L)
+                + change.after().map(LiveActionJournal::estimatedBytes).orElse(0L);
     }
 
     private static long estimatedBytes(EntityState state) {
@@ -812,7 +858,7 @@ public final class LiveActionJournal {
             Map<BlockPosition, BlockSnapshot> replacement,
             Map<UUID, Optional<EntityState>> expectedEntities,
             Map<UUID, Optional<EntityState>> replacementEntities,
-            Optional<Checkpoint> checkpoint) {
+            Optional<WorldActionCheckpoint> checkpoint) {
         public Plan {
             Objects.requireNonNull(player, "player");
             actionIds = List.copyOf(Objects.requireNonNull(
@@ -843,7 +889,7 @@ public final class LiveActionJournal {
     }
 
     private void releaseCheckpoint(MutableAction action) {
-        Checkpoint checkpoint = action.checkpoint;
+        WorldActionCheckpoint checkpoint = action.checkpoint;
         action.checkpoint = null;
         if (checkpoint != null) {
             checkpointRelease.accept(checkpoint);
@@ -857,24 +903,6 @@ public final class LiveActionJournal {
             int entities,
             long bytes,
             int delayedReferences) { }
-
-    public record Checkpoint(
-            BranchName branch,
-            CommitId before,
-            CommitId after,
-            BranchRef retainedRef,
-            WorldActionScope scope) {
-        public Checkpoint {
-            Objects.requireNonNull(branch, "branch");
-            Objects.requireNonNull(before, "before");
-            Objects.requireNonNull(after, "after");
-            Objects.requireNonNull(retainedRef, "retainedRef");
-            Objects.requireNonNull(scope, "scope");
-            if (!retainedRef.commit().equals(before) && !retainedRef.commit().equals(after)) {
-                throw new IllegalArgumentException("Checkpoint ref must retain one of its endpoints");
-            }
-        }
-    }
 
     private static final class MutableAction {
         private boolean overlapsCheckpoint(MutableAction other) {
@@ -892,14 +920,15 @@ public final class LiveActionJournal {
         private final UUID player;
         private final long sequence;
         private UUID groupId;
-        private final Map<BlockPosition, Change> changes = new LinkedHashMap<>();
-        private final Map<UUID, EntityChange> entities = new LinkedHashMap<>();
+        private final Map<BlockPosition, BlockDelta> changes = new LinkedHashMap<>();
+        private final Map<UUID, EntityDelta> entities = new LinkedHashMap<>();
         private boolean closed;
         private boolean started;
         private boolean available = true;
         private boolean applied = true;
-        private Checkpoint checkpoint;
+        private WorldActionCheckpoint checkpoint;
         private long bytes;
+        private long revision;
         private int causalReferences;
 
         private MutableAction(UUID id, UUID player, long sequence) {
@@ -909,10 +938,6 @@ public final class LiveActionJournal {
             groupId = id;
         }
     }
-
-    private record Change(BlockSnapshot before, BlockSnapshot after) {}
-
-    private record EntityChange(Optional<EntityState> before, Optional<EntityState> after) {}
 
     private record Ownership(UUID actionId, long sequence) {}
 

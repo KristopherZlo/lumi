@@ -28,6 +28,7 @@ import io.github.lumi.minecraft.operation.WorkingIndexRecoveryPublication;
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.WorldActionScope;
+import io.github.lumi.domain.model.WorldActionCheckpoint;
 import io.github.lumi.domain.model.BranchSwitchPlan;
 import io.github.lumi.domain.model.ActiveBranch;
 import io.github.lumi.domain.model.ActionReplayTarget;
@@ -1100,7 +1101,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     private CheckpointActionOperation createCheckpointAction(
             LiveActionJournal.Plan plan) throws IOException {
-        LiveActionJournal.Checkpoint checkpoint = plan.checkpoint().orElseThrow();
+        WorldActionCheckpoint checkpoint = plan.checkpoint().orElseThrow();
         BranchRef expected = activeRef();
         if (!expected.name().equals(checkpoint.branch())) {
             throw new IOException("Checkpoint action belongs to another branch");
@@ -2171,7 +2172,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         DirectLiveActionContext.recoverOrphanedAction(
                                 liveActions, author.id());
                         liveActions.pushCheckpoint(
-                                author.id(), new LiveActionJournal.Checkpoint(
+                                author.id(), new WorldActionCheckpoint(
                                         value.expectedRef().name(), saved.commitId(), value.expectedRef().commit(),
                                         saved.branchRef(), value.scope().get()));
                     }

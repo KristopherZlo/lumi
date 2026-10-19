@@ -8,6 +8,7 @@ import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.WorldActionScope;
+import io.github.lumi.domain.model.WorldActionCheckpoint;
 import io.github.lumi.domain.service.LiveActionJournal;
 import java.util.Optional;
 import java.util.UUID;
@@ -63,7 +64,7 @@ class CheckpointActionOperationTest {
 
     private static LiveActionJournal checkpointJournal() {
         LiveActionJournal journal = new LiveActionJournal();
-        journal.pushCheckpoint(PLAYER, new LiveActionJournal.Checkpoint(
+        journal.pushCheckpoint(PLAYER, new WorldActionCheckpoint(
                 new BranchName("main"), id('2'), id('1'), new BranchRef(
                         new BranchName("hidden/session-undo/test"), id('2'), 0), WorldActionScope.empty()));
         return journal;

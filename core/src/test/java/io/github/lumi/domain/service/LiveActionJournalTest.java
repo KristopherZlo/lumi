@@ -14,6 +14,8 @@ import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorldActionScope;
+import io.github.lumi.domain.model.WorldActionCheckpoint;
+import io.github.lumi.domain.model.WorldActionIndex;
 import io.github.lumi.domain.model.ObjectId;
 import java.util.List;
 import java.util.Map;
@@ -208,7 +210,7 @@ class LiveActionJournalTest {
     @Test
     void checkpointMovesAsOneConstantSizeStackEntry() {
         LiveActionJournal journal = new LiveActionJournal();
-        var checkpoint = new LiveActionJournal.Checkpoint(
+        var checkpoint = new WorldActionCheckpoint(
                 new BranchName("main"), commit('2'), commit('1'), new BranchRef(
                         new BranchName("hidden/session-undo/checkpoint"), commit('2'), 0),
                 WorldActionScope.empty());
@@ -226,12 +228,55 @@ class LiveActionJournalTest {
     }
 
     @Test
+    void capturesPortablePayloadSeparatelyFromTheUndoRedoCursor() {
+        var journal = new LiveActionJournal();
+        UUID action = journal.begin(PLAYER_A);
+        journal.record(action, POSITION, block("stone"), block("gold_block"));
+        journal.close(action);
+        var checkpoint = checkpoint('1');
+        UUID restore = journal.pushCheckpoint(PLAYER_A, checkpoint);
+        journal.complete(journal.prepareUndo(PLAYER_A).orElseThrow());
+
+        var index = journal.snapshotIndex();
+        var exported = journal.snapshotAction(index.actions().getFirst());
+        assertEquals(List.of(action), index.players().get(PLAYER_A).undo());
+        assertEquals(List.of(restore), index.players().get(PLAYER_A).redo());
+        assertEquals(Optional.of(checkpoint), index.actions().getLast().checkpoint());
+        assertEquals(block("stone"), exported.payload().blocks().get(POSITION).before());
+        assertThrows(UnsupportedOperationException.class, () -> exported.payload().blocks().clear());
+
+        journal.record(action, POSITION, block("gold_block"), block("diamond_block"));
+        assertEquals(block("gold_block"), exported.payload().blocks().get(POSITION).after());
+        assertTrue(journal.revision() > index.revision());
+        assertThrows(java.util.ConcurrentModificationException.class,
+                () -> journal.snapshotAction(index.actions().getFirst()));
+        assertThrows(IllegalArgumentException.class, () -> new WorldActionIndex(
+                index.revision(), index.nextSequence(), index.unsafeBeforeSequence(), index.actions(),
+                Map.of(PLAYER_B, index.players().get(PLAYER_A))));
+    }
+
+    @Test
+    void portableIndexKeepsProducerCompletionWithoutRewritingThePayload() {
+        var journal = new LiveActionJournal();
+        UUID action = journal.begin(PLAYER_A);
+        journal.record(action, POSITION, block("stone"), block("gold_block"));
+        journal.holdForMoreChanges(action);
+        journal.close(action);
+        var pending = journal.snapshotIndex().actions().getFirst();
+        assertTrue(pending.pending());
+        journal.finishChanges(action);
+        var finished = journal.snapshotIndex().actions().getFirst();
+        assertTrue(!finished.pending());
+        assertEquals(pending.revision(), finished.revision());
+    }
+
+    @Test
     void invalidCheckpointCannotLeaveAnOpenAction() {
         LiveActionJournal journal = new LiveActionJournal();
 
         assertThrows(NullPointerException.class,
                 () -> journal.pushCheckpoint(PLAYER_A, null));
-        assertThrows(IllegalArgumentException.class, () -> new LiveActionJournal.Checkpoint(
+        assertThrows(IllegalArgumentException.class, () -> new WorldActionCheckpoint(
                 new BranchName("main"), commit('1'), commit('2'),
                 new BranchRef(new BranchName("hidden/session-undo/invalid"), commit('3'), 0),
                 WorldActionScope.empty()));
@@ -242,7 +287,7 @@ class LiveActionJournalTest {
 
     @Test
     void releasesCheckpointOnlyWhenItLeavesTheSessionHistory() {
-        var released = new java.util.ArrayList<LiveActionJournal.Checkpoint>();
+        var released = new java.util.ArrayList<WorldActionCheckpoint>();
         LiveActionJournal journal = new LiveActionJournal(released::add);
         var first = checkpoint('1');
         var second = checkpoint('2');
@@ -337,7 +382,7 @@ class LiveActionJournalTest {
         assertThrows(IllegalStateException.class, () -> journal.prepareUndo(PLAYER_A));
     }
 
-    private static LiveActionJournal.Checkpoint scopedCheckpoint(BlockPosition position) {
+    private static WorldActionCheckpoint scopedCheckpoint(BlockPosition position) {
         var key = new SectionKey(position.x() >> 4, position.y() >> 4, position.z() >> 4);
         var before = new SectionBlob(java.util.Collections.nCopies(SectionBlob.BLOCK_COUNT,
                 "minecraft:stone"), Map.of());
@@ -347,7 +392,7 @@ class LiveActionJournalTest {
         var scope = WorldActionScope.between(Map.of(key, before),
                 Map.of(key, new SectionBlob(states, Map.of())), Map.of(), Map.of());
         var checkpoint = checkpoint('1');
-        return new LiveActionJournal.Checkpoint(checkpoint.branch(), checkpoint.before(), checkpoint.after(),
+        return new WorldActionCheckpoint(checkpoint.branch(), checkpoint.before(), checkpoint.after(),
                 checkpoint.retainedRef(), scope);
     }
 
@@ -836,9 +881,9 @@ class LiveActionJournalTest {
         return action;
     }
 
-    private static LiveActionJournal.Checkpoint checkpoint(char value) {
+    private static WorldActionCheckpoint checkpoint(char value) {
         CommitId dirty = commit(value);
-        return new LiveActionJournal.Checkpoint(
+        return new WorldActionCheckpoint(
                 new BranchName("main"), dirty, commit('0'), new BranchRef(
                         new BranchName("hidden/session-undo/" + value), dirty, 0), WorldActionScope.empty());
     }
