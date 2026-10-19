@@ -36,6 +36,30 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class MergeServiceTest {
+    @Test void projectsLiveActionEndpointsOntoTheCapturedWorldWithoutMovingSavedRefs() throws Exception {
+        var objects = new WorldObjectRepository(repositoryRoot);
+        var commits = new CommitRepository(repositoryRoot);
+        var origins = new OriginStore(repositoryRoot);
+        var captured = commits.write(commit(objects, List.of(), section("minecraft:gold_block", "minecraft:barrel"), "Captured"));
+        var refs = new BranchRefRepository(repositoryRoot);
+        var saved = refs.create(new BranchName("main"), captured);
+        var journal = new LiveActionJournal();
+        var actor = author().id();
+        UUID action = journal.begin(actor);
+        journal.record(action, new io.github.lumi.domain.model.BlockPosition(0, 0, 0),
+                new io.github.lumi.domain.model.BlockSnapshot("minecraft:stone", Optional.empty()),
+                new io.github.lumi.domain.model.BlockSnapshot("minecraft:gold_block", Optional.empty()));
+        journal.close(action);
+        var plan = journal.prepareUndo(actor).orElseThrow();
+        var service = new ActionReplayPreparation(objects, commits, origins,
+                io.github.lumi.domain.model.WorldDataVersion.LEGACY_12111);
+        CommitId target = service.prepare(captured, plan, Map.of(), author());
+        assertEquals(section("minecraft:stone", "minecraft:barrel"), readSection(objects, commits.read(target)));
+        assertEquals(Optional.of(saved), refs.read(saved.name()));
+        var conflict = commits.write(commit(objects, List.of(), section("minecraft:diamond_block", "minecraft:barrel"), "Conflict"));
+        assertThrows(java.io.IOException.class, () -> service.prepare(conflict, plan, Map.of(), author()));
+    }
+
     @TempDir java.nio.file.Path repositoryRoot;
 
     @Test
