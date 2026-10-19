@@ -169,6 +169,12 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
             var operations = new LumiBehaviorOperations(context, world.getServer(), report);
             operations.nativeHistoryStep("axiom_redo_after_reopen", false);
             checks.assertSnapshot("axiom_redo_after_reopen", area, redoExpected);
+            var head = operations.activeCommit();
+            operations.clearNativeHistory();
+            context.waitFor(client -> io.github.lumi.client.LumiClient.networking().worldActions()
+                    .filter(view -> view.view().undo().isEmpty() && view.view().redo().isEmpty()).isPresent());
+            if (!head.equals(operations.activeCommit())) throw new AssertionError("Clearing Undo changed the saved HEAD");
+            checks.assertSnapshot("axiom_clear_keeps_world", area, redoExpected);
         }
         if (loaded("axiom")) assertBiomes(world);
         checks.finish();

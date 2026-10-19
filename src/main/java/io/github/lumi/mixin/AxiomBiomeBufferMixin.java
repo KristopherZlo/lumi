@@ -8,7 +8,7 @@ import io.github.lumi.LumiMod;
 import net.minecraft.server.level.ServerLevel;
 import org.spongepowered.asm.mixin.Mixin;
 
-/** Biomes stay outside history but cannot change during an exact frozen operation. */
+/** Biomes enter world Undo/Redo, stay outside saved versions, and respect the dimension freeze. */
 @Mixin(value = AxiomServerboundSetBuffer.class, remap = false)
 abstract class AxiomBiomeBufferMixin {
     @WrapMethod(method = "applyBiomeBufferServer")

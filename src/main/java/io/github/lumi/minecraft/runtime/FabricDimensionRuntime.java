@@ -1115,14 +1115,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             UUID player,
             LiveActionJournal.Direction direction,
             Consumer<DimensionMutation> terminalObserver) {
-        requireNoRecovery();
         try {
-            cancelPendingStatistics();
+            requireActionIdle();
         } catch (IOException failed) {
             throw new java.io.UncheckedIOException(failed);
-        }
-        if (operations.hasActiveOperation() || operations.queuedCount() > 0) {
-            throw new IllegalStateException("luma.status.world_operation_busy");
         }
         var operation = new DeferredDimensionMutation(
                 true, () -> createSessionAction(player, direction));
@@ -1131,8 +1127,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     public synchronized DimensionMutation startClearWorldActions(UUID player, Consumer<DimensionMutation> terminalObserver) throws IOException {
-        requireNoRecovery();
-        if (operations.hasActiveOperation() || operations.queuedCount() > 0) throw new IllegalStateException("luma.status.world_operation_busy");
+        requireActionIdle();
         var operation = new DeferredDimensionMutation(true, () -> {
             liveEntities.finalizeOwned();
             return new io.github.lumi.minecraft.operation.WorldActionClearOperation(() -> {
@@ -1147,6 +1142,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return operation;
     }
 
+    private void requireActionIdle() throws IOException {
+        requireNoRecovery();
+        cancelPendingStatistics();
+        if (operations.hasActiveOperation() || operations.queuedCount() > 0)
+            throw new IllegalStateException("luma.status.world_operation_busy");
+    }
+
     private DimensionMutation createSessionAction(
             UUID player,
             LiveActionJournal.Direction direction) throws IOException {
@@ -1156,7 +1158,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         : liveActions.prepareRedo(player);
         if (selected.flatMap(LiveActionJournal.Plan::checkpoint).isPresent()) {
             var plan = selected.orElseThrow();
-        return new CheckpointActionOperation(liveActions, plan, createActionReplay(plan));
+            return new CheckpointActionOperation(liveActions, plan, createActionReplay(plan));
         }
         if (direction == LiveActionJournal.Direction.UNDO && selected.isPresent()) {
             int activeTntRoots = causalTicks.joinActiveTntRoots(

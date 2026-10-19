@@ -34,8 +34,9 @@ public final class AxiomWorldHistory {
 
     private boolean ready() {
         var client = Minecraft.getInstance();
-        return client.level != null && LumiClient.networking().worldActions()
-                .filter(value -> value.dimension().equals(client.level.dimension().identifier().toString())).isPresent();
+        return client.level != null && client.player != null && LumiClient.networking().worldActions()
+                .filter(value -> value.dimension().equals(client.level.dimension().identifier().toString())
+                        && LumiClient.history().state().snapshot().filter(snapshot -> snapshot.dimensionId().equals(value.dimension())).isPresent()).isPresent();
     }
 
     public boolean step(boolean undo) {
@@ -101,6 +102,11 @@ public final class AxiomWorldHistory {
         var buffer = AxiomDispatcherPendingAccess.lumi$history();
         var view = payload.view();
         if (mirroredEpoch != null && !mirroredEpoch.equals(payload.epoch())) navigating = false;
+        if (navigating) {
+            var known = java.util.stream.Stream.concat(mirroredUndo.stream(), mirroredRedo.stream())
+                    .map(WorldActionView.Entry::action).collect(java.util.stream.Collectors.toSet());
+            if (entries(view).stream().anyMatch(action -> !known.contains(action.action()))) navigating = false;
+        }
         if (buffer == mirroredBuffer && payload.epoch().equals(mirroredEpoch)
                 && view.undo().equals(mirroredUndo) && view.redo().equals(mirroredRedo)
                 && buffer.getSize() == view.undo().size() + view.redo().size()

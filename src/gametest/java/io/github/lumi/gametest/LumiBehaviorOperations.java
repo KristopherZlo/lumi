@@ -267,11 +267,19 @@ final class LumiBehaviorOperations {
     }
 
     void nativeHistoryStep(String name, boolean undo) throws IOException {
+        nativeHistoryAction(name, () -> com.moulberry.axiom.world_modification.Dispatcher.callAction(
+                undo ? com.moulberry.axiom.UserAction.UNDO : com.moulberry.axiom.UserAction.REDO, null));
+    }
+
+    void clearNativeHistory() throws IOException {
+        nativeHistoryAction("axiom_clear_history", com.moulberry.axiom.world_modification.Dispatcher::clear);
+    }
+
+    private void nativeHistoryAction(String name, Runnable action) throws IOException {
         runOperation(name, () -> {
             context.waitFor(client -> !io.github.lumi.client.integration.AxiomClientWorkBarrier.isPaused()
                     && !LumiClient.networking().worldActionPending());
-            context.runOnClient(client -> com.moulberry.axiom.world_modification.Dispatcher.callAction(
-                    undo ? com.moulberry.axiom.UserAction.UNDO : com.moulberry.axiom.UserAction.REDO, null));
+            context.runOnClient(client -> action.run());
         });
     }
 
