@@ -21,10 +21,12 @@ public final class GarbageCollector {
     private final OriginStore origins;
     private final TombstoneRepository tombstones;
     private final RepositoryMaintenance maintenance;
+    private final WorldActionHistoryRepository actionHistory;
 
     public GarbageCollector(Path dimensionRepository) {
         Objects.requireNonNull(dimensionRepository, "dimensionRepository");
         maintenance = RepositoryMaintenance.forRepository(dimensionRepository);
+        actionHistory = new WorldActionHistoryRepository(dimensionRepository);
         objects = new ObjectStore(dimensionRepository.resolve("objects"));
         commits = new ObjectStore(dimensionRepository.resolve("commits"));
         worldGraph = new WorldObjectGraph(new WorldObjectRepository(dimensionRepository));
@@ -74,6 +76,7 @@ public final class GarbageCollector {
         Objects.requireNonNull(retainedCommits, "retainedCommits");
         Objects.requireNonNull(deleteBefore, "deleteBefore");
         Set<CommitId> roots = new HashSet<>(retainedCommits);
+        roots.addAll(actionHistory.retainedCommits());
         refs.list().forEach(ref -> roots.add(ref.commit()));
         tombstones.list().forEach(tombstone -> roots.add(tombstone.commit()));
         Set<ObjectId> allCommitObjects = commits.listIds();

@@ -14,6 +14,13 @@ import io.github.lumi.domain.model.CommitStatistics;
 import io.github.lumi.domain.model.CommitTombstone;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.WorldActionCheckpoint;
+import io.github.lumi.domain.model.WorldActionIndex;
+import io.github.lumi.domain.model.WorldActionRecord;
+import io.github.lumi.domain.model.WorldActionScope;
+import io.github.lumi.domain.model.WorldDataVersion;
+import io.github.lumi.domain.model.BranchRef;
+import io.github.lumi.storage.object.WorldActionIndexCodec;
 import io.github.lumi.storage.object.ObjectStore;
 import io.github.lumi.storage.RepositoryMaintenance;
 import java.io.IOException;
@@ -132,8 +139,9 @@ class GarbageCollectorTest {
         assertTrue(Files.exists(loosePath(freshCommitPayload)));
     }
 
-    @Test
-    void retainsTombstonedDataUntilExplicitCleanup() throws IOException {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void retainsRecoveryRootsUntilExplicitCleanup(boolean actionHistory) throws IOException {
         ObjectStore rawObjects = new ObjectStore(repositoryRoot.resolve("objects"));
         ObjectId payload = rawObjects.write(new byte[] {9});
         WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
@@ -142,8 +150,18 @@ class GarbageCollectorTest {
         CommitRepository commits = new CommitRepository(repositoryRoot);
         var commitId = commits.write(commit(tree));
         TombstoneRepository tombstones = new TombstoneRepository(repositoryRoot);
-        tombstones.create(new CommitTombstone(
-                commitId, new CommitAuthor(new UUID(0, 7), "Builder"), Instant.EPOCH));
+        UUID actor = new UUID(0, 7), action = new UUID(0, 8);
+        var history = new WorldActionHistoryRepository(repositoryRoot);
+        var checkpoint = new WorldActionCheckpoint(new BranchName("main"), commitId, commitId,
+                new BranchRef(new BranchName("hidden/session-undo/test"), commitId, 0), WorldActionScope.empty());
+        var index = new WorldActionIndex(1, 1, 0, List.of(new WorldActionRecord.Metadata(action, actor, 1,
+                action, 1, true, true, false, Optional.of(checkpoint))),
+                Map.of(actor, new WorldActionIndex.Stacks(List.of(action), List.of())));
+        var state = new WorldActionIndexCodec.State(UUID.randomUUID(), new WorldDataVersion(5000),
+                UUID.randomUUID(), new BranchName("main"), index, Map.of(), Optional.empty());
+        if (actionHistory) history.writeIndex(state);
+        else tombstones.create(new CommitTombstone(
+                commitId, new CommitAuthor(actor, "Builder"), Instant.EPOCH));
         Instant cutoff = Instant.parse("2026-07-15T12:00:00Z");
         makeOld(repositoryRoot.resolve("objects"), cutoff.minus(Duration.ofDays(2)));
         makeOld(repositoryRoot.resolve("commits"), cutoff.minus(Duration.ofDays(2)));
@@ -151,7 +169,9 @@ class GarbageCollectorTest {
         new GarbageCollector(repositoryRoot).collect(Set.of(), cutoff);
         assertArrayEquals(new byte[] {9}, rawObjects.read(payload));
 
-        tombstones.delete(commitId);
+        if (actionHistory) history.writeIndex(new WorldActionIndexCodec.State(state.epoch(), state.dataVersion(),
+                state.workspace(), state.branch(), new WorldActionIndex(2, 1, 1, List.of(), Map.of()), Map.of(), Optional.empty()));
+        else tombstones.delete(commitId);
         new GarbageCollector(repositoryRoot).collect(Set.of(), cutoff);
 
         assertThrows(NoSuchFileException.class, () -> commits.read(commitId));

@@ -32,9 +32,41 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.Set;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import io.github.lumi.storage.repository.WorldActionHistoryRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class WorldActionPayloadCodecTest {
+    @Test
+    void publishesOnlyCompleteRootsAndVerifiesCompressedPayloads(@TempDir Path root) throws IOException {
+        var repository = new WorldActionHistoryRepository(root);
+        var version = new WorldDataVersion(5000);
+        var record = new WorldActionRecord(metadata(1), new WorldActionRecord.Payload(Map.of(), Map.of()));
+        UUID blob = repository.writePayload(record, version);
+        var index = new WorldActionIndex(1, 1, 0, List.of(record.metadata()), Map.of(record.metadata().actor(),
+                new WorldActionIndex.Stacks(List.of(record.metadata().id()), List.of())));
+        var state = new WorldActionIndexCodec.State(UUID.randomUUID(), version, UUID.randomUUID(),
+                new BranchName("main"), index, Map.of(record.metadata().id(), blob), Optional.empty());
+        repository.writeIndex(state);
+        var reopened = new WorldActionHistoryRepository(root);
+        assertEquals(state, reopened.readIndex().orElseThrow());
+        assertEquals(record, reopened.readPayload(metadata(1), blob, version, 4096));
+        var incomplete = new WorldActionIndexCodec.State(state.epoch(), version, state.workspace(), state.branch(),
+                index, Map.of(record.metadata().id(), UUID.randomUUID()), Optional.empty());
+        assertThrows(IOException.class, () -> reopened.writeIndex(incomplete));
+        assertEquals(state, reopened.readIndex().orElseThrow());
+        UUID orphan = repository.writePayload(record, version);
+        repository.removeUnreferencedPayloads();
+        assertThrows(IOException.class, () -> repository.readPayload(metadata(1), orphan, version, 4096));
+        Path payload = root.resolve("actions/payloads/" + blob + ".bin.gz");
+        byte[] broken = Files.readAllBytes(payload);
+        broken[broken.length - 5] ^= 1;
+        Files.write(payload, broken);
+        assertThrows(IOException.class, () -> repository.readPayload(metadata(1), blob, version, 4096));
+    }
+
     @Test
     void roundTripsTheCursorWithCheckpointOwnershipAndRejectsCorruption() throws IOException {
         var before = CommitId.hash(new byte[] {1});
