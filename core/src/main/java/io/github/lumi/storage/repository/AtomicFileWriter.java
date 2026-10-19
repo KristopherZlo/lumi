@@ -11,6 +11,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.locks.LockSupport;
 
 final class AtomicFileWriter {
@@ -27,19 +29,60 @@ final class AtomicFileWriter {
         try {
             write(temporary, content);
             beforeMove.run();
-            try {
-                retryAccessDenied(() -> Files.move(
-                        temporary, target, StandardCopyOption.ATOMIC_MOVE,
-                        StandardCopyOption.REPLACE_EXISTING));
-            } catch (AtomicMoveNotSupportedException unsupported) {
-                throw new IOException("Repository requires atomic moves: " + target, unsupported);
-            }
+            moveReplacement(temporary, target);
             if (!Arrays.equals(content,
                     RepositoryFileReader.read(target, content.length))) {
                 throw new IOException("Atomic file verification failed: " + target);
             }
         } finally {
             Files.deleteIfExists(temporary);
+        }
+    }
+
+    /** Publishes a fully encoded sibling file without retaining a second payload-sized byte array. */
+    static void replacePrepared(Path target, Path temporary) throws IOException {
+        target = target.toAbsolutePath().normalize();
+        temporary = temporary.toAbsolutePath().normalize();
+        if (target.equals(temporary) || !target.getParent().equals(temporary.getParent())
+                || Files.isSymbolicLink(temporary) || !Files.isRegularFile(temporary)) {
+            throw new IOException("Prepared repository file must be a regular sibling of its target");
+        }
+        try {
+            try (FileChannel channel = FileChannel.open(temporary, StandardOpenOption.WRITE)) {
+                channel.force(true);
+            }
+            byte[] expected = fingerprint(temporary);
+            moveReplacement(temporary, target);
+            if (!MessageDigest.isEqual(expected, fingerprint(target))) {
+                throw new IOException("Atomic file verification failed: " + target);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
+    }
+
+    private static void moveReplacement(Path temporary, Path target) throws IOException {
+        try {
+            retryAccessDenied(() -> Files.move(temporary, target,
+                    StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING));
+        } catch (AtomicMoveNotSupportedException unsupported) {
+            throw new IOException("Repository requires atomic moves: " + target, unsupported);
+        }
+    }
+
+    private static byte[] fingerprint(Path file) throws IOException {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (var input = Files.newInputStream(file)) {
+                byte[] buffer = new byte[16 * 1024];
+                for (int read; (read = input.read(buffer)) != -1;) {
+                    if (Thread.currentThread().isInterrupted()) throw new InterruptedIOException("File verification interrupted");
+                    digest.update(buffer, 0, read);
+                }
+            }
+            return digest.digest();
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new AssertionError(impossible);
         }
     }
 

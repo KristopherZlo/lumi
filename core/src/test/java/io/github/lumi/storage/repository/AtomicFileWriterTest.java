@@ -41,4 +41,20 @@ class AtomicFileWriterTest {
 
         org.junit.jupiter.api.Assertions.assertEquals(3, attempts.get());
     }
+
+    @Test
+    void publishesPreparedPayloadAndRejectsAnotherDirectory() throws IOException {
+        Path directory = Files.createDirectories(tempDir.resolve("actions"));
+        Path target = directory.resolve("one.bin");
+        byte[] payload = new byte[128 * 1024];
+        new java.util.Random(41).nextBytes(payload);
+        Path prepared = Files.write(directory.resolve(".prepared.tmp"), payload);
+        AtomicFileWriter.replacePrepared(target, prepared);
+        assertArrayEquals(payload, Files.readAllBytes(target));
+
+        Path foreign = Files.write(tempDir.resolve("foreign.bin"), new byte[] {9});
+        assertThrows(IOException.class, () -> AtomicFileWriter.replacePrepared(target, foreign));
+        assertArrayEquals(payload, Files.readAllBytes(target));
+        assertArrayEquals(new byte[] {9}, Files.readAllBytes(foreign));
+    }
 }
