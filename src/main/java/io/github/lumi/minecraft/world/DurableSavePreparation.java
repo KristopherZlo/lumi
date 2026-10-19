@@ -92,11 +92,7 @@ public final class DurableSavePreparation implements SavePreparation {
                 return false;
             }
             if (boundary == null) {
-                var scoped = new java.util.HashMap<HistoryKey, Long>();
-                mutations.snapshot().generations().forEach((key, generation) -> {
-                    if (includes.test(key)) scoped.put(key, generation);
-                });
-                boundary = mutations.durabilityBoundary(new WorkingIndexSnapshot(scoped));
+                boundary = mutations.durabilityBoundary();
             }
             complete = mutations.awaitDurable(boundary, deadlineNanos);
             return complete;

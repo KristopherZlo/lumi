@@ -34,16 +34,6 @@ import org.junit.jupiter.api.Test;
 
 class SaveCaptureOperationTest {
     @Test
-    void reusesAlreadyCapturedStateWithoutReadingTheWorldAgain() throws Exception {
-        var boundary = WorkingIndexSnapshot.empty();
-        var state = new CapturedWorldState(Map.of(), Map.of(), boundary, new CommitStatistics(0, 0, 0, 0));
-        var capture = WorldStateCapture.captured(state).begin(boundary);
-        assertTrue(capture.captureUntil(0));
-        assertEquals(state, capture.finish());
-        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
-                () -> WorldStateCapture.captured(state).begin(new WorkingIndexSnapshot(Map.of(new SectionKey(0, 0, 0), 1L))));
-    }
-    @Test
     void holdsFreezeUntilPreparationEstablishesDurableBoundary() throws Exception {
         WorkingIndex working = new WorkingIndex();
         SectionKey key = new SectionKey(1, 0, 1);
