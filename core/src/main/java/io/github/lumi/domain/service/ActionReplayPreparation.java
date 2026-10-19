@@ -74,8 +74,22 @@ public final class ActionReplayPreparation {
             for (var entry : plan.sections().entrySet()) {
                 ObjectId id = leaf(leaves, entry.getKey()).orElseThrow(() -> new IOException("Missing action section origin"));
                 SectionBlob currentSection = objects.readSection(id);
-                changes.put(entry.getKey(), objects.write(entry.getValue().project(currentSection,
-                        plan.direction() == LiveActionJournal.Direction.UNDO)));
+                var states = new ArrayList<>(currentSection.blockStates());
+                var nbt = new HashMap<>(currentSection.blockEntities());
+                boolean undo = plan.direction() == LiveActionJournal.Direction.UNDO;
+                var expected = undo ? entry.getValue().after() : entry.getValue().before();
+                var target = undo ? entry.getValue().before() : entry.getValue().after();
+                for (int cell = 0; cell < SectionBlob.BLOCK_COUNT; cell++) {
+                    if (!entry.getValue().changed(cell)) continue;
+                    if (!currentSection.blockStates().get(cell).equals(expected.blockStates().get(cell))
+                            || !java.util.Objects.equals(currentSection.blockEntities().get(cell), expected.blockEntities().get(cell))) {
+                        throw new IOException("Action section cell changed at " + entry.getKey() + ":" + cell);
+                    }
+                    states.set(cell, target.blockStates().get(cell));
+                    var value = target.blockEntities().get(cell);
+                    if (value == null) nbt.remove(cell); else nbt.put(cell, value);
+                }
+                changes.put(entry.getKey(), objects.write(new SectionBlob(states, nbt, currentSection.dataVersion())));
             }
             var sections = new HashMap<SectionKey, List<BlockPosition>>();
             plan.expected().keySet().forEach(position -> sections.computeIfAbsent(new SectionKey(
@@ -99,40 +113,13 @@ public final class ActionReplayPreparation {
                 changes.put(entry.getKey(), objects.write(new SectionBlob(blocks, nbt, before.dataVersion())));
             }
             int entityChunks = projectEntities(captured, plan, locations, leaves, changes);
-            return writeReplay(captured, plan, author, changes, entityChunks);
+            ObjectId tree = new MerkleTreeEditor(objects).update(Optional.of(current.tree()), changes);
+            return commits.write(new Commit(tree, List.of(captured), author,
+                    plan.direction() == LiveActionJournal.Direction.UNDO ? "Undo action" : "Redo action", Instant.now(),
+                    current.workspaceId(), Optional.empty(), CommitKind.HIDDEN_RETURN,
+                    new CommitStatistics(changes.size() - entityChunks, entityChunks, plan.expected().size(), plan.expectedEntities().size()),
+                    current.playerSpawns()));
         }
-    }
-
-    /** Already captured small section edits need neither a world-tree scan nor a Merge/Restore diff. */
-    public PreparedRestore prepareSections(BranchRef ref, CommitId captured,
-            Map<SectionKey, SectionBlob> current, LiveActionJournal.Plan plan, CommitAuthor author) throws IOException {
-        if (!current.keySet().equals(plan.sections().keySet()) || !plan.expected().isEmpty()
-                || !plan.expectedEntities().isEmpty() || !plan.biomes().isEmpty() || plan.checkpoint().isPresent()) {
-            throw new IllegalArgumentException("Section replay contains other action data");
-        }
-        try (var publication = objects.beginPublication()) {
-            Map<SectionKey, SectionBlob> target = new HashMap<>();
-            Map<HistoryKey, ObjectId> changes = new HashMap<>();
-            for (var entry : plan.sections().entrySet()) {
-                var projected = entry.getValue().project(current.get(entry.getKey()),
-                        plan.direction() == LiveActionJournal.Direction.UNDO);
-                target.put(entry.getKey(), projected);
-                changes.put(entry.getKey(), objects.write(projected));
-            }
-            return new PreparedRestore(ref, writeReplay(captured, plan, author, changes, 0),
-                    target, Map.of(), current, Map.of());
-        }
-    }
-
-    private CommitId writeReplay(CommitId captured, LiveActionJournal.Plan plan, CommitAuthor author,
-            Map<HistoryKey, ObjectId> changes, int entityChunks) throws IOException {
-        var current = commits.read(captured);
-        ObjectId tree = new MerkleTreeEditor(objects).update(Optional.of(current.tree()), changes);
-        return commits.write(new Commit(tree, List.of(captured), author,
-                plan.direction() == LiveActionJournal.Direction.UNDO ? "Undo action" : "Redo action", Instant.now(),
-                current.workspaceId(), Optional.empty(), CommitKind.HIDDEN_RETURN,
-                new CommitStatistics(changes.size() - entityChunks, entityChunks, plan.expected().size(), plan.expectedEntities().size()),
-                current.playerSpawns()));
     }
 
     private int projectEntities(CommitId captured, LiveActionJournal.Plan plan, Map<EntityState, EntityChunkKey> locations,

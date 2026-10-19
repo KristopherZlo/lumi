@@ -97,24 +97,6 @@ public record WorldActionRecord(Metadata metadata, Payload payload) {
                     || !Objects.equals(before.blockEntities().get(cell), after.blockEntities().get(cell));
         }
 
-        /** Changes only this action's cells, after checking their observed endpoint. */
-        public SectionBlob project(SectionBlob current, boolean undo) {
-            before.dataVersion().requireSame(current.dataVersion());
-            var expected = undo ? after : before;
-            var target = undo ? before : after;
-            var states = new java.util.ArrayList<>(current.blockStates());
-            var nbt = new java.util.HashMap<>(current.blockEntities());
-            for (int cell = 0; cell < SectionBlob.BLOCK_COUNT; cell++) {
-                if (!changed(cell)) continue;
-                if (!states.get(cell).equals(expected.blockStates().get(cell))
-                        || !Objects.equals(nbt.get(cell), expected.blockEntities().get(cell))) {
-                    throw new IllegalStateException("Action section cell changed at " + cell);
-                }
-                put(states, nbt, cell, target);
-            }
-            return new SectionBlob(states, nbt, current.dataVersion());
-        }
-
         private static void put(java.util.List<String> states, Map<Integer, CanonicalNbt> nbt, int cell, SectionBlob source) {
             states.set(cell, source.blockStates().get(cell));
             var value = source.blockEntities().get(cell);

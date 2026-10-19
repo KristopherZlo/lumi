@@ -40,13 +40,6 @@ class LiveActionJournalTest {
         var delta = journal.prepareUndo(PLAYER_A).orElseThrow().sections().get(key);
         assertEquals("minecraft:air", delta.before().blockStates().getFirst());
         assertEquals("minecraft:gold_block", delta.after().blockStates().getFirst());
-        var observed = new java.util.ArrayList<>(delta.after().blockStates());
-        observed.set(1, "minecraft:diamond_block");
-        var projected = delta.project(new SectionBlob(observed, Map.of()), true);
-        assertEquals("minecraft:air", projected.blockStates().getFirst());
-        assertEquals("minecraft:diamond_block", projected.blockStates().get(1));
-        assertEquals(new SectionBlob(observed, Map.of()), delta.project(projected, false));
-        assertThrows(IllegalStateException.class, () -> delta.project(empty, true));
         UUID foreign = journal.begin(PLAYER_B);
         journal.record(foreign, new BlockPosition(1, 0, 0), block("air"), block("diamond_block"));
         journal.close(foreign);
