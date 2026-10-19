@@ -24,9 +24,12 @@ import net.minecraft.world.level.levelgen.Heightmap;
 final class MinecraftSectionRewriter {
     private static final int DENSE_CHUNK_CHANGE_THRESHOLD = 1024;
     private final ServerLevel level;
+    private final java.util.function.BiPredicate<SectionKey, DecodedSection> blockWriter;
 
-    MinecraftSectionRewriter(ServerLevel level) {
+    MinecraftSectionRewriter(ServerLevel level,
+            java.util.function.BiPredicate<SectionKey, DecodedSection> blockWriter) {
         this.level = level;
+        this.blockWriter = blockWriter;
     }
 
     SectionApplyResult apply(LevelChunk chunk, SectionKey key, DecodedSection target) {
@@ -41,7 +44,6 @@ final class MinecraftSectionRewriter {
             level.getChunkSource().chunkMap.getPlayers(chunk.getPos(), false)
                     .forEach(player -> player.connection.send(packet));
         }
-        LevelChunkSection replacementSection = target.replacementFor(section);
         PreparedSectionDelta delta = target.deltaFrom(section);
         if (delta.changedCount() == 0) {
             return new SectionApplyResult(key, delta.changedCells(), 0,
@@ -49,7 +51,13 @@ final class MinecraftSectionRewriter {
         }
 
         boolean wasOnlyAir = section.hasOnlyAir();
-        chunk.getSections()[sectionIndex] = replacementSection;
+        LevelChunkSection replacementSection;
+        if (blockWriter != null && target.blockEntities().isEmpty() && blockWriter.test(key, target)) {
+            replacementSection = chunk.getSection(sectionIndex);
+        } else {
+            replacementSection = target.replacementFor(section);
+            chunk.getSections()[sectionIndex] = replacementSection;
+        }
         updatePois(key, replacementSection, delta.poiIndexes());
         updateHeightmaps(chunk, key, replacementSection, delta.heightmapIndexes());
         boolean isOnlyAir = replacementSection.hasOnlyAir();

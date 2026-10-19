@@ -19,11 +19,13 @@ import net.minecraft.world.level.ChunkPos;
 
 /** Complete Minecraft WorldStateApply adapter: off-thread decode plus bounded mutation. */
 public final class MinecraftWorldStateApply implements WorldStateApply {
+    public static final int EAGER_ACTION_SECTIONS = 8;
     private final MinecraftRestorePreparation preparation;
     private final PreparedWorldAccess world;
     private final ServerLevel level;
     private final DimensionFreezeState freeze;
     private final Executor background;
+    private final boolean nativeAction;
 
     public MinecraftWorldStateApply(ServerLevel level, DimensionFreezeState freeze) {
         this(level, freeze, Runnable::run);
@@ -31,15 +33,21 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
 
     public MinecraftWorldStateApply(
             ServerLevel level, DimensionFreezeState freeze, Executor background) {
+        this(level, freeze, background, null);
+    }
+
+    public MinecraftWorldStateApply(ServerLevel level, DimensionFreezeState freeze, Executor background,
+            java.util.function.BiPredicate<SectionKey, DecodedSection> blockWriter) {
         this.level = Objects.requireNonNull(level, "level");
         this.freeze = Objects.requireNonNull(freeze, "freeze");
         this.background = Objects.requireNonNull(background, "background");
+        nativeAction = blockWriter != null;
         preparation = new MinecraftRestorePreparation(
                 new MinecraftBlockStateDecoder(
                         level.registryAccess().lookupOrThrow(Registries.BLOCK),
                         level.registryAccess().lookupOrThrow(Registries.BIOME)),
                 new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE));
-        world = new MinecraftPreparedWorldAccess(level, freeze, background);
+        world = new MinecraftPreparedWorldAccess(level, freeze, background, blockWriter);
     }
 
     @Override
@@ -73,6 +81,13 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
             State returnPoint,
             LongConsumer targetProgress,
             LongConsumer returnProgress) throws IOException {
+        if (nativeAction && target.sections().size() <= EAGER_ACTION_SECTIONS
+                && target.entities().isEmpty() && returnPoint.entities().isEmpty()
+                && target.sections().values().stream().allMatch(section -> section.blockEntities().isEmpty())
+                && returnPoint.sections().values().stream().allMatch(section -> section.blockEntities().isEmpty())) {
+            return new PreparedStates(preparation.prepare(target, returnPoint, targetProgress),
+                    preparation.prepare(returnPoint, target, returnProgress));
+        }
         targetProgress.accept(0);
         PreparedMinecraftPlanState plan = preparation.preflight(
                 target, returnPoint, targetProgress);

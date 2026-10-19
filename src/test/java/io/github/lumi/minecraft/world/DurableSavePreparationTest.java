@@ -106,6 +106,7 @@ class DurableSavePreparationTest {
         EntityChunkKey excluded = new EntityChunkKey(200, 300);
         entities.rememberLoaded(included, entities(1));
         entities.rememberLoaded(excluded, entities(1));
+        mutations.registerEntityMutation(excluded, () -> entities(1));
         var reads = new ArrayList<EntityChunkKey>();
         WorldStateReader reader = new WorldStateReader() {
             @Override public SectionBlob read(SectionKey ignored) {

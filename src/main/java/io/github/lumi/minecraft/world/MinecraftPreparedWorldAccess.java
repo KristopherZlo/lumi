@@ -40,10 +40,15 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
 
     public MinecraftPreparedWorldAccess(
             ServerLevel level, DimensionFreezeState freeze, Executor background) {
+        this(level, freeze, background, null);
+    }
+
+    public MinecraftPreparedWorldAccess(ServerLevel level, DimensionFreezeState freeze, Executor background,
+            java.util.function.BiPredicate<SectionKey, DecodedSection> blockWriter) {
         this.level = Objects.requireNonNull(level, "level");
         this.freeze = Objects.requireNonNull(freeze, "freeze");
         this.background = Objects.requireNonNull(background, "background");
-        sectionRewriter = new MinecraftSectionRewriter(level);
+        sectionRewriter = new MinecraftSectionRewriter(level, blockWriter);
         entityLookup = ChunkEntityLookup.forLevel(level);
         entityRestorer = new MinecraftEntityRestorer(level, freeze, entities, entityLookup);
         storedChunks = new MinecraftStoredChunkAccess(level, background, entities);

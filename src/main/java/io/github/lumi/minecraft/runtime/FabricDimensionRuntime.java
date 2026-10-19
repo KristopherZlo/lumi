@@ -1201,9 +1201,22 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var author = new CommitAuthor(plan.player(), player == null ? "Builder" : player.getName().getString());
         SaveRequest request = new SaveRequest(expected, author, "Return point before action replay",
                 Instant.now(), workspace.id(), Optional.empty(), CommitKind.HIDDEN_RETURN);
-        var capture = createChunkReadySave(request, scopedReturnPointPreparation(request),
-                (value, captured) -> saves.checkpoint(value, captured, sessionCheckpoints.name(operationId)),
-                ignored -> { });
+        SavePreparation replayPreparation = scopedReturnPointPreparation(request);
+        if (checkpoint == null && plan.expectedEntities().isEmpty()) {
+            var keys = new java.util.HashSet<io.github.lumi.domain.model.HistoryKey>(plan.sections().keySet());
+            plan.expected().keySet().forEach(position -> keys.add(new SectionKey(position.x() >> 4, position.y() >> 4, position.z() >> 4)));
+            plan.biomes().keySet().forEach(position -> keys.add(position.section()));
+            replayPreparation = scopedReturnPointPreparation(keys::contains);
+        }
+        var replayApply = checkpoint == null && !plan.sections().isEmpty()
+                && net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom")
+                ? new MinecraftWorldStateApply(level, freeze, background,
+                        new io.github.lumi.minecraft.world.AxiomSectionWriter(level, player)) : worldApply;
+        var captured = captureBufferedReplay(plan);
+        SavePublisher publisher = (value, state) -> saves.checkpoint(value, state, sessionCheckpoints.name(operationId));
+        var capture = captured == null ? createChunkReadySave(request, replayPreparation, publisher, ignored -> { })
+                : new SaveCaptureOperation(request, captured.generations(),
+                        io.github.lumi.minecraft.world.WorldStateCapture.captured(captured), publisher, ignored -> { }, background);
         var restore = new ReturnPointRestoreOperation(capture, (saved, progress) ->
                 CompletableFuture.supplyAsync(() -> {
                     try {
@@ -1212,46 +1225,48 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                             throw new IOException("Checkpoint action changed during preparation");
                         }
                         if (!persistActionHistory()) throw new IOException("Action changed during durable capture");
-                        CommitId replay;
+                        var actionReplay = new ActionReplayPreparation(new WorldObjectRepository(repository),
+                                new CommitRepository(repository), new OriginStore(repository),
+                                new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version()));
                         RestorePublication world = new PendingRestorePublication(mutations);
-                        if (checkpoint != null) {
-                            replay = new ActionReplayPreparation(new WorldObjectRepository(repository), new CommitRepository(repository),
-                                    new OriginStore(repository), new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version()))
-                                    .replayCheckpoint(saved.commitId(), checkpoint, undo, author);
-                            if (checkpoint.context().isPresent()) {
-                                var change = checkpoint.context().orElseThrow();
-                                var from = change.endpoint(undo);
-                                var to = change.endpoint(!undo);
-                                if (!new WorldActionContext(selectedWorkspaceId, expected.name()).equals(from)) throw new IOException("Action context changed");
-                                var branch = branches.prepareReplaySwitch(to.branch());
-                                var scope = from.workspace().equals(to.workspace()) ? Optional.<WorkspaceSwitchPlan>empty()
-                                        : Optional.of(workspaces.prepareReplaySwitch(to.workspace(), branch));
-                                world = replayContextPublication(branch, scope, true);
-                            }
-                        } else {
-                            var locations = new java.util.HashMap<io.github.lumi.domain.model.EntityState,
-                                    io.github.lumi.domain.model.EntityChunkKey>();
-                            for (var value : plan.replacementEntities().values()) {
-                                if (value.isPresent()) locations.put(value.orElseThrow(), liveEntityWorld.chunk(value.orElseThrow()));
-                            }
-                            replay = new ActionReplayPreparation(new WorldObjectRepository(repository),
-                                    new CommitRepository(repository), new OriginStore(repository),
-                                    new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version()))
-                                    .prepare(saved.commitId(), plan, locations, author);
-                        }
                         CommitId replaySource = saved.commitId();
-                        if (!plan.biomes().isEmpty()) {
-                            var biomePreparation = new ActionReplayPreparation(new WorldObjectRepository(repository),
-                                    new CommitRepository(repository), new OriginStore(repository),
-                                    new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version()));
-                            replaySource = biomePreparation.withBiomes(saved.commitId(), plan.biomes(), undo, author);
-                            replay = biomePreparation.withBiomes(replay, plan.biomes(), !undo, author);
+                        PreparedRestore prepared;
+                        if (captured != null) {
+                            prepared = actionReplay
+                                    .prepareSections(expected, saved.commitId(), captured.sections(), plan, author);
+                        } else {
+                            CommitId replay;
+                            if (checkpoint != null) {
+                                replay = actionReplay.replayCheckpoint(saved.commitId(), checkpoint, undo, author);
+                                if (checkpoint.context().isPresent()) {
+                                    var change = checkpoint.context().orElseThrow();
+                                    var from = change.endpoint(undo);
+                                    var to = change.endpoint(!undo);
+                                    if (!new WorldActionContext(selectedWorkspaceId, expected.name()).equals(from)) throw new IOException("Action context changed");
+                                    var branch = branches.prepareReplaySwitch(to.branch());
+                                    var scope = from.workspace().equals(to.workspace()) ? Optional.<WorkspaceSwitchPlan>empty()
+                                            : Optional.of(workspaces.prepareReplaySwitch(to.workspace(), branch));
+                                    world = replayContextPublication(branch, scope, true);
+                                }
+                            } else {
+                                var locations = new java.util.HashMap<io.github.lumi.domain.model.EntityState,
+                                        io.github.lumi.domain.model.EntityChunkKey>();
+                                for (var value : plan.replacementEntities().values()) {
+                                    if (value.isPresent()) locations.put(value.orElseThrow(), liveEntityWorld.chunk(value.orElseThrow()));
+                                }
+                                replay = actionReplay
+                                        .prepare(saved.commitId(), plan, locations, author);
+                            }
+                            if (!plan.biomes().isEmpty()) {
+                                replaySource = actionReplay.withBiomes(saved.commitId(), plan.biomes(), undo, author);
+                                replay = actionReplay.withBiomes(replay, plan.biomes(), !undo, author);
+                            }
+                            prepared = restores.prepare(
+                                    expected, replaySource, replay,
+                                    value -> publishRestoreDiffProgress(progress, value));
                         }
-                        PreparedRestore prepared = restores.prepare(
-                                expected, replaySource, replay,
-                                value -> publishRestoreDiffProgress(progress, value));
                         return RestoreOperation.startCheckpointAction(
-                                prepared, worldApply, new ActionReplayPublication(world,
+                                prepared, replayApply, new ActionReplayPublication(world,
                                         actionHistory, operationId, new ActionReplayTarget(plan.player(), plan.actionId(), undo), !undo, ignored -> { }),
                                 journals, operationId, restoreStateListener,
                                 OperationKind.ACTION_REPLAY, replaySource,
@@ -1261,6 +1276,28 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     }
                 }, background), saved -> releaseSessionCheckpoint(saved.branchRef()));
         return restore;
+    }
+
+    private io.github.lumi.domain.service.CapturedWorldState captureBufferedReplay(LiveActionJournal.Plan plan) throws IOException {
+        // ponytail: eagerly copy at most eight loaded sections; larger/cold edits keep the bounded capture path.
+        if (plan.sections().isEmpty() || plan.sections().size() > MinecraftWorldStateApply.EAGER_ACTION_SECTIONS || !plan.expected().isEmpty()
+                || !plan.expectedEntities().isEmpty() || !plan.biomes().isEmpty()) return null;
+        var sections = new java.util.LinkedHashMap<SectionKey, io.github.lumi.domain.model.SectionBlob>();
+        var generations = new java.util.HashMap<io.github.lumi.domain.model.HistoryKey, Long>();
+        var pending = mutations.snapshot().generations();
+        for (var key : plan.sections().keySet()) {
+            var chunk = level.getChunkSource().getChunkNow(key.chunkX(), key.chunkZ());
+            if (chunk == null || chunk.getBlockEntities().keySet().stream().anyMatch(position -> position.getY() >> 4 == key.sectionY())) return null;
+            sections.put(key, worldReader.read(key));
+            generations.put(key, pending.getOrDefault(key, 1L));
+        }
+        var durable = new java.util.HashMap<io.github.lumi.domain.model.HistoryKey, Long>();
+        pending.forEach((key, generation) -> { if (sections.containsKey(key)) durable.put(key, generation); });
+        if (!mutations.isDurable(mutations.durabilityBoundary(new WorkingIndexSnapshot(durable)))) return null;
+        return new io.github.lumi.domain.service.CapturedWorldState(sections, Map.of(),
+                new WorkingIndexSnapshot(generations),
+                new io.github.lumi.domain.model.CommitStatistics(sections.size(), 0, (long) sections.size() * 4096, 0),
+                worldReader.readPlayerSpawns());
     }
 
     private boolean persistActionHistory() throws IOException {

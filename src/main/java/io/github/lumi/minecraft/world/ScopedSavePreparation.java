@@ -7,7 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.Objects;
 import java.util.function.Predicate;
 
-/** Keeps the durability boundary global while selecting captured scope keys. */
+/** Filters a prepared boundary and its builder markers to the selected scope. */
 public final class ScopedSavePreparation implements SavePreparation {
     private final SavePreparation source;
     private final Predicate<HistoryKey> includes;
