@@ -65,6 +65,31 @@ class WorldActionPayloadCodecTest {
         broken[broken.length - 5] ^= 1;
         Files.write(payload, broken);
         assertThrows(IOException.class, () -> repository.readPayload(metadata(1), blob, version, 4096));
+
+        var nbt = new CanonicalNbt(new byte[128 << 10]);
+        WorldActionRecord paged;
+        UUID stored;
+        try (var spool = new io.github.lumi.storage.repository.NbtSpool(root, 64, 4096)) {
+            var page = spool.store(nbt);
+            assertEquals(0, page.residentByteSize());
+            assertEquals(nbt.byteSize(), page.byteSize());
+            assertEquals(nbt, page);
+            assertEquals(nbt.hashCode(), page.hashCode());
+            org.junit.jupiter.api.Assertions.assertArrayEquals(nbt.bytes(), page.bytes());
+            var delta = new BlockDelta(new BlockSnapshot("minecraft:chest", Optional.of(page)),
+                    new BlockSnapshot("minecraft:air", Optional.empty()));
+            paged = new WorldActionRecord(metadata(1), new WorldActionRecord.Payload(Map.of(new BlockPosition(0, 0, 0), delta), Map.of()));
+            stored = repository.writePayload(paged, version);
+        }
+        // A durable payload owns its contents independently of the temporary pages.
+        var durable = repository.readPayload(metadata(1), stored, version, 1 << 20);
+        assertEquals(paged, durable);
+        org.junit.jupiter.api.Assertions.assertArrayEquals(nbt.bytes(), durable.payload().blocks().values().iterator().next().before().blockEntity().orElseThrow().bytes());
+        assertThrows(java.io.UncheckedIOException.class, () -> paged.payload().blocks().values().iterator().next().before().blockEntity().orElseThrow().bytes());
+        assertThrows(java.io.UncheckedIOException.class, () -> nbt.stored(() -> new byte[1]).bytes());
+        try (var full = new io.github.lumi.storage.repository.NbtSpool(root, 1, 1)) {
+            assertThrows(IOException.class, () -> full.store(nbt));
+        }
     }
 
     @org.junit.jupiter.params.ParameterizedTest
