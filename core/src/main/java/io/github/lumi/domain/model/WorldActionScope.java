@@ -24,6 +24,22 @@ public final class WorldActionScope {
 
     public static WorldActionScope empty() { return EMPTY; }
 
+    public static WorldActionScope fromMasks(Map<SectionKey, long[]> masks, Set<UUID> entities) {
+        var blocks = new HashMap<SectionKey, BitSet>();
+        masks.forEach((key, words) -> {
+            BitSet cells = BitSet.valueOf(words);
+            if (cells.isEmpty() || cells.length() > SectionBlob.BLOCK_COUNT) {
+                throw new IllegalArgumentException("Invalid action section mask");
+            }
+            blocks.put(Objects.requireNonNull(key), cells);
+        });
+        return new WorldActionScope(blocks, entities);
+    }
+
+    public Set<SectionKey> sections() { return blocks.keySet(); }
+    public long[] mask(SectionKey key) { return Objects.requireNonNull(blocks.get(key), "section").toLongArray(); }
+    public Set<UUID> entityIds() { return entities; }
+
     public static WorldActionScope between(
             Map<SectionKey, SectionBlob> before, Map<SectionKey, SectionBlob> after,
             Map<EntityChunkKey, EntityChunkBlob> beforeEntities,

@@ -11,6 +11,14 @@ import io.github.lumi.domain.model.WorldActionRecord;
 import io.github.lumi.domain.model.WorldActionRecord.BlockDelta;
 import io.github.lumi.domain.model.WorldActionRecord.EntityDelta;
 import io.github.lumi.domain.model.WorldDataVersion;
+import io.github.lumi.domain.model.WorldActionCheckpoint;
+import io.github.lumi.domain.model.WorldActionScope;
+import io.github.lumi.domain.model.WorldActionIndex;
+import io.github.lumi.domain.model.ActionReplayTarget;
+import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.domain.model.BranchRef;
+import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.SectionKey;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -23,9 +31,46 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class WorldActionPayloadCodecTest {
+    @Test
+    void roundTripsTheCursorWithCheckpointOwnershipAndRejectsCorruption() throws IOException {
+        var before = CommitId.hash(new byte[] {1});
+        var after = CommitId.hash(new byte[] {2});
+        long[] mask = new long[64];
+        mask[63] = Long.MIN_VALUE;
+        var scope = WorldActionScope.fromMasks(Map.of(new SectionKey(-1, -1, -1), mask), Set.of(new UUID(0, 9)));
+        mask[63] = 0;
+        var checkpoint = new WorldActionCheckpoint(new BranchName("main"), before, after,
+                new BranchRef(new BranchName("hidden/session-undo/test"), before, 0), scope);
+        var second = new WorldActionRecord.Metadata(new UUID(0, 3), new UUID(0, 2), 2, new UUID(0, 3),
+                1, false, true, false, Optional.of(checkpoint));
+        var index = new WorldActionIndex(7, 2, 0, List.of(metadata(1), second),
+                Map.of(new UUID(0, 2), new WorldActionIndex.Stacks(List.of(new UUID(0, 1)), List.of(second.id()))));
+        var state = new WorldActionIndexCodec.State(new UUID(0, 100), new WorldDataVersion(5000),
+                new UUID(0, 200), new BranchName("main"), index, Map.of(new UUID(0, 1), new UUID(0, 300)),
+                Optional.of(new WorldActionIndexCodec.Publication(new UUID(0, 400),
+                        new ActionReplayTarget(second.actor(), second.id(), true), true)));
+        var bytes = new ByteArrayOutputStream();
+        var codec = new WorldActionIndexCodec();
+        codec.encode(state, new DataOutputStream(bytes));
+        byte[] valid = bytes.toByteArray();
+        var restored = codec.decode(input(valid));
+        assertEquals(state, restored);
+        assertEquals(true, restored.index().actions().getLast().checkpoint().orElseThrow().scope()
+                .intersects(Set.of(new BlockPosition(-1, -1, -1)), Set.of()));
+        byte[] invalidFlag = valid.clone();
+        invalidFlag[invalidFlag.length - 1] = 2;
+        byte[] oversizedCount = valid.clone();
+        ByteBuffer.wrap(oversizedCount).putInt(72, Integer.MAX_VALUE);
+        for (byte[] invalid : new byte[][] {invalidFlag, oversizedCount,
+                Arrays.copyOf(valid, valid.length - 1), Arrays.copyOf(valid, valid.length + 1)}) {
+            assertThrows(IOException.class, () -> codec.decode(input(invalid)));
+        }
+    }
+
     @Test
     void roundTripsOrderedWorldEndpointsAndRejectsInvalidInputsBeforeAllocation() throws IOException {
         var version = new WorldDataVersion(5000);
