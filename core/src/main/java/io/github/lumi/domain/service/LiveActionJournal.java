@@ -25,8 +25,9 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.io.IOException;
 
-/** Session-only action history for one dimension. */
+/** Ordered action history and ownership indexes for one shared dimension. */
 public final class LiveActionJournal {
     private final Map<UUID, MutableAction> actions = new HashMap<>();
     private final Map<UUID, UUID> openActions = new HashMap<>();
@@ -409,7 +410,7 @@ public final class LiveActionJournal {
                 .sorted(java.util.Comparator.comparingLong(action -> action.sequence))
                 .map(action -> new WorldActionRecord.Metadata(
                         action.id, action.player, action.sequence, action.groupId, action.revision,
-                        action.applied, action.closed, !action.closed || action.causalReferences > 0
+                        action.applied, action.closed, !action.closed || action.delayedReferences > 0
                                 || pendingChanges.contains(action.id), Optional.ofNullable(action.checkpoint)))
                 .toList();
         var players = new HashMap<UUID, WorldActionIndex.Stacks>();
@@ -426,6 +427,77 @@ public final class LiveActionJournal {
             throw new java.util.ConcurrentModificationException("Action changed during history capture");
         }
         return new WorldActionRecord(expected, new WorldActionRecord.Payload(action.changes, action.entities));
+    }
+
+    /** Startup only, off-thread. An interrupted producer is retained on disk but cannot be replayed. */
+    public synchronized void restore(WorldActionIndex index, ActionSource source) throws IOException {
+        if (!actions.isEmpty() || nextSequence != 0) throw new IllegalStateException("History was already opened");
+        for (var metadata : index.actions()) {
+            WorldActionRecord record = source.read(metadata);
+            if (!record.metadata().equals(metadata)) throw new IOException("Restored action identity mismatch");
+            var action = new MutableAction(metadata.id(), metadata.actor(), metadata.sequence());
+            action.groupId = metadata.group();
+            action.revision = metadata.revision();
+            action.applied = metadata.applied();
+            action.closed = metadata.closed();
+            action.started = true;
+            action.checkpoint = metadata.checkpoint().orElse(null);
+            action.changes.putAll(record.payload().blocks());
+            action.entities.putAll(record.payload().entities());
+            action.bytes = action.changes.values().stream().mapToLong(LiveActionJournal::estimatedBytes).sum()
+                    + action.entities.values().stream().mapToLong(LiveActionJournal::estimatedBytes).sum()
+                    + metadata.checkpoint().map(value -> value.scope().estimatedBytes()).orElse(0L);
+            if (action.bytes > limits.maxActionBytes || retainedBytes + action.bytes > limits.maxDimensionBytes
+                    || playerBytes.getOrDefault(action.player, 0L) + action.bytes > limits.maxPlayerBytes) {
+                throw new IOException("Stored history exceeds its memory budget");
+            }
+            actions.put(action.id, action);
+            adjustBytes(action.player, action.bytes);
+            action.changes.forEach((position, delta) -> {
+                retainBlockStates(delta);
+                blockOwners.set(position, action, action.applied);
+            });
+            action.entities.forEach((id, delta) -> {
+                entityStates.retain(delta.before());
+                entityStates.retain(delta.after());
+                entityOwners.set(id, action, action.applied);
+            });
+        }
+        index.players().forEach((actor, cursor) -> {
+            var stacks = stacks(actor);
+            stacks.undo.addAll(cursor.undo());
+            stacks.redo.addAll(cursor.redo());
+            cursor.undo().forEach(id -> stacks.add(requireAction(id).groupId));
+            cursor.redo().forEach(id -> stacks.add(requireAction(id).groupId));
+        });
+        nextSequence = index.nextSequence();
+        unsafeBeforeSequence = index.unsafeBeforeSequence();
+        revision = index.revision();
+        for (var metadata : index.actions()) {
+            if (metadata.pending()) {
+                var action = actions.get(metadata.id());
+                if (action != null && action.available) {
+                    action.closed = true;
+                    makeUnavailable(action, "The edit was still arriving when the world closed");
+                }
+            }
+        }
+        revision++;
+    }
+
+    @FunctionalInterface
+    public interface ActionSource { WorldActionRecord read(WorldActionRecord.Metadata metadata) throws IOException; }
+
+    public synchronized void retainDelayed(UUID actionId) {
+        retain(actionId);
+        requireAction(actionId).delayedReferences++;
+    }
+
+    public synchronized void releaseDelayed(UUID actionId) {
+        var action = actions.get(actionId);
+        if (action == null || action.delayedReferences == 0) throw new IllegalStateException("Unbalanced delayed action lease");
+        action.delayedReferences--;
+        release(actionId);
     }
 
     public synchronized boolean hasEntityChange(UUID actionId, UUID entityId) {
@@ -468,7 +540,9 @@ public final class LiveActionJournal {
                 .map(this::requireAction)
                 .filter(action -> action.groupId.equals(selected.groupId))
                 .toList();
-        if (group.stream().anyMatch(action -> pendingChanges.contains(action.id))) {
+        if (actions.values().stream().anyMatch(action -> action.available
+                && action.groupId.equals(selected.groupId)
+                && (!action.closed || pendingChanges.contains(action.id)))) {
             throw new IllegalStateException("The selected builder edit is still arriving");
         }
         if (group.stream().anyMatch(action -> action.sequence <= unsafeBeforeSequence)) {
@@ -930,6 +1004,7 @@ public final class LiveActionJournal {
         private long bytes;
         private long revision;
         private int causalReferences;
+        private int delayedReferences;
 
         private MutableAction(UUID id, UUID player, long sequence) {
             this.id = id;

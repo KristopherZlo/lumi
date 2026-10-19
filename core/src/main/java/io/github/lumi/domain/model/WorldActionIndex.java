@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.ArrayList;
 
 /** One consistent order/cursor boundary over immutable action payloads. */
 public record WorldActionIndex(
@@ -57,5 +58,30 @@ public record WorldActionIndex(
             undo = List.copyOf(Objects.requireNonNull(undo, "undo"));
             redo = List.copyOf(Objects.requireNonNull(redo, "redo"));
         }
+    }
+
+    /** Projects one whole group; publication can retry without moving the cursor twice. */
+    public WorldActionIndex move(ActionReplayTarget step, boolean applied) {
+        var selected = actions.stream().filter(action -> action.id().equals(step.action())
+                && action.actor().equals(step.actor())).findFirst().orElseThrow(
+                        () -> new IllegalStateException("Selected action is no longer retained"));
+        if (selected.applied() == applied) return this;
+        var stacks = players.get(step.actor());
+        var source = new ArrayList<>(applied ? stacks.redo() : stacks.undo());
+        var target = new ArrayList<>(applied ? stacks.undo() : stacks.redo());
+        var group = actions.stream().filter(action -> action.group().equals(selected.group())).toList();
+        var ids = group.stream().map(WorldActionRecord.Metadata::id).toList();
+        if (!selected.closed() || source.isEmpty() || !source.getLast().equals(step.action())
+                || source.size() < ids.size() || !source.subList(source.size() - ids.size(), source.size()).equals(ids)) {
+            throw new IllegalStateException("Selected action cursor changed before publication");
+        }
+        source.subList(source.size() - ids.size(), source.size()).clear();
+        target.addAll(ids);
+        var replacement = actions.stream().map(action -> action.group().equals(selected.group())
+                ? new WorldActionRecord.Metadata(action.id(), action.actor(), action.sequence(), action.group(),
+                        action.revision(), applied, action.closed(), action.pending(), action.checkpoint()) : action).toList();
+        var cursors = new HashMap<>(players);
+        cursors.put(step.actor(), applied ? new Stacks(target, source) : new Stacks(source, target));
+        return new WorldActionIndex(Math.addExact(revision, 1), nextSequence, unsafeBeforeSequence, replacement, cursors);
     }
 }

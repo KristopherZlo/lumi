@@ -25,6 +25,34 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class LiveActionJournalTest {
+    @Test void reopensUndoRedoAndRefusesAnInterruptedProducer() throws Exception {
+        var journal = new LiveActionJournal();
+        UUID first = add(journal, 1);
+        UUID second = add(journal, 2);
+        journal.complete(journal.prepareUndo(PLAYER_A).orElseThrow());
+        var index = journal.snapshotIndex();
+        var reopened = new LiveActionJournal();
+        reopened.restore(index, journal::snapshotAction);
+        assertEquals(first, reopened.prepareUndo(PLAYER_A).orElseThrow().actionId());
+        assertEquals(second, reopened.prepareRedo(PLAYER_A).orElseThrow().actionId());
+        var step = new io.github.lumi.domain.model.ActionReplayTarget(PLAYER_A, second, false);
+        var projected = index.move(step, true);
+        assertEquals(projected, projected.move(step, true));
+        reopened.complete(reopened.prepareRedo(PLAYER_A).orElseThrow());
+        assertEquals(reopened.snapshotIndex().players(), projected.players());
+        assertEquals(second, reopened.prepareUndo(PLAYER_A).orElseThrow().actionId());
+
+        journal.retain(second); // Entity ownership alone does not mean a producer is unfinished.
+        assertTrue(!journal.snapshotIndex().actions().getLast().pending());
+        journal.retainDelayed(second);
+        var interrupted = new LiveActionJournal();
+        interrupted.restore(journal.snapshotIndex(), journal::snapshotAction);
+        assertTrue(interrupted.prepareRedo(PLAYER_A).isEmpty());
+        assertTrue(interrupted.lastUnavailableReason(PLAYER_A).isPresent());
+        journal.releaseDelayed(second);
+        journal.release(second);
+    }
+
     @Test void unchangedBlockAndEntityRecordsPreserveEarlierRedo() {
         for (boolean entityRecord : List.of(false, true)) {
             var journal = new LiveActionJournal();

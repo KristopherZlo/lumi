@@ -145,7 +145,7 @@ public final class MinecraftCausalTickTracker {
         boolean unchanged = !(carrier instanceof PistonMovingBlockEntity)
                 && !changedBlockCarriers.remove(carrier);
         if (carrier.isRemoved() || unchanged) {
-            blockCarriers.forget(carrier).ifPresent(root -> journal.release(root.action()));
+            blockCarriers.forget(carrier).ifPresent(root -> journal.releaseDelayed(root.action()));
         }
     }
 
@@ -181,7 +181,7 @@ public final class MinecraftCausalTickTracker {
     public void finishedCarrier(Entity carrier, boolean changed) {
         if (carrier.isRemoved()
                 || (carrier instanceof AbstractMinecart && !changed)) {
-            entityCarriers.forget(carrier).ifPresent(root -> journal.release(root.action()));
+            entityCarriers.forget(carrier).ifPresent(root -> journal.releaseDelayed(root.action()));
         }
     }
 
@@ -228,20 +228,20 @@ public final class MinecraftCausalTickTracker {
                     }
                 }
             } finally {
-                journal.release(action);
+                journal.releaseDelayed(action);
             }
         });
         changedBlockCarriers.removeAll(cancelledBlockCarriers);
         Set<TickKey> cancelledTicks = tokens.cancel(root -> root.action().equals(action));
         cancelledTicks.forEach(key -> {
             remove(key);
-            journal.release(action);
+            journal.releaseDelayed(action);
         });
         Set<BlockEventData> cancelledEvents =
                 blockEvents.cancel(root -> root.action().equals(action));
         cancelledEvents.forEach(event -> {
             eventAccess.lumi$removeBlockEvent(event);
-            journal.release(action);
+            journal.releaseDelayed(action);
         });
         Set<Entity> cancelledEntityCarriers =
                 entityCarriers.cancel(root -> root.action().equals(action));
@@ -251,7 +251,7 @@ public final class MinecraftCausalTickTracker {
                     freeze.runAuthorized(carrier::discard);
                 }
             } finally {
-                journal.release(action);
+                journal.releaseDelayed(action);
             }
         });
         depthLimitLogged.remove(action);
@@ -312,22 +312,22 @@ public final class MinecraftCausalTickTracker {
                 key -> matches.test(key.position()));
         cancelledTicks.forEach((key, root) -> {
             remove(key);
-            journal.release(root.action());
+            journal.releaseDelayed(root.action());
         });
         var cancelledEvents = blockEvents.cancelKeys(
                 event -> matches.test(event.pos()));
         cancelledEvents.forEach((event, root) -> {
             eventAccess.lumi$removeBlockEvent(event);
-            journal.release(root.action());
+            journal.releaseDelayed(root.action());
         });
         var cancelledBlockCarriers = blockCarriers.cancelKeys(
                 carrier -> matches.test(carrier.getBlockPos()));
         cancelledBlockCarriers.values().forEach(root ->
-                journal.release(root.action()));
+                journal.releaseDelayed(root.action()));
         changedBlockCarriers.removeAll(cancelledBlockCarriers.keySet());
         entityCarriers.cancelKeys(
                 carrier -> matches.test(carrier.blockPosition()))
-                .values().forEach(root -> journal.release(root.action()));
+                .values().forEach(root -> journal.releaseDelayed(root.action()));
         cancelAuthorizedWork();
     }
 
@@ -400,15 +400,15 @@ public final class MinecraftCausalTickTracker {
         if (previous.filter(root::equals).isPresent()) {
             return;
         }
-        previous.ifPresent(value -> journal.release(value.action()));
-        journal.retain(root.action());
+        previous.ifPresent(value -> journal.releaseDelayed(value.action()));
+        journal.retainDelayed(root.action());
     }
 
     private <K> Optional<CausalExecution> consume(
             CausalTokenRegistry<K, DirectLiveActionContext.CausalRoot> registry, K key) {
         return registry.take(key).map(root -> new CausalExecution(
                 DirectLiveActionContext.resume(journal, root.action(), root.depth()),
-                () -> journal.release(root.action())));
+                () -> journal.releaseDelayed(root.action())));
     }
 
     private void logDepthLimit(java.util.UUID action) {
