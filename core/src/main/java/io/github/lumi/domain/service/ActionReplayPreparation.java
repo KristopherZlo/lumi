@@ -36,13 +36,33 @@ public final class ActionReplayPreparation {
             Commit current = commits.read(captured);
             var leaves = new WorldObjectGraph(objects).scan(current.tree()).leaves();
             Map<HistoryKey, ObjectId> changes = new HashMap<>();
+            for (var entry : plan.sections().entrySet()) {
+                ObjectId id = leaf(leaves, entry.getKey()).orElseThrow(() -> new IOException("Missing action section origin"));
+                SectionBlob currentSection = objects.readSection(id);
+                var states = new ArrayList<>(currentSection.blockStates());
+                var nbt = new HashMap<>(currentSection.blockEntities());
+                boolean undo = plan.direction() == LiveActionJournal.Direction.UNDO;
+                var expected = undo ? entry.getValue().after() : entry.getValue().before();
+                var target = undo ? entry.getValue().before() : entry.getValue().after();
+                for (int cell = 0; cell < SectionBlob.BLOCK_COUNT; cell++) {
+                    if (!entry.getValue().changed(cell)) continue;
+                    if (!currentSection.blockStates().get(cell).equals(expected.blockStates().get(cell))
+                            || !java.util.Objects.equals(currentSection.blockEntities().get(cell), expected.blockEntities().get(cell))) {
+                        throw new IOException("Action section cell changed at " + entry.getKey() + ":" + cell);
+                    }
+                    states.set(cell, target.blockStates().get(cell));
+                    var value = target.blockEntities().get(cell);
+                    if (value == null) nbt.remove(cell); else nbt.put(cell, value);
+                }
+                changes.put(entry.getKey(), objects.write(new SectionBlob(states, nbt, currentSection.dataVersion())));
+            }
             var sections = new HashMap<SectionKey, List<BlockPosition>>();
             plan.expected().keySet().forEach(position -> sections.computeIfAbsent(new SectionKey(
                     Math.floorDiv(position.x(), 16), Math.floorDiv(position.y(), 16), Math.floorDiv(position.z(), 16)),
                     ignored -> new ArrayList<>()).add(position));
             for (var entry : sections.entrySet()) {
                 ObjectId id = leaf(leaves, entry.getKey()).orElseThrow(() -> new IOException("Missing action block origin"));
-                SectionBlob before = objects.readSection(id);
+                SectionBlob before = objects.readSection(changes.getOrDefault(entry.getKey(), id));
                 var blocks = new ArrayList<>(before.blockStates());
                 var nbt = new HashMap<>(before.blockEntities());
                 for (var position : entry.getValue()) {
@@ -62,7 +82,7 @@ public final class ActionReplayPreparation {
             return commits.write(new Commit(tree, List.of(captured), author,
                     plan.direction() == LiveActionJournal.Direction.UNDO ? "Undo action" : "Redo action", Instant.now(),
                     current.workspaceId(), Optional.empty(), CommitKind.HIDDEN_RETURN,
-                    new CommitStatistics(sections.size(), entityChunks, plan.expected().size(), plan.expectedEntities().size()),
+                    new CommitStatistics(changes.size() - entityChunks, entityChunks, plan.expected().size(), plan.expectedEntities().size()),
                     current.playerSpawns()));
         }
     }

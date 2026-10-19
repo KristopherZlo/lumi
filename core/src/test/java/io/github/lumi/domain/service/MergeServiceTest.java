@@ -36,7 +36,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class MergeServiceTest {
-    @Test void projectsLiveActionEndpointsOntoTheCapturedWorldWithoutMovingSavedRefs() throws Exception {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void projectsLiveActionEndpointsOntoTheCapturedWorldWithoutMovingSavedRefs(boolean compact) throws Exception {
         var objects = new WorldObjectRepository(repositoryRoot);
         var commits = new CommitRepository(repositoryRoot);
         var origins = new OriginStore(repositoryRoot);
@@ -46,7 +48,9 @@ class MergeServiceTest {
         var journal = new LiveActionJournal();
         var actor = author().id();
         UUID action = journal.begin(actor);
-        journal.record(action, new io.github.lumi.domain.model.BlockPosition(0, 0, 0),
+        if (compact) journal.recordSection(action, new io.github.lumi.domain.model.SectionKey(0, 0, 0),
+                section("minecraft:stone", "minecraft:air"), section("minecraft:gold_block", "minecraft:air"));
+        else journal.record(action, new io.github.lumi.domain.model.BlockPosition(0, 0, 0),
                 new io.github.lumi.domain.model.BlockSnapshot("minecraft:stone", Optional.empty()),
                 new io.github.lumi.domain.model.BlockSnapshot("minecraft:gold_block", Optional.empty()));
         journal.close(action);

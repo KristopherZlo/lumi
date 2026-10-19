@@ -10,6 +10,8 @@ import io.github.lumi.domain.model.WorldActionRecord.EntityDelta;
 import io.github.lumi.domain.model.WorldDataVersion;
 import io.github.lumi.domain.model.BiomePosition;
 import io.github.lumi.domain.model.WorldActionRecord.BiomeDelta;
+import io.github.lumi.domain.model.WorldActionRecord.SectionDelta;
+import io.github.lumi.domain.model.SectionKey;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -23,7 +25,8 @@ import java.util.UUID;
 
 /** Streamed action payload with a shared state palette and a bounded decoder. */
 public final class WorldActionPayloadCodec {
-    private static final int MAGIC = 0x4C415032;
+    private static final int MAGIC = 0x4C415033;
+    private final SectionBlobCodec sections = new SectionBlobCodec();
     private static final int MAX_STRING = 1024 * 1024;
     private static final int MAX_NBT = 16 * 1024 * 1024;
     private static final int MAX_ENTRIES = 4_000_000;
@@ -65,6 +68,13 @@ public final class WorldActionPayloadCodec {
             CanonicalBytes.writeString(output, entry.getValue().before(), MAX_STRING, "before biome");
             CanonicalBytes.writeString(output, entry.getValue().after(), MAX_STRING, "after biome");
         }
+        if (record.payload().sections().size() > MAX_ENTRIES) throw new IOException("Too many action section entries");
+        output.writeInt(record.payload().sections().size());
+        for (var entry : record.payload().sections().entrySet()) {
+            output.writeInt(entry.getKey().chunkX()); output.writeInt(entry.getKey().sectionY()); output.writeInt(entry.getKey().chunkZ());
+            CanonicalBytes.write(output, sections.encode(entry.getValue().before()), MAX_NBT, "before section");
+            CanonicalBytes.write(output, sections.encode(entry.getValue().after()), MAX_NBT, "after section");
+        }
     }
 
     public WorldActionRecord decode(WorldActionRecord.Metadata expected, WorldDataVersion version,
@@ -104,8 +114,18 @@ public final class WorldActionPayloadCodec {
                     throw new IOException("Duplicate action biome position");
                 }
             }
+            count = budget.count(input, 65_536);
+            var sectionChanges = new LinkedHashMap<SectionKey, SectionDelta>();
+            for (int index = 0; index < count; index++) {
+                var key = new SectionKey(input.readInt(), input.readInt(), input.readInt());
+                var delta = new SectionDelta(sections.decode(budget.bytes(input, MAX_NBT, "before section")),
+                        sections.decode(budget.bytes(input, MAX_NBT, "after section")));
+                if (!delta.before().dataVersion().equals(version) || sectionChanges.put(key, delta) != null) {
+                    throw new IOException("Duplicate or incorrectly versioned action section");
+                }
+            }
             if (input.read() != -1) throw new IOException("Trailing action payload bytes");
-            return new WorldActionRecord(expected, new WorldActionRecord.Payload(blocks, entities, biomes));
+            return new WorldActionRecord(expected, new WorldActionRecord.Payload(blocks, entities, biomes, sectionChanges));
         } catch (IllegalArgumentException invalid) {
             throw new IOException("Invalid action payload", invalid);
         }

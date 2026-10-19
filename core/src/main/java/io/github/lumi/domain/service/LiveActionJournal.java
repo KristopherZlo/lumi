@@ -10,6 +10,10 @@ import io.github.lumi.domain.model.WorldActionRecord.EntityDelta;
 import io.github.lumi.domain.model.WorldActionIndex;
 import io.github.lumi.domain.model.BiomePosition;
 import io.github.lumi.domain.model.WorldActionRecord.BiomeDelta;
+import io.github.lumi.domain.model.WorldActionRecord.SectionDelta;
+import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.SectionBlob;
+import io.github.lumi.domain.model.WorldActionScope;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.Collections;
@@ -128,6 +132,15 @@ public final class LiveActionJournal {
         }
         MutableAction action = effectiveAction(
                 causalAction, position, blockOwners);
+        var sectionKey = new SectionKey(position.x() >> 4, position.y() >> 4, position.z() >> 4);
+        var section = action.sections.get(sectionKey);
+        if (section != null) {
+            int cell = ((position.y() & 15) << 8) | ((position.z() & 15) << 4) | (position.x() & 15);
+            var combined = section.followedByBlock(cell, before, after);
+            recordSection(action.id, sectionKey, combined.before(), combined.after());
+            discardUnowned(before); discardUnowned(after);
+            return action.id;
+        }
         BlockDelta previous = action.changes.get(position);
         BlockDelta updated = new BlockDelta(previous == null ? before : previous.before(), after);
         long previousBytes = previous == null ? 0 : estimatedBytes(previous);
@@ -198,6 +211,46 @@ public final class LiveActionJournal {
     }
 
     private static long biomeBytes(BiomeDelta delta) { return 32L + 2L * (delta.before().length() + delta.after().length()); }
+
+    public synchronized void recordSection(UUID actionId, SectionKey key, SectionBlob before, SectionBlob after) {
+        revision++;
+        var action = requireAction(actionId);
+        if (!action.available || before.equals(after)) return;
+        var previous = action.sections.get(key);
+        var delta = previous == null ? new SectionDelta(before, after) : previous.followedBy(new SectionDelta(before, after));
+        startRecording(action);
+        long oldBytes = previous == null ? 0 : sectionBytes(previous);
+        long bytes = delta.before().equals(delta.after()) ? 0 : sectionBytes(delta);
+        if (!resize(action, bytes - oldBytes)) return;
+        var covered = action.changes.entrySet().iterator();
+        while (covered.hasNext()) {
+            var entry = covered.next();
+            if ((entry.getKey().x() >> 4) != key.chunkX() || (entry.getKey().y() >> 4) != key.sectionY()
+                    || (entry.getKey().z() >> 4) != key.chunkZ()) continue;
+            adjustBytes(action.player, -estimatedBytes(entry.getValue()));
+            action.bytes -= estimatedBytes(entry.getValue());
+            blockOwners.set(entry.getKey(), action, false);
+            releaseBlockStates(entry.getValue());
+            covered.remove();
+        }
+        if (bytes == 0) { action.sections.remove(key); action.sectionScopes.remove(key); }
+        else {
+            action.sections.put(key, delta);
+            action.sectionScopes.put(key, sectionScope(key, delta));
+        }
+        action.revision++;
+    }
+
+    private static WorldActionScope sectionScope(SectionKey key, SectionDelta delta) {
+        return WorldActionScope.between(Map.of(key, delta.before()), Map.of(key, delta.after()), Map.of(), Map.of());
+    }
+
+    private static long sectionBytes(SectionDelta delta) { return sectionBytes(delta.before()) + sectionBytes(delta.after()); }
+    private static long sectionBytes(SectionBlob section) {
+        long bytes = 16_384 + section.blockEntities().values().stream().mapToLong(nbt -> nbt.byteSize()).sum();
+        for (String state : section.distinctBlockStates()) bytes += 2L * state.length();
+        return bytes;
+    }
 
     private UUID replaceEntity(MutableAction action, UUID entityId, EntityDelta updated) {
         EntityDelta previous = action.entities.get(entityId);
@@ -463,7 +516,7 @@ public final class LiveActionJournal {
                 || !action.player.equals(expected.actor()) || action.sequence != expected.sequence()) {
             throw new java.util.ConcurrentModificationException("Action changed during history capture");
         }
-        return new WorldActionRecord(expected, new WorldActionRecord.Payload(action.changes, action.entities, action.biomes));
+        return new WorldActionRecord(expected, new WorldActionRecord.Payload(action.changes, action.entities, action.biomes, action.sections));
     }
 
     /** Startup only, off-thread. An interrupted producer is retained on disk but cannot be replayed. */
@@ -482,9 +535,12 @@ public final class LiveActionJournal {
             action.changes.putAll(record.payload().blocks());
             action.entities.putAll(record.payload().entities());
             action.biomes.putAll(record.payload().biomes());
+            action.sections.putAll(record.payload().sections());
+            action.sections.forEach((key, delta) -> action.sectionScopes.put(key, sectionScope(key, delta)));
             action.bytes = action.changes.values().stream().mapToLong(LiveActionJournal::estimatedBytes).sum()
                     + action.entities.values().stream().mapToLong(LiveActionJournal::estimatedBytes).sum()
                     + action.biomes.values().stream().mapToLong(LiveActionJournal::biomeBytes).sum()
+                    + action.sections.values().stream().mapToLong(LiveActionJournal::sectionBytes).sum()
                     + metadata.checkpoint().map(value -> value.scope().estimatedBytes()).orElse(0L);
             if (action.bytes > limits.maxActionBytes || retainedBytes + action.bytes > limits.maxDimensionBytes
                     || playerBytes.getOrDefault(action.player, 0L) + action.bytes > limits.maxPlayerBytes) {
@@ -626,13 +682,22 @@ public final class LiveActionJournal {
         Map<BlockPosition, BlockDelta> blocks = new LinkedHashMap<>();
         Map<UUID, EntityDelta> entities = new LinkedHashMap<>();
         Map<BiomePosition, BiomeDelta> biomes = new LinkedHashMap<>();
+        Map<SectionKey, SectionDelta> sectionChanges = new LinkedHashMap<>();
+        var sectionSeeds = new HashMap<SectionKey, SectionBlob>();
+        group.forEach(action -> action.sections.forEach((key, delta) -> sectionSeeds.putIfAbsent(key, delta.before())));
         for (MutableAction action : group) {
+            action.sections.forEach((key, delta) -> sectionChanges.merge(key, delta, SectionDelta::followedBy));
             action.biomes.forEach((position, change) -> biomes.merge(position, change,
                     (previous, latest) -> new BiomeDelta(previous.before(), latest.after())));
-            action.changes.forEach((position, change) -> blocks.merge(
-                    position, change,
-                    (previous, latest) ->
-                            new BlockDelta(previous.before(), latest.after())));
+            action.changes.forEach((position, change) -> {
+                var key = new SectionKey(position.x() >> 4, position.y() >> 4, position.z() >> 4);
+                if (sectionSeeds.containsKey(key)) {
+                    var seed = sectionSeeds.get(key);
+                    var delta = sectionChanges.getOrDefault(key, new SectionDelta(seed, seed));
+                    int cell = ((position.y() & 15) << 8) | ((position.z() & 15) << 4) | (position.x() & 15);
+                    sectionChanges.put(key, delta.followedByBlock(cell, change.before(), change.after()));
+                } else blocks.merge(position, change, (previous, latest) -> new BlockDelta(previous.before(), latest.after()));
+            });
             action.entities.forEach((entity, change) -> entities.merge(
                     entity, change,
                     (previous, latest) ->
@@ -643,7 +708,7 @@ public final class LiveActionJournal {
         Set<BlockPosition> blockOrder = new LinkedHashSet<>();
         Set<UUID> entityOrder = new LinkedHashSet<>();
         for (MutableAction action : applicationOrder) {
-            blockOrder.addAll(action.changes.keySet());
+            action.changes.keySet().stream().filter(blocks::containsKey).forEach(blockOrder::add);
             entityOrder.addAll(action.entities.keySet());
         }
         Map<BlockPosition, BlockSnapshot> expected = new LinkedHashMap<>();
@@ -663,7 +728,7 @@ public final class LiveActionJournal {
         return Optional.of(new Plan(
                 player, group.stream().map(action -> action.id).toList(),
                 direction, expected, replacement,
-                expectedEntities, replacementEntities, Optional.empty(), biomes));
+                expectedEntities, replacementEntities, Optional.empty(), biomes, sectionChanges));
     }
 
     private MutableAction requireAction(UUID id) {
@@ -763,7 +828,7 @@ public final class LiveActionJournal {
     }
 
     private static boolean isEmpty(MutableAction action) {
-        return action.changes.isEmpty() && action.entities.isEmpty() && action.biomes.isEmpty()
+        return action.changes.isEmpty() && action.entities.isEmpty() && action.biomes.isEmpty() && action.sections.isEmpty()
                 && action.checkpoint == null;
     }
 
@@ -890,6 +955,8 @@ public final class LiveActionJournal {
         action.changes.clear();
         action.entities.clear();
         action.biomes.clear();
+        action.sections.clear();
+        action.sectionScopes.clear();
         PlayerStacks stacks = stacks(action.player);
         if (stacks.undo.remove(action.id) || stacks.redo.remove(action.id)) {
             stacks.remove(action.groupId);
@@ -982,12 +1049,12 @@ public final class LiveActionJournal {
             Map<BlockPosition, BlockSnapshot> replacement,
             Map<UUID, Optional<EntityState>> expectedEntities,
             Map<UUID, Optional<EntityState>> replacementEntities,
-            Optional<WorldActionCheckpoint> checkpoint, Map<BiomePosition, BiomeDelta> biomes) {
+            Optional<WorldActionCheckpoint> checkpoint, Map<BiomePosition, BiomeDelta> biomes, Map<SectionKey, SectionDelta> sections) {
         public Plan(UUID player, List<UUID> actionIds, Direction direction,
                 Map<BlockPosition, BlockSnapshot> expected, Map<BlockPosition, BlockSnapshot> replacement,
                 Map<UUID, Optional<EntityState>> expectedEntities, Map<UUID, Optional<EntityState>> replacementEntities,
                 Optional<WorldActionCheckpoint> checkpoint) {
-            this(player, actionIds, direction, expected, replacement, expectedEntities, replacementEntities, checkpoint, Map.of());
+            this(player, actionIds, direction, expected, replacement, expectedEntities, replacementEntities, checkpoint, Map.of(), Map.of());
         }
         public Plan {
             Objects.requireNonNull(player, "player");
@@ -1004,6 +1071,7 @@ public final class LiveActionJournal {
             replacementEntities = immutableOrderedCopy(replacementEntities);
             checkpoint = Objects.requireNonNull(checkpoint, "checkpoint");
             biomes = immutableOrderedCopy(biomes);
+            sections = immutableOrderedCopy(sections);
         }
 
         public UUID actionId() {
@@ -1037,6 +1105,14 @@ public final class LiveActionJournal {
 
     private static final class MutableAction {
         private boolean overlapsCheckpoint(MutableAction other) {
+            for (var entry : sectionScopes.entrySet()) {
+                var scope = entry.getValue();
+                if (scope.intersects(other.changes.keySet(), Set.of())
+                        || other.checkpoint != null && scope.intersects(other.checkpoint.scope())
+                        || other.sectionScopes.containsKey(entry.getKey()) && scope.intersects(other.sectionScopes.get(entry.getKey()))) return true;
+            }
+            if (other.sectionScopes.values().stream().anyMatch(scope -> scope.intersects(changes.keySet(), Set.of()))) return true;
+            if (checkpoint != null && other.sectionScopes.values().stream().anyMatch(checkpoint.scope()::intersects)) return true;
             if (checkpoint != null && other.checkpoint != null) {
                 return checkpoint.scope().intersects(other.checkpoint.scope());
             }
@@ -1054,6 +1130,8 @@ public final class LiveActionJournal {
         private final Map<BlockPosition, BlockDelta> changes = new LinkedHashMap<>();
         private final Map<UUID, EntityDelta> entities = new LinkedHashMap<>();
         private final Map<BiomePosition, BiomeDelta> biomes = new LinkedHashMap<>();
+        private final Map<SectionKey, SectionDelta> sections = new LinkedHashMap<>();
+        private final Map<SectionKey, WorldActionScope> sectionScopes = new HashMap<>();
         private boolean closed;
         private boolean started;
         private boolean available = true;

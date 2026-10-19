@@ -25,6 +25,36 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class LiveActionJournalTest {
+    @Test void compactSectionsKeepChangedCellOwnershipAndAbsorbLaterCausalWrites() throws Exception {
+        var journal = new LiveActionJournal();
+        var key = new SectionKey(0, 0, 0);
+        var empty = new SectionBlob(java.util.Collections.nCopies(4096, "minecraft:air"), Map.of());
+        var states = new java.util.ArrayList<>(empty.blockStates());
+        states.set(0, "minecraft:stone");
+        var placed = new SectionBlob(states, Map.of());
+        UUID action = journal.begin(PLAYER_A);
+        journal.recordSection(action, key, empty, placed);
+        journal.close(action);
+        journal.record(action, new BlockPosition(0, 0, 0), block("stone"), block("gold_block"));
+        var delta = journal.prepareUndo(PLAYER_A).orElseThrow().sections().get(key);
+        assertEquals("minecraft:air", delta.before().blockStates().getFirst());
+        assertEquals("minecraft:gold_block", delta.after().blockStates().getFirst());
+        UUID foreign = journal.begin(PLAYER_B);
+        journal.record(foreign, new BlockPosition(1, 0, 0), block("air"), block("diamond_block"));
+        journal.close(foreign);
+        assertEquals(action, journal.prepareUndo(PLAYER_A).orElseThrow().actionId());
+        UUID overlap = journal.begin(PLAYER_B);
+        journal.record(overlap, new BlockPosition(0, 0, 0), block("gold_block"), block("dirt"));
+        journal.close(overlap);
+        assertThrows(IllegalStateException.class, () -> journal.prepareUndo(PLAYER_A));
+        var reopened = new LiveActionJournal();
+        reopened.restore(journal.snapshotIndex(), journal::snapshotAction);
+        assertThrows(IllegalStateException.class, () -> reopened.prepareUndo(PLAYER_A));
+        journal.complete(journal.prepareUndo(PLAYER_B).orElseThrow());
+        journal.complete(journal.prepareUndo(PLAYER_A).orElseThrow());
+        assertEquals(action, journal.prepareRedo(PLAYER_A).orElseThrow().actionId());
+    }
+
     @Test void biomeActionsShareOrderingAndPreserveEarlierRedoAfterANoop() throws Exception {
         var journal = new LiveActionJournal();
         var position = new io.github.lumi.domain.model.BiomePosition(-1, -1, -1);

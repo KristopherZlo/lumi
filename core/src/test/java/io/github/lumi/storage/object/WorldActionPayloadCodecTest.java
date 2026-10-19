@@ -116,25 +116,28 @@ class WorldActionPayloadCodecTest {
         var payload = new WorldActionRecord.Payload(blocks, Map.of(entity, new EntityDelta(Optional.empty(),
                 Optional.of(new EntityState(entity, "minecraft:armor_stand", new CanonicalNbt(new byte[] {3, 4}))))),
                 Map.of(new io.github.lumi.domain.model.BiomePosition(-1, -1, -1),
-                        new WorldActionRecord.BiomeDelta("minecraft:plains", "minecraft:desert")));
+                        new WorldActionRecord.BiomeDelta("minecraft:plains", "minecraft:desert")),
+                Map.of(new SectionKey(-1, -1, -1), new WorldActionRecord.SectionDelta(
+                        new io.github.lumi.domain.model.SectionBlob(java.util.Collections.nCopies(4096, "minecraft:air"), Map.of(), version),
+                        new io.github.lumi.domain.model.SectionBlob(java.util.Collections.nCopies(4096, "minecraft:stone"), Map.of(), version))));
         var record = new WorldActionRecord(metadata(1), payload);
         var bytes = new ByteArrayOutputStream();
         codec.encode(record, version, new DataOutputStream(bytes));
         byte[] valid = bytes.toByteArray();
 
-        var restored = codec.decode(metadata(1), version, 4096, input(valid));
+        var restored = codec.decode(metadata(1), version, 262144, input(valid));
         assertEquals(record, restored);
         assertEquals(List.copyOf(blocks.keySet()), List.copyOf(restored.payload().blocks().keySet()));
-        assertThrows(IOException.class, () -> codec.decode(metadata(2), version, 4096, input(valid)));
-        assertThrows(IOException.class, () -> codec.decode(metadata(1), new WorldDataVersion(5001), 4096, input(valid)));
+        assertThrows(IOException.class, () -> codec.decode(metadata(2), version, 262144, input(valid)));
+        assertThrows(IOException.class, () -> codec.decode(metadata(1), new WorldDataVersion(5001), 262144, input(valid)));
         assertThrows(IOException.class, () -> codec.decode(metadata(1), version, 1, input(valid)));
-        assertThrows(IOException.class, () -> codec.decode(metadata(1), version, 4096,
+        assertThrows(IOException.class, () -> codec.decode(metadata(1), version, 262144,
                 input(Arrays.copyOf(valid, valid.length - 1))));
-        assertThrows(IOException.class, () -> codec.decode(metadata(1), version, 4096,
+        assertThrows(IOException.class, () -> codec.decode(metadata(1), version, 262144,
                 input(Arrays.copyOf(valid, valid.length + 1))));
         byte[] oversizedPalette = valid.clone();
         ByteBuffer.wrap(oversizedPalette).putInt(32, Integer.MAX_VALUE);
-        assertThrows(IOException.class, () -> codec.decode(metadata(1), version, 4096, input(oversizedPalette)));
+        assertThrows(IOException.class, () -> codec.decode(metadata(1), version, 262144, input(oversizedPalette)));
     }
 
     private static WorldActionRecord.Metadata metadata(long revision) {
