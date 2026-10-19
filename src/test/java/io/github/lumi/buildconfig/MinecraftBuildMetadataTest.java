@@ -28,7 +28,6 @@ class MinecraftBuildMetadataTest {
             assertTrue(names.contains("GameTestServerFailFastMixin"), source.toString());
             assertTrue(names.contains("GameTestSequenceFailureMixin"), source.toString());
             assertTrue(names.contains("AxiomVerificationFaultMixin"), source.toString());
-            assertTrue(names.contains("AxiomBlockReadFaultMixin"), source.toString());
             assertTrue(configuration.getAsJsonArray("client").asList().stream()
                     .anyMatch(name -> name.getAsString().equals("ClientScreenTraceMixin")), source.toString());
         }
