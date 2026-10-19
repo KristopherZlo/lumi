@@ -31,7 +31,6 @@ import io.github.lumi.minecraft.operation.WorkingIndexClearPublication;
 import io.github.lumi.minecraft.operation.WorkingIndexRecoveryPublication;
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.BranchRef;
-import io.github.lumi.domain.model.WorldActionScope;
 import io.github.lumi.domain.model.WorldActionCheckpoint;
 import io.github.lumi.domain.model.BranchSwitchPlan;
 import io.github.lumi.domain.model.ActiveBranch;
@@ -395,12 +394,20 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 new WorkspaceRepository(repository), activeWorkspaces, commits, refs);
         UUID defaultWorkspaceId = workspaceService.defaultWorkspaceId();
         workspaceService.initializeDefault(defaultWorkspaceId);
+        var actionVersion = new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version());
+        var actionRepository = new WorldActionHistoryRepository(repository, actionVersion);
+        var recoveringHistory = new WorldActionHistory(actionRepository, actionVersion);
         if (interrupted.isPresent()
                 && new PublishedApplyRecovery(
                         refs, active, activeWorkspaces, working, journals)
-                        .finalizeIfPublished(interrupted.orElseThrow())) {
+                        .finalizeIfPublished(interrupted.orElseThrow(), journal -> {
+                            if (journal.actionReplay().isPresent() && recoveringHistory.hasPreparedCheckpoint(journal.operationId())) {
+                                recoveringHistory.publishCheckpoint(journal.operationId(), true);
+                            }
+                        })) {
             interrupted = Optional.empty();
         }
+        actionRepository.pruneStagedCheckpoints(interrupted.map(OperationJournal::operationId));
         UUID activeWorkspaceId = workspaceService.active().id();
         var sessionCheckpoints = new SessionCheckpointRefService(refs);
         var recoveryLease = interrupted.isPresent() ? freeze.acquire() : null;
@@ -628,7 +635,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 }
             }
             if (finished) {
-                pruneSessionCheckpointRefs(Set.of());
+                try {
+                    pruneSessionCheckpointRefs(new WorldActionHistoryRepository(repository).retainedCommits());
+                } catch (IOException failed) {
+                    LumiMod.LOGGER.error("Cannot collect completed recovery checkpoints", failed);
+                }
             }
             terminalObserver.accept(completed);
         });
@@ -636,6 +647,16 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     private RestorePublication recoveryPublication(
+            OperationJournal journal, RecoveryChoice choice) throws IOException {
+        RestorePublication world = recoveryWorldPublication(journal, choice);
+        if (journal.actionReplay().isPresent() && actionHistory.hasPreparedCheckpoint(journal.operationId())) {
+            return ActionReplayPublication.checkpoint(world, actionHistory, journal.operationId(),
+                    choice == RecoveryChoice.RESUME_TARGET, ignored -> journal.actionReplay().orElseThrow(), this::installActionHistory);
+        }
+        return world;
+    }
+
+    private RestorePublication recoveryWorldPublication(
             OperationJournal journal, RecoveryChoice choice) throws IOException {
         if (choice == RecoveryChoice.RETURN_CHECKPOINT
                 && journal.kind() != OperationKind.QUICK_ROLLBACK
@@ -1029,7 +1050,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 () -> requireExpectedRef(expected),
                 () -> createRestore(expected, target, author, includeEntities));
         enqueueForeground(
-                operation, OperationPriority.NORMAL, clearingLiveHistory(terminalObserver));
+                operation, OperationPriority.NORMAL, terminalObserver);
         return operation;
     }
 
@@ -1038,6 +1059,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             CommitId target,
             CommitAuthor author,
             boolean includeEntities) throws IOException {
+        liveEntities.finalizeOwned();
         UUID workspaceId = activeWorkspaceId();
         restores.requireTargetInWorkspace(target, workspaceId);
         if (isRestoreNoOp(expected.commit(), target, mutations.hasPendingChanges())) {
@@ -1047,7 +1069,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         SaveRequest returnPoint = new SaveRequest(
                 expected, author, "Return point before Restore", Instant.now(),
                 workspaceId, Optional.empty(), CommitKind.HIDDEN_RETURN);
-        BranchName hiddenRef = new BranchName("hidden/return/" + operationId);
+        BranchName hiddenRef = sessionCheckpoints.name(operationId);
         SaveCaptureOperation checkpoint = createChunkReadySave(
                 returnPoint, scopedReturnPointPreparation(returnPoint),
                 (request, captured) -> saves.checkpoint(
@@ -1055,8 +1077,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         RestorePrewarm prewarm = includeEntities
                 ? takeOrStartRestorePrewarm(expected, target) : null;
         ReturnPointRestoreOperation.RestorePreparation preparation = (saved, progress) -> {
-            var publication = new BranchRefRestorePublication(
-                    refs, mutations, saved.capturedGenerations());
+            var publication = recordingPublication(new BranchRefRestorePublication(
+                    refs, mutations, saved.capturedGenerations()), operationId, author.id(), saved.branchRef());
             return includeEntities
                     ? returnPointRestores.prepareCheckpoint(
                             expected, saved, target, operationId,
@@ -1205,20 +1227,56 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         actionHistory.restore(liveActions, selectedWorkspaceId, activeRef().name());
         for (var metadata : liveActions.snapshotIndex().actions()) {
             var record = liveActions.snapshotAction(metadata);
-            for (var delta : record.payload().blocks().values()) {
-                liveWorld.prepare(delta.before()); liveWorld.prepare(delta.after());
-            }
-            var before = new java.util.HashMap<UUID, Optional<io.github.lumi.domain.model.EntityState>>();
-            var after = new java.util.HashMap<UUID, Optional<io.github.lumi.domain.model.EntityState>>();
-            for (var entry : record.payload().entities().entrySet()) {
-                var delta = entry.getValue();
-                if (delta.before().isPresent()) liveEntityWorld.prepare(delta.before().orElseThrow());
-                if (delta.after().isPresent()) liveEntityWorld.prepare(delta.after().orElseThrow());
-                before.put(entry.getKey(), delta.before()); after.put(entry.getKey(), delta.after());
-            }
-            liveEntities.trackApplied(metadata.id(), metadata.applied() ? LiveActionJournal.Direction.REDO : LiveActionJournal.Direction.UNDO,
-                    metadata.applied() ? before : after, metadata.applied() ? after : before);
+            prepareActionRecord(record);
+            trackActionRecord(record);
         }
+    }
+
+    private void prepareActionRecord(io.github.lumi.domain.model.WorldActionRecord record) throws IOException {
+        for (var delta : record.payload().blocks().values()) {
+            liveWorld.prepare(delta.before()); liveWorld.prepare(delta.after());
+        }
+        for (var delta : record.payload().entities().values()) {
+            if (delta.before().isPresent()) liveEntityWorld.prepare(delta.before().orElseThrow());
+            if (delta.after().isPresent()) liveEntityWorld.prepare(delta.after().orElseThrow());
+        }
+    }
+
+    private void trackActionRecord(io.github.lumi.domain.model.WorldActionRecord record) {
+        var metadata = record.metadata();
+        var before = new java.util.HashMap<UUID, Optional<io.github.lumi.domain.model.EntityState>>();
+        var after = new java.util.HashMap<UUID, Optional<io.github.lumi.domain.model.EntityState>>();
+        for (var entry : record.payload().entities().entrySet()) {
+            var delta = entry.getValue();
+            before.put(entry.getKey(), delta.before()); after.put(entry.getKey(), delta.after());
+        }
+        liveEntities.trackApplied(metadata.id(), metadata.applied() ? LiveActionJournal.Direction.REDO : LiveActionJournal.Direction.UNDO,
+                metadata.applied() ? before : after, metadata.applied() ? after : before);
+    }
+
+    private Runnable installActionHistory(io.github.lumi.storage.object.WorldActionIndexCodec.State state) throws IOException {
+        var added = new java.util.ArrayList<io.github.lumi.domain.model.WorldActionRecord>();
+        liveActions.installIndex(state.index(), metadata -> {
+            var record = actionHistory.readRecord(state, metadata);
+            prepareActionRecord(record);
+            added.add(record);
+            return record;
+        });
+        storedActionRevision = state.index().revision();
+        return () -> { liveEntities.discardUnavailable(); added.forEach(this::trackActionRecord); };
+    }
+
+    private RestorePublication recordingPublication(RestorePublication world, UUID operation, UUID actor, BranchRef captured) {
+        UUID workspace = selectedWorkspaceId;
+        return ActionReplayPublication.checkpoint(world, actionHistory, operation, true, restore -> {
+            if (!persistActionHistory()) throw new IOException("Action changed during replacement capture");
+            var objects = new WorldObjectRepository(repository);
+            try (var publication = objects.beginPublication()) {
+                var checkpoint = new ActionReplayPreparation(objects, new CommitRepository(repository), new OriginStore(repository),
+                        new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version())).checkpoint(captured, restore);
+                return actionHistory.prepareCheckpoint(operation, actor, checkpoint, workspace, restore.expectedRef().name());
+            }
+        }, this::installActionHistory);
     }
 
     private Optional<LiveActionJournal.Plan> selectedPlan(
@@ -2008,13 +2066,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         Objects.requireNonNull(plan, "plan");
         var operation = new DeferredDimensionMutation(true, () -> createMerge(plan));
         enqueueForeground(
-                operation, OperationPriority.NORMAL, clearingLiveHistory(terminalObserver));
+                operation, OperationPriority.NORMAL, terminalObserver);
         return operation;
     }
 
     private BackgroundPreparedMutation<RestoreOperation> createMerge(PreparedMerge plan)
             throws IOException {
         validateMerge(plan);
+        liveEntities.finalizeOwned();
         UUID operationId = UUID.randomUUID();
         var progress = new AtomicReference<>(OperationProgress.indeterminate(
                 "Restore: reading saved state"));
@@ -2024,7 +2083,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         plan.request().current(), plan.result().commit(),
                         value -> publishRestoreDiffProgress(progress::set, value));
                 return RestoreOperation.startMerge(
-                        prepared, worldApply, new BranchRefRestorePublication(refs),
+                        prepared, worldApply, recordingPublication(new BranchRefRestorePublication(refs),
+                                operationId, plan.request().author().id(), refs.create(sessionCheckpoints.name(operationId), plan.request().current().commit())),
                         journals, operationId, restoreStateListener, progress::set);
             } catch (IOException failed) {
                 throw new CompletionException(failed);
@@ -2087,10 +2147,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             CommitId target,
             BlockAreaTarget area,
             CommitAuthor author) throws IOException {
+        liveEntities.finalizeOwned();
         UUID workspaceId = activeWorkspaceId();
         restores.requireTargetInWorkspace(target, workspaceId);
         UUID operationId = UUID.randomUUID();
-        BranchName hidden = new BranchName("hidden/partial/" + operationId);
+        BranchName hidden = sessionCheckpoints.name(operationId);
         SaveRequest checkpointRequest = new SaveRequest(
                 expected, author,
                 "Checkpoint before partial Restore", Instant.now(), workspaceId,
@@ -2109,7 +2170,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                                 expected, saved.commitId(), target, area.area(), area.outside(),
                                 value -> publishRestoreDiffProgress(progress, value));
                         return RestoreOperation.startPartial(
-                                prepared, worldApply, new PendingRestorePublication(mutations),
+                                prepared, worldApply, recordingPublication(new PendingRestorePublication(mutations), operationId, author.id(), saved.branchRef()),
                                 journals, operationId, restoreStateListener, area,
                                 saved.commitId(), progress);
                     } catch (IOException failed) {
@@ -2164,11 +2225,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             CommitId target,
             UUID zoneId,
             CommitAuthor author) throws IOException {
+        liveEntities.finalizeOwned();
         var workspace = workspaces.active();
         var zone = zones.require(workspace.id(), zoneId);
         ZoneScope scope = new ZoneScope(zone);
         UUID operationId = UUID.randomUUID();
-        BranchName hidden = new BranchName("hidden/zone/" + operationId);
+        BranchName hidden = sessionCheckpoints.name(operationId);
         SaveRequest checkpointRequest = new SaveRequest(
                 expected, author,
                 "Checkpoint before zone Restore", Instant.now(), workspace.id(),
@@ -2193,7 +2255,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                                 expected, saved.commitId(), target, zone,
                                 value -> publishRestoreDiffProgress(progress, value));
                         return RestoreOperation.startZone(
-                                prepared, worldApply, new PendingRestorePublication(mutations),
+                                prepared, worldApply, recordingPublication(new PendingRestorePublication(mutations), operationId, author.id(), saved.branchRef()),
                                 journals, operationId, restoreStateListener, zone,
                                 saved.commitId(), progress);
                     } catch (IOException failed) {
@@ -2216,13 +2278,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         requireNoRecovery();
         Objects.requireNonNull(expected, "expected");
         Objects.requireNonNull(author, "author");
-        var context = new AtomicReference<QuickRollbackContext>();
-        var scope = new AtomicReference<WorldActionScope>();
+        var scope = new AtomicReference<Workspace>();
         var operation = new DeferredDimensionMutation(
                 true,
                 () -> requireExpectedRef(expected),
                 () -> {
                     var workspace = activeWorkspace();
+                    scope.set(workspace);
                     Map<HistoryKey, Long> generations = new HashMap<>();
                     mutations.snapshot().generations().forEach((key, generation) -> {
                         if (workspace.includes(key)) {
@@ -2233,26 +2295,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     if (pending.generations().isEmpty()) {
                         return new NoChangeMutation("luma.status.nothing_to_restore");
                     }
-                    ReturnPointRestoreOperation rollback =
-                            createQuickRollback(author, pending, expected, scope);
-                    context.set(new QuickRollbackContext(expected, workspace, rollback, scope));
-                    return rollback;
+                    return createQuickRollback(author, pending, expected);
                 });
         enqueueForeground(operation, OperationPriority.URGENT, completed -> {
             try {
-                if (completed.terminalState()
-                        == io.github.lumi.minecraft.operation.MutationTerminalState.SUCCEEDED) {
-                    QuickRollbackContext value = context.get();
-                    if (value != null) {
-                        var saved = value.operation().returnPoint().orElseThrow();
-                        causalTicks.cancelScope(value.workspace()::includes);
-                        DirectLiveActionContext.recoverOrphanedAction(
-                                liveActions, author.id());
-                        liveActions.pushCheckpoint(
-                                author.id(), new WorldActionCheckpoint(
-                                        value.expectedRef().name(), saved.commitId(), value.expectedRef().commit(),
-                                        saved.branchRef(), value.scope().get()));
-                    }
+                if (completed.terminalState() == io.github.lumi.minecraft.operation.MutationTerminalState.SUCCEEDED && scope.get() != null) {
+                    causalTicks.cancelScope(scope.get()::includes);
                 }
             } finally {
                 terminalObserver.accept(completed);
@@ -2326,8 +2374,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private ReturnPointRestoreOperation createQuickRollback(
             CommitAuthor author,
             WorkingIndexSnapshot pending,
-            BranchRef expected,
-            AtomicReference<WorldActionScope> scope)
+            BranchRef expected)
             throws IOException {
         UUID operationId = UUID.randomUUID();
         BranchName hidden = sessionCheckpoints.name(operationId);
@@ -2342,6 +2389,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 ignored -> { });
         var operation = new ReturnPointRestoreOperation(checkpoint, (saved, progress) -> {
             try {
+                DirectLiveActionContext.recoverOrphanedAction(liveActions, author.id());
                 liveEntities.finalizeOwned();
             } catch (IOException failed) {
                 return CompletableFuture.failedFuture(failed);
@@ -2354,21 +2402,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     var prepared = restores.prepare(
                             expected, saved.commitId(), expected.commit(),
                             value -> publishRestoreDiffProgress(progress, value));
-                    try {
-                        scope.set(WorldActionScope.between(
-                                prepared.returnSections(), prepared.sections(),
-                                prepared.returnEntities(), prepared.entities()));
-                    } catch (RuntimeException failed) {
-                        try {
-                            prepared.close();
-                        } catch (IOException closeFailure) {
-                            failed.addSuppressed(closeFailure);
-                        }
-                        throw failed;
-                    }
                     return RestoreOperation.startQuickRollback(
-                            prepared, worldApply, new WorkingIndexClearPublication(
-                                    mutations, saved.capturedGenerations()),
+                            prepared, worldApply, recordingPublication(new WorkingIndexClearPublication(
+                                    mutations, saved.capturedGenerations()), operationId, author.id(), saved.branchRef()),
                             journals, operationId, restoreStateListener,
                             saved.commitId(), saved.capturedGenerations(), progress);
                 } catch (IOException failed) {
@@ -2403,12 +2439,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     level.dimension().identifier(), failed);
         }
     }
-
-    private record QuickRollbackContext(
-            BranchRef expectedRef,
-            Workspace workspace,
-            ReturnPointRestoreOperation operation,
-            AtomicReference<WorldActionScope> scope) { }
 
     private static void publishRestoreDiffProgress(
             Consumer<OperationProgress> target,

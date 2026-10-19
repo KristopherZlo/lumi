@@ -51,10 +51,15 @@ public final class PublishedApplyRecovery {
     }
 
     public boolean finalizeIfPublished(OperationJournal journal) throws IOException {
+        return finalizeIfPublished(journal, ignored -> { });
+    }
+
+    public boolean finalizeIfPublished(OperationJournal journal, Publication completion) throws IOException {
         Objects.requireNonNull(journal, "journal");
         if (!isPublished(journal)) {
             return false;
         }
+        completion.complete(journal);
         if (journal.capturedGenerations().isPresent()) {
             if (working == null) {
                 return false;
@@ -71,6 +76,8 @@ public final class PublishedApplyRecovery {
         journals.clear(journal);
         return true;
     }
+
+    @FunctionalInterface public interface Publication { void complete(OperationJournal journal) throws IOException; }
 
     private boolean isPublished(OperationJournal journal) throws IOException {
         var target = journal.target();

@@ -102,6 +102,8 @@ public final class WorldActionHistory {
         var retained = index.actions().stream().map(WorldActionRecord.Metadata::id).collect(java.util.stream.Collectors.toSet());
         blobs.keySet().retainAll(retained);
         var next = new WorldActionIndexCodec.State(epoch, version, workspace, branch, index, blobs, persisted.publication());
+        // A new dimension mutation can start only after its predecessor's journal was resolved.
+        repository.pruneStagedCheckpoints(Optional.of(operation));
         repository.stageCheckpoint(operation, persisted, next);
         return new ActionReplayTarget(actor, operation, false);
     }

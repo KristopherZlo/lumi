@@ -50,9 +50,12 @@ class PublishedApplyRecoveryTest {
                 new OperationTarget(expected.name(), expected.commit(), expected.revision(),
                         Optional.of(target), Optional.of(expected.commit()))));
 
-        boolean completed = new PublishedApplyRecovery(
-                refs, new ActiveBranchRepository(root), journals)
-                .finalizeIfPublished(journal);
+        var recovery = new PublishedApplyRecovery(refs, new ActiveBranchRepository(root), journals);
+        org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class, () -> recovery.finalizeIfPublished(journal,
+                ignored -> { throw new java.io.IOException("Action root publication interrupted"); }));
+        assertEquals(journal, journals.read().orElseThrow());
+
+        boolean completed = recovery.finalizeIfPublished(journal, retained -> assertEquals(journal, journals.read().orElseThrow()));
 
         assertTrue(completed);
         assertTrue(journals.read().isEmpty());

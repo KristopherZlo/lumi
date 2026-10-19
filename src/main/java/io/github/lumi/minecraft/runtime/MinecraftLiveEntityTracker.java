@@ -163,6 +163,13 @@ public final class MinecraftLiveEntityTracker {
         owned.clear();
     }
 
+    public void discardUnavailable() {
+        for (UUID action : java.util.Set.copyOf(owned.keySet())) {
+            if (journal.isAvailable(action)) continue;
+            for (UUID entity : java.util.Set.copyOf(owned.get(action).keySet())) disown(action, entity);
+        }
+    }
+
     private void own(
             UUID action, UUID entity, Optional<EntityState> before) {
         own(action, entity, new Owned(Endpoint.AFTER, before));

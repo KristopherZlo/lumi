@@ -52,6 +52,27 @@ class RestorePublicationThreadTest {
         assertTrue(publication.awaitReturnDurable(Long.MAX_VALUE));
         assertTrue(repository.readIndex().orElseThrow().index().actions().getFirst().applied());
         assertTrue(journal.prepareUndo(actor).isPresent());
+
+        UUID operation = UUID.randomUUID();
+        var installed = new java.util.concurrent.atomic.AtomicBoolean();
+        var checkpoint = new io.github.lumi.domain.model.WorldActionCheckpoint(restore.expectedRef().name(), id('1'), id('2'),
+                restore.expectedRef(), io.github.lumi.domain.model.WorldActionScope.empty());
+        var recording = ActionReplayPublication.checkpoint(ignored -> { }, history, operation, true,
+                ignored -> history.prepareCheckpoint(operation, actor, checkpoint, UUID.randomUUID(), checkpoint.branch()),
+                state -> {
+                    journal.installIndex(state.index(), metadata -> history.readRecord(state, metadata));
+                    return () -> installed.set(true);
+                });
+        recording.prepare(restore);
+        assertEquals(operation, recording.historyTarget().orElseThrow().action());
+        recording.persist(restore);
+        assertEquals(operation, journal.prepareUndo(actor).orElseThrow().actionId());
+        assertFalse(installed.get());
+        recording.installed();
+        assertTrue(installed.get());
+        recording.persistReturn(restore);
+        assertTrue(recording.awaitReturnDurable(Long.MAX_VALUE));
+        assertEquals(action, journal.prepareUndo(actor).orElseThrow().actionId());
     }
 
     @TempDir Path root;
