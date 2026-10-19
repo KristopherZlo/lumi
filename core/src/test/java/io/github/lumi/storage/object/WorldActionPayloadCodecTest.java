@@ -114,7 +114,9 @@ class WorldActionPayloadCodecTest {
         blocks.put(new BlockPosition(-1, -1, -1), new BlockDelta(after, before));
         UUID entity = new UUID(0, 9);
         var payload = new WorldActionRecord.Payload(blocks, Map.of(entity, new EntityDelta(Optional.empty(),
-                Optional.of(new EntityState(entity, "minecraft:armor_stand", new CanonicalNbt(new byte[] {3, 4}))))));
+                Optional.of(new EntityState(entity, "minecraft:armor_stand", new CanonicalNbt(new byte[] {3, 4}))))),
+                Map.of(new io.github.lumi.domain.model.BiomePosition(-1, -1, -1),
+                        new WorldActionRecord.BiomeDelta("minecraft:plains", "minecraft:desert")));
         var record = new WorldActionRecord(metadata(1), payload);
         var bytes = new ByteArrayOutputStream();
         codec.encode(record, version, new DataOutputStream(bytes));

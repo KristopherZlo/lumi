@@ -10,7 +10,7 @@ import java.util.RandomAccess;
 import java.util.TreeSet;
 
 public record SectionBlob(List<String> blockStates, Map<Integer, CanonicalNbt> blockEntities,
-        WorldDataVersion dataVersion) {
+        WorldDataVersion dataVersion, Map<Integer, String> actionBiomes) {
     public static final int BLOCK_COUNT = 16 * 16 * 16;
 
     public SectionBlob {
@@ -18,12 +18,25 @@ public record SectionBlob(List<String> blockStates, Map<Integer, CanonicalNbt> b
         Objects.requireNonNull(blockStates, "blockStates");
         blockStates = PaletteBlockStates.copyOf(blockStates);
         blockEntities = Map.copyOf(Objects.requireNonNull(blockEntities, "blockEntities"));
+        actionBiomes = Map.copyOf(actionBiomes);
+        actionBiomes.forEach((cell, biome) -> {
+            if (cell < 0 || cell >= 64 || biome.isBlank()) throw new IllegalArgumentException("Invalid action biome cell");
+        });
         if (blockStates.size() != BLOCK_COUNT) {
             throw new IllegalArgumentException("Section must contain exactly " + BLOCK_COUNT + " block states");
         }
         if (blockEntities.keySet().stream().anyMatch(index -> index == null || index < 0 || index >= BLOCK_COUNT)) {
             throw new IllegalArgumentException("Block entity index must be within the section");
         }
+    }
+
+    public SectionBlob(List<String> states, Map<Integer, CanonicalNbt> entities, WorldDataVersion version) {
+        this(states, entities, version, Map.of());
+    }
+
+    /** Only action-replay endpoints carry this overlay; ordinary Save capture does not. */
+    public SectionBlob withActionBiomes(Map<Integer, String> biomes) {
+        return new SectionBlob(blockStates, blockEntities, dataVersion, biomes);
     }
 
     public SectionBlob(List<String> blockStates, Map<Integer, CanonicalNbt> blockEntities) {

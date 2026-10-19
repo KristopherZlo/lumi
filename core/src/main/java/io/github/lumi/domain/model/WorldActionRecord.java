@@ -12,7 +12,7 @@ public record WorldActionRecord(Metadata metadata, Payload payload) {
     public WorldActionRecord {
         Objects.requireNonNull(metadata, "metadata");
         Objects.requireNonNull(payload, "payload");
-        if (metadata.checkpoint().isPresent() && (!payload.blocks().isEmpty() || !payload.entities().isEmpty())) {
+        if (metadata.checkpoint().isPresent() && (!payload.blocks().isEmpty() || !payload.entities().isEmpty() || !payload.biomes().isEmpty())) {
             throw new IllegalArgumentException("Checkpoint cannot contain a second action payload");
         }
     }
@@ -31,10 +31,12 @@ public record WorldActionRecord(Metadata metadata, Payload payload) {
 
     public record Payload(
             Map<BlockPosition, BlockDelta> blocks,
-            Map<UUID, EntityDelta> entities) {
+            Map<UUID, EntityDelta> entities, Map<BiomePosition, BiomeDelta> biomes) {
+        public Payload(Map<BlockPosition, BlockDelta> blocks, Map<UUID, EntityDelta> entities) { this(blocks, entities, Map.of()); }
         public Payload {
             blocks = orderedCopy(blocks);
             entities = orderedCopy(entities);
+            biomes = orderedCopy(biomes);
             entities.forEach((id, delta) -> {
                 delta.before().ifPresent(value -> requireEntity(id, value));
                 delta.after().ifPresent(value -> requireEntity(id, value));
@@ -49,6 +51,14 @@ public record WorldActionRecord(Metadata metadata, Payload payload) {
 
         private static void requireEntity(UUID id, EntityState value) {
             if (!id.equals(value.id())) throw new IllegalArgumentException("Action entity UUID mismatch");
+        }
+    }
+
+    public record BiomeDelta(String before, String after) {
+        public BiomeDelta {
+            if (Objects.requireNonNull(before).isBlank() || Objects.requireNonNull(after).isBlank()) {
+                throw new IllegalArgumentException("Empty biome registry identity");
+            }
         }
     }
 

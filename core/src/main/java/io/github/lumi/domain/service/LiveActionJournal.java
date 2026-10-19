@@ -8,6 +8,8 @@ import io.github.lumi.domain.model.WorldActionRecord;
 import io.github.lumi.domain.model.WorldActionRecord.BlockDelta;
 import io.github.lumi.domain.model.WorldActionRecord.EntityDelta;
 import io.github.lumi.domain.model.WorldActionIndex;
+import io.github.lumi.domain.model.BiomePosition;
+import io.github.lumi.domain.model.WorldActionRecord.BiomeDelta;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.Collections;
@@ -35,6 +37,7 @@ public final class LiveActionJournal {
     private final Map<UUID, PlayerStacks> playerStacks = new HashMap<>();
     private final OwnershipIndex<BlockPosition> blockOwners = new OwnershipIndex<>();
     private final OwnershipIndex<UUID> entityOwners = new OwnershipIndex<>();
+    private final OwnershipIndex<BiomePosition> biomeOwners = new OwnershipIndex<>();
     private final Map<UUID, Long> playerBytes = new HashMap<>();
     private final Map<UUID, String> unavailableReasons = new HashMap<>();
     private final Map<BlockSnapshot, Integer> blockStateReferences = new HashMap<>();
@@ -177,6 +180,24 @@ public final class LiveActionJournal {
             entityStates.discardUnowned(after);
         }
     }
+
+    public synchronized void recordBiome(UUID actionId, BiomePosition position, String before, String after) {
+        revision++;
+        var action = effectiveAction(requireAction(actionId), position, biomeOwners);
+        if (!action.available) return;
+        var previous = action.biomes.get(position);
+        var delta = new BiomeDelta(previous == null ? before : previous.before(), after);
+        long oldBytes = previous == null ? 0 : biomeBytes(previous);
+        long bytes = delta.before().equals(delta.after()) ? 0 : biomeBytes(delta);
+        if (previous == null && bytes == 0) return;
+        startRecording(action);
+        if (!resize(action, bytes - oldBytes)) return;
+        if (bytes == 0) action.biomes.remove(position); else action.biomes.put(position, delta);
+        action.revision++;
+        biomeOwners.set(position, action, bytes != 0 && action.applied);
+    }
+
+    private static long biomeBytes(BiomeDelta delta) { return 32L + 2L * (delta.before().length() + delta.after().length()); }
 
     private UUID replaceEntity(MutableAction action, UUID entityId, EntityDelta updated) {
         EntityDelta previous = action.entities.get(entityId);
@@ -388,6 +409,7 @@ public final class LiveActionJournal {
         action.applied = applied;
         action.changes.keySet().forEach(position -> blockOwners.set(position, action, applied));
         action.entities.keySet().forEach(entity -> entityOwners.set(entity, action, applied));
+        action.biomes.keySet().forEach(position -> biomeOwners.set(position, action, applied));
     }
 
     public synchronized void clear() {
@@ -403,6 +425,7 @@ public final class LiveActionJournal {
         playerStacks.clear();
         blockOwners.clear();
         entityOwners.clear();
+        biomeOwners.clear();
         playerBytes.clear();
         unavailableReasons.clear();
         retainedBytes = 0;
@@ -440,7 +463,7 @@ public final class LiveActionJournal {
                 || !action.player.equals(expected.actor()) || action.sequence != expected.sequence()) {
             throw new java.util.ConcurrentModificationException("Action changed during history capture");
         }
-        return new WorldActionRecord(expected, new WorldActionRecord.Payload(action.changes, action.entities));
+        return new WorldActionRecord(expected, new WorldActionRecord.Payload(action.changes, action.entities, action.biomes));
     }
 
     /** Startup only, off-thread. An interrupted producer is retained on disk but cannot be replayed. */
@@ -458,8 +481,10 @@ public final class LiveActionJournal {
             action.checkpoint = metadata.checkpoint().orElse(null);
             action.changes.putAll(record.payload().blocks());
             action.entities.putAll(record.payload().entities());
+            action.biomes.putAll(record.payload().biomes());
             action.bytes = action.changes.values().stream().mapToLong(LiveActionJournal::estimatedBytes).sum()
                     + action.entities.values().stream().mapToLong(LiveActionJournal::estimatedBytes).sum()
+                    + action.biomes.values().stream().mapToLong(LiveActionJournal::biomeBytes).sum()
                     + metadata.checkpoint().map(value -> value.scope().estimatedBytes()).orElse(0L);
             if (action.bytes > limits.maxActionBytes || retainedBytes + action.bytes > limits.maxDimensionBytes
                     || playerBytes.getOrDefault(action.player, 0L) + action.bytes > limits.maxPlayerBytes) {
@@ -476,6 +501,7 @@ public final class LiveActionJournal {
                 entityStates.retain(delta.after());
                 entityOwners.set(id, action, action.applied);
             });
+            action.biomes.keySet().forEach(position -> biomeOwners.set(position, action, action.applied));
         }
         index.players().forEach((actor, cursor) -> {
             var stacks = stacks(actor);
@@ -577,6 +603,11 @@ public final class LiveActionJournal {
                 .map(action -> action.id)
                 .collect(java.util.stream.Collectors.toSet());
         for (MutableAction action : group) {
+            for (var position : action.biomes.keySet()) {
+                if (overlaps(action, direction, biomeOwners.latest(position), groupIds)) {
+                    throw new IllegalStateException("A newer action overlaps the selected biome edit");
+                }
+            }
             for (BlockPosition position : action.changes.keySet()) {
                 if (overlaps(
                         action, direction, blockOwners.latest(position), groupIds)) {
@@ -594,7 +625,10 @@ public final class LiveActionJournal {
         }
         Map<BlockPosition, BlockDelta> blocks = new LinkedHashMap<>();
         Map<UUID, EntityDelta> entities = new LinkedHashMap<>();
+        Map<BiomePosition, BiomeDelta> biomes = new LinkedHashMap<>();
         for (MutableAction action : group) {
+            action.biomes.forEach((position, change) -> biomes.merge(position, change,
+                    (previous, latest) -> new BiomeDelta(previous.before(), latest.after())));
             action.changes.forEach((position, change) -> blocks.merge(
                     position, change,
                     (previous, latest) ->
@@ -629,7 +663,7 @@ public final class LiveActionJournal {
         return Optional.of(new Plan(
                 player, group.stream().map(action -> action.id).toList(),
                 direction, expected, replacement,
-                expectedEntities, replacementEntities, Optional.empty()));
+                expectedEntities, replacementEntities, Optional.empty(), biomes));
     }
 
     private MutableAction requireAction(UUID id) {
@@ -729,7 +763,7 @@ public final class LiveActionJournal {
     }
 
     private static boolean isEmpty(MutableAction action) {
-        return action.changes.isEmpty() && action.entities.isEmpty()
+        return action.changes.isEmpty() && action.entities.isEmpty() && action.biomes.isEmpty()
                 && action.checkpoint == null;
     }
 
@@ -850,10 +884,12 @@ public final class LiveActionJournal {
         action.bytes = 0;
         action.changes.keySet().forEach(position -> blockOwners.set(position, action, false));
         action.entities.keySet().forEach(entity -> entityOwners.set(entity, action, false));
+        action.biomes.keySet().forEach(position -> biomeOwners.set(position, action, false));
         action.changes.values().forEach(this::releaseBlockStates);
         action.entities.values().forEach(this::releaseEntityStates);
         action.changes.clear();
         action.entities.clear();
+        action.biomes.clear();
         PlayerStacks stacks = stacks(action.player);
         if (stacks.undo.remove(action.id) || stacks.redo.remove(action.id)) {
             stacks.remove(action.groupId);
@@ -946,7 +982,13 @@ public final class LiveActionJournal {
             Map<BlockPosition, BlockSnapshot> replacement,
             Map<UUID, Optional<EntityState>> expectedEntities,
             Map<UUID, Optional<EntityState>> replacementEntities,
-            Optional<WorldActionCheckpoint> checkpoint) {
+            Optional<WorldActionCheckpoint> checkpoint, Map<BiomePosition, BiomeDelta> biomes) {
+        public Plan(UUID player, List<UUID> actionIds, Direction direction,
+                Map<BlockPosition, BlockSnapshot> expected, Map<BlockPosition, BlockSnapshot> replacement,
+                Map<UUID, Optional<EntityState>> expectedEntities, Map<UUID, Optional<EntityState>> replacementEntities,
+                Optional<WorldActionCheckpoint> checkpoint) {
+            this(player, actionIds, direction, expected, replacement, expectedEntities, replacementEntities, checkpoint, Map.of());
+        }
         public Plan {
             Objects.requireNonNull(player, "player");
             actionIds = List.copyOf(Objects.requireNonNull(
@@ -961,6 +1003,7 @@ public final class LiveActionJournal {
             expectedEntities = immutableOrderedCopy(expectedEntities);
             replacementEntities = immutableOrderedCopy(replacementEntities);
             checkpoint = Objects.requireNonNull(checkpoint, "checkpoint");
+            biomes = immutableOrderedCopy(biomes);
         }
 
         public UUID actionId() {
@@ -1010,6 +1053,7 @@ public final class LiveActionJournal {
         private UUID groupId;
         private final Map<BlockPosition, BlockDelta> changes = new LinkedHashMap<>();
         private final Map<UUID, EntityDelta> entities = new LinkedHashMap<>();
+        private final Map<BiomePosition, BiomeDelta> biomes = new LinkedHashMap<>();
         private boolean closed;
         private boolean started;
         private boolean available = true;

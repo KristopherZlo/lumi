@@ -25,6 +25,30 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class LiveActionJournalTest {
+    @Test void biomeActionsShareOrderingAndPreserveEarlierRedoAfterANoop() throws Exception {
+        var journal = new LiveActionJournal();
+        var position = new io.github.lumi.domain.model.BiomePosition(-1, -1, -1);
+        UUID action = journal.begin(PLAYER_A);
+        journal.recordBiome(action, position, "minecraft:plains", "minecraft:desert");
+        journal.close(action);
+        var undo = journal.prepareUndo(PLAYER_A).orElseThrow();
+        assertEquals("minecraft:plains", undo.biomes().get(position).before());
+        UUID foreign = journal.begin(PLAYER_B);
+        journal.recordBiome(foreign, position, "minecraft:desert", "minecraft:forest");
+        journal.close(foreign);
+        assertThrows(IllegalStateException.class, () -> journal.prepareUndo(PLAYER_A));
+        journal.complete(journal.prepareUndo(PLAYER_B).orElseThrow());
+        journal.complete(journal.prepareUndo(PLAYER_A).orElseThrow());
+        UUID noop = journal.begin(PLAYER_A);
+        journal.recordBiome(noop, position, "minecraft:plains", "minecraft:plains");
+        assertTrue(!journal.close(noop));
+        var reopened = new LiveActionJournal();
+        reopened.restore(journal.snapshotIndex(), journal::snapshotAction);
+        assertEquals(action, reopened.prepareRedo(PLAYER_A).orElseThrow().actionId());
+        assertEquals(new io.github.lumi.domain.model.SectionKey(-1, -1, -1), position.section());
+        assertEquals(63, position.localIndex());
+    }
+
     @Test void publishesDurableCursorsOnceAndKeepsTheLastRootOnCaptureFailure(
             @org.junit.jupiter.api.io.TempDir java.nio.file.Path root) throws Exception {
         var repository = new io.github.lumi.storage.repository.WorldActionHistoryRepository(root);

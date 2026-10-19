@@ -8,6 +8,8 @@ import io.github.lumi.domain.model.WorldActionRecord;
 import io.github.lumi.domain.model.WorldActionRecord.BlockDelta;
 import io.github.lumi.domain.model.WorldActionRecord.EntityDelta;
 import io.github.lumi.domain.model.WorldDataVersion;
+import io.github.lumi.domain.model.BiomePosition;
+import io.github.lumi.domain.model.WorldActionRecord.BiomeDelta;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -21,7 +23,7 @@ import java.util.UUID;
 
 /** Streamed action payload with a shared state palette and a bounded decoder. */
 public final class WorldActionPayloadCodec {
-    private static final int MAGIC = 0x4C415031;
+    private static final int MAGIC = 0x4C415032;
     private static final int MAX_STRING = 1024 * 1024;
     private static final int MAX_NBT = 16 * 1024 * 1024;
     private static final int MAX_ENTRIES = 4_000_000;
@@ -56,6 +58,13 @@ public final class WorldActionPayloadCodec {
             writeEntity(output, entry.getValue().before());
             writeEntity(output, entry.getValue().after());
         }
+        if (record.payload().biomes().size() > MAX_ENTRIES) throw new IOException("Too many action biome entries");
+        output.writeInt(record.payload().biomes().size());
+        for (var entry : record.payload().biomes().entrySet()) {
+            output.writeInt(entry.getKey().x()); output.writeInt(entry.getKey().y()); output.writeInt(entry.getKey().z());
+            CanonicalBytes.writeString(output, entry.getValue().before(), MAX_STRING, "before biome");
+            CanonicalBytes.writeString(output, entry.getValue().after(), MAX_STRING, "after biome");
+        }
     }
 
     public WorldActionRecord decode(WorldActionRecord.Metadata expected, WorldDataVersion version,
@@ -87,8 +96,16 @@ public final class WorldActionPayloadCodec {
                 var delta = new EntityDelta(readEntity(input, id, budget), readEntity(input, id, budget));
                 if (entities.put(id, delta) != null) throw new IOException("Duplicate action entity UUID");
             }
+            count = budget.count(input, 256);
+            var biomes = new LinkedHashMap<BiomePosition, BiomeDelta>();
+            for (int index = 0; index < count; index++) {
+                var position = new BiomePosition(input.readInt(), input.readInt(), input.readInt());
+                if (biomes.put(position, new BiomeDelta(budget.string(input), budget.string(input))) != null) {
+                    throw new IOException("Duplicate action biome position");
+                }
+            }
             if (input.read() != -1) throw new IOException("Trailing action payload bytes");
-            return new WorldActionRecord(expected, new WorldActionRecord.Payload(blocks, entities));
+            return new WorldActionRecord(expected, new WorldActionRecord.Payload(blocks, entities, biomes));
         } catch (IllegalArgumentException invalid) {
             throw new IOException("Invalid action payload", invalid);
         }

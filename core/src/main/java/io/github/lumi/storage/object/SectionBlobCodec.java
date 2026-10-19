@@ -16,6 +16,7 @@ import java.util.Map;
 public final class SectionBlobCodec {
     private static final int MAGIC = 0x4C555332;
     private static final int VERSIONED_MAGIC = 0x4C555333;
+    private static final int ACTION_MAGIC = 0x4C555334;
     private static final int MAX_STRING_BYTES = 1024 * 1024;
     private static final int MAX_NBT_BYTES = 16 * 1024 * 1024;
 
@@ -25,8 +26,9 @@ public final class SectionBlobCodec {
 
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (DataOutputStream output = new DataOutputStream(bytes)) {
-            boolean legacy = section.dataVersion().equals(WorldDataVersion.LEGACY_12111);
-            output.writeInt(legacy ? MAGIC : VERSIONED_MAGIC);
+            boolean action = !section.actionBiomes().isEmpty();
+            boolean legacy = !action && section.dataVersion().equals(WorldDataVersion.LEGACY_12111);
+            output.writeInt(action ? ACTION_MAGIC : legacy ? MAGIC : VERSIONED_MAGIC);
             if (!legacy) output.writeInt(section.dataVersion().value());
             output.writeInt(palette.size());
             for (String state : palette) {
@@ -40,6 +42,13 @@ public final class SectionBlobCodec {
                 output.writeShort(entry.getKey());
                 CanonicalBytes.write(output, entry.getValue().bytes(), MAX_NBT_BYTES, "block entity NBT");
             }
+            if (action) {
+                output.writeByte(section.actionBiomes().size());
+                for (var entry : new java.util.TreeMap<>(section.actionBiomes()).entrySet()) {
+                    output.writeByte(entry.getKey());
+                    CanonicalBytes.writeString(output, entry.getValue(), 1024, "action biome");
+                }
+            }
         }
         return bytes.toByteArray();
     }
@@ -47,7 +56,7 @@ public final class SectionBlobCodec {
     public SectionBlob decode(byte[] payload) throws IOException {
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(payload))) {
             int magic = input.readInt();
-            if (magic != MAGIC && magic != VERSIONED_MAGIC) {
+            if (magic != MAGIC && magic != VERSIONED_MAGIC && magic != ACTION_MAGIC) {
                 throw new IOException("Not a Lumi section blob");
             }
             WorldDataVersion dataVersion = magic == MAGIC ? WorldDataVersion.LEGACY_12111
@@ -85,10 +94,22 @@ public final class SectionBlobCodec {
                 blockEntities.put(localIndex,
                         new CanonicalNbt(CanonicalBytes.read(input, MAX_NBT_BYTES, "block entity NBT")));
             }
+            var biomes = new LinkedHashMap<Integer, String>();
+            if (magic == ACTION_MAGIC) {
+                int count = input.readUnsignedByte();
+                if (count < 1 || count > 64) throw new IOException("Invalid action biome count");
+                int previous = -1;
+                for (int index = 0; index < count; index++) {
+                    int cell = input.readUnsignedByte();
+                    if (cell <= previous || cell >= 64) throw new IOException("Noncanonical action biome order");
+                    previous = cell;
+                    biomes.put(cell, CanonicalBytes.readString(input, 1024, "action biome"));
+                }
+            }
             if (input.available() != 0) {
                 throw new IOException("Trailing bytes in section blob");
             }
-            return SectionBlob.fromPalette(palette, states, blockEntities, dataVersion);
+            return SectionBlob.fromPalette(palette, states, blockEntities, dataVersion).withActionBiomes(biomes);
         } catch (java.io.EOFException truncated) {
             throw new IOException("Truncated section blob", truncated);
         } catch (IllegalArgumentException invalid) {
