@@ -62,6 +62,26 @@ class RestoreOperationTest {
     @TempDir
     Path repositoryRoot;
 
+    @Test
+    void journalsActionReplayWithTheCapturedWorldAndCurrentSavedHead() throws Exception {
+        var expected = new BranchRef(new BranchName("main"), id('1'), 7);
+        var prepared = new PreparedRestore(expected, id('3'),
+                Map.of(), Map.of(), Map.of(), Map.of());
+        var journals = new OperationJournalRepository(repositoryRoot);
+        var operation = RestoreOperation.startCheckpointAction(prepared,
+                new ImmediatelyVerified(), ignored -> { }, journals, UUID.randomUUID(),
+                RestoreStateListener.NONE, OperationKind.ACTION_REPLAY, id('2'), ignored -> { });
+
+        operation.tick(Long.MAX_VALUE);
+
+        var journal = journals.read().orElseThrow();
+        assertEquals(OperationKind.ACTION_REPLAY, journal.kind());
+        assertEquals(expected.commit(), journal.target().expectedHead());
+        assertEquals(expected.revision(), journal.target().expectedRevision());
+        assertEquals(Optional.of(id('2')), journal.target().returnPoint());
+        assertEquals(Optional.of(id('3')), journal.target().target());
+    }
+
     @Test void refusesUndrainedExternalWorkBeforeCreatingAJournalOrPublishing() throws IOException {
         var journals = new OperationJournalRepository(repositoryRoot);
         var publications = new AtomicInteger();

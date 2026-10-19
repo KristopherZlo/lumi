@@ -431,7 +431,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     static Set<CommitId> retainedSessionCheckpointCommits(
             OperationJournal recovery) {
         if (recovery == null || (recovery.kind() != OperationKind.QUICK_ROLLBACK
-                && recovery.kind() != OperationKind.CHECKPOINT_UNDO)) {
+                && recovery.kind() != OperationKind.CHECKPOINT_UNDO
+                && recovery.kind() != OperationKind.ACTION_REPLAY)) {
             return Set.of();
         }
         var retained = new java.util.LinkedHashSet<CommitId>();
@@ -615,7 +616,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             OperationJournal journal, RecoveryChoice choice) throws IOException {
         if (choice == RecoveryChoice.RETURN_CHECKPOINT
                 && journal.kind() != OperationKind.QUICK_ROLLBACK
-                && journal.kind() != OperationKind.CHECKPOINT_UNDO) {
+                && journal.kind() != OperationKind.CHECKPOINT_UNDO
+                && journal.kind() != OperationKind.ACTION_REPLAY) {
             return ignored -> { };
         }
         if (journal.kind() == OperationKind.BRANCH_SWITCH) {
@@ -650,7 +652,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                             branches, plan));
         }
         if (journal.target().blockArea().isPresent()
-                || journal.target().zoneRestore().isPresent()) {
+                || journal.target().zoneRestore().isPresent()
+                || journal.kind() == OperationKind.ACTION_REPLAY) {
             return new PendingRestorePublication(mutations);
         }
         if (journal.kind() == OperationKind.QUICK_ROLLBACK
@@ -1097,49 +1100,45 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private CheckpointActionOperation createCheckpointAction(
             LiveActionJournal.Plan plan) throws IOException {
         LiveActionJournal.Checkpoint checkpoint = plan.checkpoint().orElseThrow();
-        if (!activeRef().equals(checkpoint.expectedRef())) {
-            throw new IOException(
-                    "Quick Restore Undo is unavailable after HEAD changed");
+        BranchRef expected = activeRef();
+        if (!expected.name().equals(checkpoint.expectedRef().name())) {
+            throw new IOException("Checkpoint action belongs to another branch");
         }
         boolean undo = plan.direction() == LiveActionJournal.Direction.UNDO;
-        CommitId source = undo
-                ? checkpoint.expectedRef().commit() : checkpoint.dirtyCommit();
-        CommitId target = undo
-                ? checkpoint.dirtyCommit() : checkpoint.expectedRef().commit();
-        OperationKind kind = undo
-                ? OperationKind.CHECKPOINT_UNDO : OperationKind.QUICK_ROLLBACK;
-        var action = undo
-                ? WorkingIndexRecoveryPublication.TargetAction.RESTORE
-                : WorkingIndexRecoveryPublication.TargetAction.CLEAR;
-        var progress = new AtomicReference<>(OperationProgress.indeterminate(
-                "Restore: reading checkpoint"));
-        CompletableFuture<RestoreOperation> preparation = CompletableFuture.supplyAsync(() -> {
-            try {
-                PreparedRestore prepared = restores.prepare(
-                        checkpoint.expectedRef(), source, target,
-                        value -> publishRestoreDiffProgress(progress::set, value));
-                return RestoreOperation.startCheckpointAction(
-                        prepared, worldApply,
-                        new WorkingIndexRecoveryPublication(
-                                mutations, Optional.empty(), action),
-                        journals, UUID.randomUUID(), restoreStateListener,
-                        kind, source, progress::set);
-            } catch (IOException failed) {
-                throw new CompletionException(failed);
-            }
-        }, background);
-        var restore = new BackgroundPreparedMutation<>(
-                preparation,
-                () -> {
-                    if (!activeRef().equals(checkpoint.expectedRef())
-                            || !selectedPlan(plan.player(), plan.direction()).equals(
-                                    Optional.of(plan))) {
-                        throw new IOException(
-                                "Quick Restore session action changed during preparation");
+        CommitId source = undo ? checkpoint.expectedRef().commit() : checkpoint.dirtyCommit();
+        BranchRef target = undo ? checkpoint.hiddenRef() : checkpoint.expectedRef();
+        UUID operationId = UUID.randomUUID();
+        var workspace = activeWorkspace();
+        var player = level.getServer().getPlayerList().getPlayer(plan.player());
+        var author = new CommitAuthor(plan.player(), player == null ? "Builder" : player.getName().getString());
+        SaveRequest request = new SaveRequest(expected, author, "Return point before action replay",
+                Instant.now(), workspace.id(), Optional.empty(), CommitKind.HIDDEN_RETURN);
+        var capture = createChunkReadySave(request, scopedReturnPointPreparation(request),
+                (value, captured) -> saves.checkpoint(value, captured, sessionCheckpoints.name(operationId)),
+                ignored -> { });
+        var restore = new ReturnPointRestoreOperation(capture, (saved, progress) ->
+                CompletableFuture.supplyAsync(() -> {
+                    try {
+                        requireExpectedRef(expected);
+                        if (!selectedPlan(plan.player(), plan.direction()).equals(Optional.of(plan))) {
+                            throw new IOException("Checkpoint action changed during preparation");
+                        }
+                        var replay = merges.prepareReplay(new MergeService.Request(
+                                saved.branchRef(), target, author, undo ? "Undo action" : "Redo action",
+                                Instant.now(), workspace.id(), Optional.empty()), source);
+                        PreparedRestore prepared = restores.prepare(
+                                expected, saved.commitId(), replay.commit(),
+                                value -> publishRestoreDiffProgress(progress, value));
+                        return RestoreOperation.startCheckpointAction(
+                                prepared, worldApply, new PendingRestorePublication(mutations),
+                                journals, operationId, restoreStateListener,
+                                OperationKind.ACTION_REPLAY, saved.commitId(), progress);
+                    } catch (IOException failed) {
+                        throw new CompletionException(failed);
                     }
-                },
-                ignored -> { }, true, false, progress::get);
-        return new CheckpointActionOperation(liveActions, plan, restore);
+                }, background));
+        return new CheckpointActionOperation(liveActions, plan, restore, () ->
+                restore.returnPoint().ifPresent(saved -> releaseSessionCheckpoint(saved.branchRef())));
     }
 
     private Optional<LiveActionJournal.Plan> selectedPlan(

@@ -77,6 +77,7 @@ public final class PublishedApplyRecovery {
         if (journal.kind() == OperationKind.SAVE
                 || journal.kind() == OperationKind.QUICK_ROLLBACK
                 || journal.kind() == OperationKind.CHECKPOINT_UNDO
+                || journal.kind() == OperationKind.ACTION_REPLAY
                 || target.blockArea().isPresent()
                 || target.target().isEmpty()) {
             return false;

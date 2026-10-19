@@ -54,6 +54,9 @@ class CheckpointRecoveryDirectionTest {
         assertEquals(Set.of(target, returnPoint),
                 FabricDimensionRuntime.retainedSessionCheckpointCommits(
                         journal(OperationKind.QUICK_ROLLBACK, pair)));
+        assertEquals(Set.of(target, returnPoint),
+                FabricDimensionRuntime.retainedSessionCheckpointCommits(
+                        journal(OperationKind.ACTION_REPLAY, pair)));
         assertEquals(Set.of(),
                 FabricDimensionRuntime.retainedSessionCheckpointCommits(
                         journal(OperationKind.RESTORE, pair)));

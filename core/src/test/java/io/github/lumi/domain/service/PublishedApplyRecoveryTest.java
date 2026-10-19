@@ -79,7 +79,7 @@ class PublishedApplyRecoveryTest {
     @Test
     void checkpointActionsRemainRefNeutralRecoveryWork() throws Exception {
         for (OperationKind kind : java.util.List.of(
-                OperationKind.QUICK_ROLLBACK, OperationKind.CHECKPOINT_UNDO)) {
+                OperationKind.QUICK_ROLLBACK, OperationKind.CHECKPOINT_UNDO, OperationKind.ACTION_REPLAY)) {
             Path root = repositoryRoot.resolve(kind.name());
             BranchRefRepository refs = new BranchRefRepository(root);
             var expected = refs.create(new BranchName("main"), id('3'));

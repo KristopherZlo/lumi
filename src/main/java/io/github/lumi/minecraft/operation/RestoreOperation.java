@@ -507,7 +507,8 @@ public final class RestoreOperation implements DimensionMutation {
             CommitId returnPoint,
             Consumer<OperationProgress> progress) throws IOException {
         if (kind != OperationKind.CHECKPOINT_UNDO
-                && kind != OperationKind.QUICK_ROLLBACK) {
+                && kind != OperationKind.QUICK_ROLLBACK
+                && kind != OperationKind.ACTION_REPLAY) {
             throw new IllegalArgumentException(
                     "Checkpoint action requires a checkpoint operation kind");
         }

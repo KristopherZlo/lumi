@@ -16,6 +16,23 @@ class CheckpointActionOperationTest {
     private static final UUID PLAYER = new UUID(0, 41);
 
     @Test
+    void releasesTemporaryDataOnceAfterSafeCloseAndKeepsItForRecovery() throws Exception {
+        for (var terminal : MutationTerminalState.values()) {
+            var journal = checkpointJournal();
+            var restore = new ControlledMutation(terminal);
+            var released = new java.util.concurrent.atomic.AtomicInteger();
+            var operation = new CheckpointActionOperation(journal,
+                    journal.prepareUndo(PLAYER).orElseThrow(), restore, released::incrementAndGet);
+            operation.advance(Long.MAX_VALUE);
+
+            operation.close();
+            operation.close();
+
+            assertEquals(terminal == MutationTerminalState.DEGRADED ? 0 : 1, released.get());
+        }
+    }
+
+    @Test
     void advancesStackOnlyAfterSuccessfulRestore() throws Exception {
         LiveActionJournal journal = checkpointJournal();
         var plan = journal.prepareUndo(PLAYER).orElseThrow();
@@ -59,6 +76,7 @@ class CheckpointActionOperationTest {
     private static final class ControlledMutation implements DimensionMutation {
         private final MutationTerminalState terminal;
         private boolean complete;
+        private boolean closed;
 
         private ControlledMutation(MutationTerminalState terminal) {
             this.terminal = terminal;
@@ -66,7 +84,10 @@ class CheckpointActionOperationTest {
 
         @Override public void advance(long deadlineNanos) { complete = true; }
         @Override public boolean isTerminal() { return complete; }
-        @Override public boolean isSafeToRelease() { return complete; }
+        @Override public boolean isSafeToRelease() {
+            return closed || complete && terminal != MutationTerminalState.DEGRADED;
+        }
+        @Override public void close() { closed = true; }
         @Override public MutationTerminalState terminalState() { return terminal; }
         @Override public Optional<Throwable> failure() { return Optional.empty(); }
     }
