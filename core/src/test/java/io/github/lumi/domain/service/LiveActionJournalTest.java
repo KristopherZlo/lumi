@@ -166,6 +166,8 @@ class LiveActionJournalTest {
         reopened.restore(index, journal::snapshotAction);
         assertEquals(first, reopened.prepareUndo(PLAYER_A).orElseThrow().actionId());
         assertEquals(second, reopened.prepareRedo(PLAYER_A).orElseThrow().actionId());
+        assertEquals(List.of(first), reopened.view(PLAYER_A).undo().stream().map(io.github.lumi.domain.model.WorldActionView.Entry::action).toList());
+        assertEquals(List.of(second), reopened.view(PLAYER_A).redo().stream().map(io.github.lumi.domain.model.WorldActionView.Entry::action).toList());
         var step = new io.github.lumi.domain.model.ActionReplayTarget(PLAYER_A, second, false);
         var projected = index.move(step, true);
         assertEquals(projected, projected.move(step, true));

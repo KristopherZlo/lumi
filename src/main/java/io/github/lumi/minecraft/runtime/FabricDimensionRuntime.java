@@ -1349,6 +1349,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     public LiveActionJournal liveActions() { return liveActions; }
+    public UUID worldActionEpoch() { return actionHistory.epoch(); }
 
     /** Native capture owns immutable bytes; page writes stay on a worker before capture proceeds. */
     public SectionBlob retainActionSection(SectionBlob section) throws IOException {

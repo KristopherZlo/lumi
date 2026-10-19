@@ -139,4 +139,5 @@ public final class WorldActionHistory {
     }
 
     public synchronized boolean hasPreparedCheckpoint(UUID operation) { return repository.hasStagedCheckpoint(operation); }
+    public UUID epoch() { return epoch; }
 }

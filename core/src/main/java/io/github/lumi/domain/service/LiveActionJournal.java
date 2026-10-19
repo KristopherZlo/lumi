@@ -14,6 +14,7 @@ import io.github.lumi.domain.model.WorldActionRecord.SectionDelta;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.WorldActionScope;
+import io.github.lumi.domain.model.WorldActionView;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.Collections;
@@ -493,6 +494,36 @@ public final class LiveActionJournal {
     }
 
     public synchronized long revision() { return revision; }
+
+    public synchronized WorldActionView view(UUID player) {
+        var cursor = playerStacks.get(Objects.requireNonNull(player, "player"));
+        if (cursor == null) return new WorldActionView(revision, List.of(), List.of());
+        return new WorldActionView(revision, view(cursor.undo, false), view(cursor.redo, true));
+    }
+
+    private List<WorldActionView.Entry> view(Deque<UUID> cursor, boolean reverse) {
+        var groups = new LinkedHashMap<UUID, MutableAction>();
+        cursor.forEach(id -> { var action = requireAction(id); groups.put(action.groupId, action); });
+        var values = new java.util.ArrayList<>(groups.values());
+        if (reverse) Collections.reverse(values);
+        return values.stream().map(action -> {
+            var kind = WorldActionView.Kind.EDIT;
+            if (action.checkpoint != null) {
+                kind = WorldActionView.Kind.RESTORE;
+                if (action.checkpoint.context().isPresent()) {
+                    var context = action.checkpoint.context().orElseThrow();
+                    kind = context.before().workspace().equals(context.after().workspace())
+                            ? WorldActionView.Kind.BRANCH_SWITCH : WorldActionView.Kind.WORKSPACE_SWITCH;
+                }
+            }
+            Optional<BlockPosition> origin = action.changes.keySet().stream().findFirst();
+            if (origin.isEmpty()) {
+                var keys = action.checkpoint == null ? action.sections.keySet() : action.checkpoint.scope().sections();
+                origin = keys.stream().findFirst().map(key -> new BlockPosition(key.chunkX() << 4, key.sectionY() << 4, key.chunkZ() << 4));
+            }
+            return new WorldActionView.Entry(action.id, kind, origin);
+        }).toList();
+    }
 
     /** Captures only order/ownership metadata; payloads are copied individually off-thread. */
     public synchronized WorldActionIndex snapshotIndex() {

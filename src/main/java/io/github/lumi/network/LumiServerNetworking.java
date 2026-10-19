@@ -78,12 +78,15 @@ public final class LumiServerNetworking {
             new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<UUID, PendingRefresh> PENDING_REFRESHES =
             new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<UUID, WorldActionsSent> WORLD_ACTION_REFRESHES = new ConcurrentHashMap<>();
+    private record WorldActionsSent(String dimension, UUID epoch, long revision) { }
     private static final int PENDING_REFRESH_TICKS = 5;
     private static final HistorySnapshotFactory SNAPSHOTS = new HistorySnapshotFactory();
 
     private LumiServerNetworking() { }
 
     public static void register() {
+        PayloadTypeRegistry.playS2C().register(WorldActionViewPayload.TYPE, WorldActionViewPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(BuilderToolBarrierPayload.TYPE, BuilderToolBarrierPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(BuilderToolBarrierPayload.TYPE, BuilderToolBarrierPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(BuilderToolBarrierPayload.TYPE, (payload, context) ->
@@ -162,6 +165,7 @@ public final class LumiServerNetworking {
             FabricDimensionRuntime runtime = LumiMod.serverRuntime()
                     .find(player.level()).orElse(null);
             if (runtime == null) continue;
+            if (tick % PENDING_REFRESH_TICKS == 0) sendWorldActions(player, runtime, false);
             String dimension = dimension(runtime);
             long revision = runtime.pendingRevision();
             PendingRefresh current = PENDING_REFRESHES.get(player.getUUID());
@@ -586,6 +590,7 @@ public final class LumiServerNetworking {
         ZONE_PENDING_PREVIEWS.cleanupPlayer(playerId);
         PACKAGE_INSPECTIONS.remove(playerId);
         PENDING_REFRESHES.remove(playerId);
+        WORLD_ACTION_REFRESHES.remove(playerId);
         TICKET_OWNERS.forEach((ticketId, owner) -> {
             if (!owner.playerId().equals(playerId)) {
                 return;
@@ -612,6 +617,7 @@ public final class LumiServerNetworking {
         TICKET_OWNERS.clear();
         PACKAGE_INSPECTIONS.clear();
         PENDING_REFRESHES.clear();
+        WORLD_ACTION_REFRESHES.clear();
     }
 
     private static String failureMessage(Throwable failure) {
@@ -1147,9 +1153,19 @@ public final class LumiServerNetworking {
     private static void sendSnapshot(ServerPlayer player, FabricDimensionRuntime runtime) {
         try {
             send(player, SNAPSHOTS.create(player, runtime));
+            sendWorldActions(player, runtime, true);
         } catch (IOException failed) {
             LumiMod.LOGGER.error("Cannot publish Lumi history snapshot", failed);
         }
+    }
+
+    private static void sendWorldActions(ServerPlayer player, FabricDimensionRuntime runtime, boolean force) {
+        if (!ServerPlayNetworking.canSend(player, WorldActionViewPayload.TYPE)) return;
+        var current = new WorldActionsSent(dimension(runtime), runtime.worldActionEpoch(), runtime.liveActions().revision());
+        if (!force && current.equals(WORLD_ACTION_REFRESHES.get(player.getUUID()))) return;
+        var view = runtime.liveActions().view(player.getUUID());
+        send(player, new WorldActionViewPayload(current.dimension(), current.epoch(), view));
+        WORLD_ACTION_REFRESHES.put(player.getUUID(), new WorldActionsSent(current.dimension(), current.epoch(), view.revision()));
     }
 
     private static void broadcastSnapshot(FabricDimensionRuntime runtime) {
