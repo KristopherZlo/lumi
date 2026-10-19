@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.util.Util;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.DynamicUniforms;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.rendertype.LayeringTransform;
 import net.minecraft.core.BlockPos;
@@ -169,6 +170,27 @@ final class LumiCompareOverlayRenderer implements AutoCloseable {
 
     private void draw(WorldRenderContext context, List<CompareOverlayGeometry.Section> visible,
             boolean xray, boolean outline) {
+        var retained = new ArrayList<DrawBatch>();
+        for (var section : visible) {
+            var mesh = meshes.get(section);
+            if (mesh != null && mesh.layer(outline) != null) {
+                retained.add(new DrawBatch(section, mesh.layer(outline)));
+            } else if (mesh == null
+                    && gpuBytes + CompareOverlayGpuMesh.estimatedBytes(section) > residentByteLimit) {
+                drawBatches(context, retained, xray, outline);
+                retained.clear();
+                // Preserve draw order while keeping overflow memory bounded to one layer.
+                try (var layer = CompareOverlayGpuMesh.uploadLayer(section, outline)) {
+                    if (layer != null) drawBatches(context, List.of(new DrawBatch(section, layer)), xray, outline);
+                }
+            }
+        }
+        drawBatches(context, retained, xray, outline);
+    }
+
+    private void drawBatches(WorldRenderContext context, List<DrawBatch> batches,
+            boolean xray, boolean outline) {
+        if (batches.isEmpty()) return;
         var type = outline ? LumiCompareRenderTypes.outline(xray) : LumiCompareRenderTypes.fill(xray);
         var target = Minecraft.getInstance().getMainRenderTarget();
         //? if >=26.3 {
@@ -187,43 +209,45 @@ final class LumiCompareOverlayRenderer implements AutoCloseable {
             var camera = context.worldState().cameraRenderState.pos;
             var tint = new Vector4f(1, 1, 1,
                     outline ? 1 : (xray ? XRAY_ALPHA : NORMAL_ALPHA) / 255.0F);
-            for (var section : visible) {
-                var mesh = meshes.get(section);
-                boolean transientMesh = mesh == null
-                        && gpuBytes + CompareOverlayGpuMesh.estimatedBytes(section) > residentByteLimit;
-                if (transientMesh) mesh = new CompareOverlayGpuMesh(section);
-                if (mesh == null) continue; // Visible batches upload incrementally after preparation.
-                try {
-                    var layer = mesh.layer(outline);
-                    if (layer == null) continue;
-                    var transform = new Matrix4f(RenderSystem.getModelViewMatrix())
-                            .mul(context.matrices().last().pose())
-                            .translate((float) (section.x() - camera.x),
-                                    (float) (section.y() - camera.y), (float) (section.z() - camera.z));
-                    var uniform = RenderSystem.getDynamicUniforms()
-                            .writeTransform(transform, tint, new Vector3f(), new Matrix4f());
-                    var indices = RenderSystem.getSequentialBuffer(layer.mode());
-                    var indexBuffer = indices.getBuffer(layer.indexCount());
-                    var encoder = RenderSystem.getDevice().createCommandEncoder();
-                    try (var pass = encoder.createRenderPass(
-                            () -> "Lumi Compare", color, OptionalInt.empty(), depth, OptionalDouble.empty())) {
-                        pass.setPipeline(type.pipeline());
-                        RenderSystem.bindDefaultUniforms(pass);
-                        pass.setUniform("DynamicTransforms", uniform);
-                        pass.setVertexBuffer(0, layer.buffer());
-                        pass.setIndexBuffer(indexBuffer, indices.type());
-                        pass.drawIndexed(0, 0, layer.indexCount(), 1);
-                    }
-                    //? if >=26.3
-                    /*encoder.submit();*/
-                } finally {
-                    if (transientMesh) mesh.close();
+            var transforms = new DynamicUniforms.Transform[batches.size()];
+            var baseTransform = new Matrix4f(RenderSystem.getModelViewMatrix())
+                    .mul(context.matrices().last().pose());
+            var offset = new Vector3f();
+            var texture = new Matrix4f();
+            int maxIndices = 0;
+            for (int i = 0; i < batches.size(); i++) {
+                var batch = batches.get(i);
+                var section = batch.section();
+                var transform = new Matrix4f(baseTransform).translate((float) (section.x() - camera.x),
+                        (float) (section.y() - camera.y), (float) (section.z() - camera.z));
+                transforms[i] = new DynamicUniforms.Transform(transform, tint, offset, texture);
+                maxIndices = Math.max(maxIndices, batch.layer().indexCount());
+            }
+            // Grow shared buffers before opening the pass; all its draws must retain valid slices.
+            var uniforms = RenderSystem.getDynamicUniforms().writeTransforms(transforms);
+            var indices = RenderSystem.getSequentialBuffer(batches.getFirst().layer().mode());
+            var indexBuffer = indices.getBuffer(maxIndices);
+            var encoder = RenderSystem.getDevice().createCommandEncoder();
+            try (var pass = encoder.createRenderPass(
+                    () -> "Lumi Compare", color, OptionalInt.empty(), depth, OptionalDouble.empty())) {
+                pass.setPipeline(type.pipeline());
+                RenderSystem.bindDefaultUniforms(pass);
+                pass.setIndexBuffer(indexBuffer, indices.type());
+                for (int i = 0; i < batches.size(); i++) {
+                    var layer = batches.get(i).layer();
+                    pass.setUniform("DynamicTransforms", uniforms[i]);
+                    pass.setVertexBuffer(0, layer.buffer());
+                    pass.drawIndexed(0, 0, layer.indexCount(), 1);
                 }
             }
+            //? if >=26.3
+            /*encoder.submit();*/
         } finally {
             modelView.popMatrix();
         }
     }
+
+    private record DrawBatch(CompareOverlayGeometry.Section section, CompareOverlayGpuMesh.Layer layer) { }
 
     @Override
     public void close() {

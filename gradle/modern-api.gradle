@@ -133,6 +133,8 @@ stonecutter.replacements {
                     '(InputConstants\\.isKeyDown\\()', '$1client.getWindow(), ')
         }
         string(true, '!native263-api') {
+            replace('net.minecraft.client.renderer.DynamicUniforms', 'net.minecraft.client.renderer.DynamicGpuData')
+            replace('DynamicUniforms.Transform', 'DynamicGpuData.Transform')
             replace('com.mojang.blaze3d.buffers.GpuBuffer', 'com.mojang.renderpearl.api.buffers.GpuBuffer')
             replace('com.mojang.blaze3d.textures.', 'com.mojang.renderpearl.api.textures.')
             replace('com.mojang.blaze3d.vertex.VertexFormat', 'com.mojang.renderpearl.api.vertex.VertexFormat')

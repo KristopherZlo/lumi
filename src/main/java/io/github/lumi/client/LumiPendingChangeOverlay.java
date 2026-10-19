@@ -58,7 +58,7 @@ public final class LumiPendingChangeOverlay {
         *///?} else {
         WorldRenderEvents.END_EXTRACTION.register(context -> compareOverlay.setFrustum(context.frustum()));
         //?}
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> compareOverlay.close());
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> client.execute(compareOverlay::close));
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> compareOverlay.close());
     }
 

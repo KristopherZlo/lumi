@@ -83,7 +83,26 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
                     context.waitFor(client -> frame >= 90 && pending.isEmpty(), 1200);
                     Path screenshot = takeHighlightScreenshot(context, "lumi-compare-" + name);
                     assertHighlight(screenshot);
-                    if (!sparse && throughWorld) denseXrayScreenshot = screenshot;
+                    if (!sparse && throughWorld) {
+                        denseXrayScreenshot = screenshot;
+                        long cachedBytes = context.computeOnClient(client -> renderer.cachedBytes());
+                        context.runOnClient(client -> {
+                            client.player.setYRot(0);
+                            client.player.yRotO = 0;
+                        });
+                        context.waitTicks(3);
+                        context.runOnClient(client -> {
+                            client.player.setYRot(180);
+                            client.player.yRotO = 180;
+                        });
+                        context.waitTicks(3);
+                        context.runOnClient(client -> {
+                            if (!renderer.isReady() || renderer.cachedBytes() != cachedBytes) {
+                                throw new AssertionError("Camera rotation discarded retained Compare geometry");
+                            }
+                        });
+                        assertSameHighlight(screenshot, takeHighlightScreenshot(context, "lumi-compare-camera-return"));
+                    }
                     context.runOnClient(client -> active = false);
                 }
             }

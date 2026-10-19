@@ -18,7 +18,18 @@ final class CompareOverlayGpuMesh implements AutoCloseable {
     private final Layer outlines;
 
     CompareOverlayGpuMesh(CompareOverlayGeometry.Section section) {
-        fills = upload(LumiCompareRenderTypes.fill(false), builder -> {
+        fills = uploadLayer(section, false);
+        try {
+            outlines = uploadLayer(section, true);
+        } catch (RuntimeException | Error failed) {
+            if (fills != null) fills.close();
+            throw failed;
+        }
+    }
+
+    static Layer uploadLayer(CompareOverlayGeometry.Section section, boolean outline) {
+        if (outline) return uploadOutlines(section);
+        return upload(LumiCompareRenderTypes.fill(false), builder -> {
             PoseStack pose = new PoseStack();
             for (var block : section.blocks()) {
                 var change = block.change();
@@ -35,28 +46,26 @@ final class CompareOverlayGpuMesh implements AutoCloseable {
                 }
             }
         });
-        try {
-            outlines = upload(LumiCompareRenderTypes.outline(false), builder -> {
-                for (var block : section.blocks()) {
-                    var change = block.change();
-                    int color = LumiCompareOverlayRenderer.color(change.kind());
-                    for (int edge = 0; edge < 12; edge++) {
-                        if ((block.edges() & (1 << edge)) == 0) continue;
-                        int axis = edge / 4, corner = edge % 4;
-                        int first = (axis + 1) % 3, second = (axis + 2) % 3;
-                        float x = change.x() - section.x() + cornerOffset(0, first, second, corner);
-                        float y = change.y() - section.y() + cornerOffset(1, first, second, corner);
-                        float z = change.z() - section.z() + cornerOffset(2, first, second, corner);
-                        vertex(builder, x, y, z, axis, color);
-                        vertex(builder, x + (axis == 0 ? 1 : 0),
-                                y + (axis == 1 ? 1 : 0), z + (axis == 2 ? 1 : 0), axis, color);
-                    }
+    }
+
+    private static Layer uploadOutlines(CompareOverlayGeometry.Section section) {
+        return upload(LumiCompareRenderTypes.outline(false), builder -> {
+            for (var block : section.blocks()) {
+                var change = block.change();
+                int color = LumiCompareOverlayRenderer.color(change.kind());
+                for (int edge = 0; edge < 12; edge++) {
+                    if ((block.edges() & (1 << edge)) == 0) continue;
+                    int axis = edge / 4, corner = edge % 4;
+                    int first = (axis + 1) % 3, second = (axis + 2) % 3;
+                    float x = change.x() - section.x() + cornerOffset(0, first, second, corner);
+                    float y = change.y() - section.y() + cornerOffset(1, first, second, corner);
+                    float z = change.z() - section.z() + cornerOffset(2, first, second, corner);
+                    vertex(builder, x, y, z, axis, color);
+                    vertex(builder, x + (axis == 0 ? 1 : 0),
+                            y + (axis == 1 ? 1 : 0), z + (axis == 2 ? 1 : 0), axis, color);
                 }
-            });
-        } catch (RuntimeException | Error failed) {
-            if (fills != null) fills.buffer().close();
-            throw failed;
-        }
+            }
+        });
     }
 
     Layer layer(boolean outline) {
@@ -75,8 +84,8 @@ final class CompareOverlayGpuMesh implements AutoCloseable {
 
     @Override
     public void close() {
-        if (fills != null) fills.buffer().close();
-        if (outlines != null) outlines.buffer().close();
+        if (fills != null) fills.close();
+        if (outlines != null) outlines.close();
     }
 
     private static int cornerOffset(int axis, int first, int second, int corner) {
@@ -102,5 +111,10 @@ final class CompareOverlayGpuMesh implements AutoCloseable {
         }
     }
 
-    record Layer(GpuBuffer buffer, VertexFormat.Mode mode, int indexCount) { }
+    record Layer(GpuBuffer buffer, VertexFormat.Mode mode, int indexCount) implements AutoCloseable {
+        @Override
+        public void close() {
+            buffer.close();
+        }
+    }
 }
