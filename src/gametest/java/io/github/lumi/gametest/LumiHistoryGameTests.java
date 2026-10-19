@@ -6,6 +6,7 @@ import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.VersionTags;
+import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.operation.DimensionMutation;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
@@ -42,7 +43,8 @@ public final class LumiHistoryGameTests {
     private static final TicketType TEST_CHUNK_TICKET =
             new TicketType(Long.MAX_VALUE, TicketType.FLAG_LOADING);
 
-    @GameTest(maxTicks = 300000)
+    // Dedicated GameTests advance ticks faster than the asynchronous persistence phases.
+    @GameTest(maxTicks = 3000000)
     public void quickRestoreCancelsWorkInUnchangedSections(GameTestHelper helper) {
         var runtime = runtime(helper);
         var level = helper.getLevel();
@@ -50,7 +52,9 @@ public final class LumiHistoryGameTests {
         var zone = new AtomicReference<UUID>();
         var terminal = new AtomicReference<MutationTerminalState>();
         var current = new AtomicReference<DimensionMutation>();
+        var savedHead = new AtomicReference<CommitId>();
         BlockPos changed = helper.absolutePos(new BlockPos(2, 2, 2));
+        BlockPos disjoint = changed.north();
         BlockPos pending = changed.east(32);
         BlockPos ambient = pending.south();
         helper.startSequence()
@@ -89,6 +93,44 @@ public final class LumiHistoryGameTests {
                             "Quick Restore removed unrelated vanilla work");
                     ((io.github.lumi.minecraft.world.OwnedTickAccess<net.minecraft.world.level.block.Block>)
                             level.getBlockTicks()).lumi$remove(ambient, Blocks.STONE);
+                    assertBlock(helper, level, changed, Blocks.STONE);
+                    try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), new UUID(0, 70))) {
+                        level.setBlockAndUpdate(disjoint, Blocks.DIAMOND_BLOCK.defaultBlockState());
+                    }
+                    startSave(helper, runtime, zone.get(), "Save after Quick Restore", terminal, current);
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime, current))
+                .thenExecute(() -> {
+                    requireSucceeded(helper, terminal.get(), "Save after Quick Restore");
+                    savedHead.set(activeCommit(helper, runtime));
+                    startAction(runtime, LiveActionJournal.Direction.UNDO, terminal, current);
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime, current))
+                .thenExecute(() -> {
+                    requireSucceeded(helper, terminal.get(), "Undo Quick Restore after Save");
+                    assertBlock(helper, level, changed, Blocks.GOLD_BLOCK);
+                    assertBlock(helper, level, disjoint, Blocks.DIAMOND_BLOCK);
+                    startAction(runtime, LiveActionJournal.Direction.UNDO, terminal, current);
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime, current))
+                .thenExecute(() -> {
+                    requireSucceeded(helper, terminal.get(), "Undo builder action");
+                    assertBlock(helper, level, changed, Blocks.STONE);
+                    startAction(runtime, LiveActionJournal.Direction.REDO, terminal, current);
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime, current))
+                .thenExecute(() -> {
+                    requireSucceeded(helper, terminal.get(), "Redo builder action");
+                    assertBlock(helper, level, changed, Blocks.GOLD_BLOCK);
+                    startAction(runtime, LiveActionJournal.Direction.REDO, terminal, current);
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime, current))
+                .thenExecute(() -> {
+                    requireSucceeded(helper, terminal.get(), "Redo Quick Restore after Save");
+                    assertBlock(helper, level, changed, Blocks.STONE);
+                    assertBlock(helper, level, disjoint, Blocks.DIAMOND_BLOCK);
+                    helper.assertValueEqual(savedHead.get(), activeCommit(helper, runtime),
+                            "Action replay moved the saved branch pointer");
                     LumiGameTestLease.release(lease);
                 })
                 .thenSucceed();
@@ -469,6 +511,16 @@ public final class LumiHistoryGameTests {
             throw helper.assertionException(
                     "Cannot start durable Save: %s", failed.getMessage());
         }
+    }
+
+    private static void startAction(
+            FabricDimensionRuntime runtime,
+            LiveActionJournal.Direction direction,
+            AtomicReference<MutationTerminalState> terminal,
+            AtomicReference<DimensionMutation> current) {
+        terminal.set(null);
+        current.set(runtime.startLiveAction(AUTHOR.id(), direction,
+                operation -> terminal.set(operation.terminalState())));
     }
 
     private static void startRestore(
