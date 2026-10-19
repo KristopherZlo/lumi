@@ -251,45 +251,37 @@ class LiveActionJournalTest {
     }
 
     @Test
-    void newHeadDropsOnlyHistoryThroughTheStaleCheckpoint() {
-        var released = new java.util.ArrayList<LiveActionJournal.Checkpoint>();
-        LiveActionJournal journal = new LiveActionJournal(released::add);
-        add(journal, 1);
-        var checkpoint = checkpoint('1');
-        journal.pushCheckpoint(PLAYER_A, checkpoint);
-        UUID newer = add(journal, 2);
-
-        assertEquals(2, journal.discardStaleCheckpoints(
-                new BranchRef(new BranchName("main"), commit('9'), 2)));
-        assertEquals(List.of(checkpoint), released);
-        var remaining = journal.prepareUndo(PLAYER_A).orElseThrow();
-        assertEquals(newer, remaining.actionId());
-        journal.complete(remaining);
-        assertTrue(journal.prepareUndo(PLAYER_A).isEmpty());
-    }
-
-    @Test
-    void unchangedHeadKeepsCheckpointHistory() {
+    void traversesBuilderAndReplacementActionsOnOneUndoRedoStack() {
         LiveActionJournal journal = new LiveActionJournal();
+        UUID axiom = journal.begin(PLAYER_A);
+        journal.record(axiom, POSITION, block("stone"), block("gold_block"));
+        journal.close(axiom);
         var checkpoint = checkpoint('1');
-        journal.pushCheckpoint(PLAYER_A, checkpoint);
+        UUID restore = journal.pushCheckpoint(PLAYER_A, checkpoint);
 
-        assertEquals(0, journal.discardStaleCheckpoints(checkpoint.expectedRef()));
+        var undoRestore = journal.prepareUndo(PLAYER_A).orElseThrow();
+        assertEquals(restore, undoRestore.actionId());
+        assertEquals(Optional.of(checkpoint), undoRestore.checkpoint());
+        journal.complete(undoRestore);
+
+        var undoAxiom = journal.prepareUndo(PLAYER_A).orElseThrow();
+        assertEquals(axiom, undoAxiom.actionId());
+        assertEquals(block("gold_block"), undoAxiom.expected().get(POSITION));
+        assertEquals(block("stone"), undoAxiom.replacement().get(POSITION));
+        journal.complete(undoAxiom);
+        assertTrue(journal.prepareUndo(PLAYER_A).isEmpty());
+
+        var redoAxiom = journal.prepareRedo(PLAYER_A).orElseThrow();
+        assertEquals(axiom, redoAxiom.actionId());
+        assertEquals(block("stone"), redoAxiom.expected().get(POSITION));
+        assertEquals(block("gold_block"), redoAxiom.replacement().get(POSITION));
+        journal.complete(redoAxiom);
+        var redoRestore = journal.prepareRedo(PLAYER_A).orElseThrow();
+        assertEquals(restore, redoRestore.actionId());
         assertEquals(Optional.of(checkpoint),
-                journal.prepareUndo(PLAYER_A).orElseThrow().checkpoint());
-    }
-
-    @Test
-    void staleCheckpointDiscardIncludesAGroupCrossingItsBoundary() {
-        LiveActionJournal journal = new LiveActionJournal();
-        UUID older = add(journal, 1);
-        journal.pushCheckpoint(PLAYER_A, checkpoint('1'));
-        UUID newer = add(journal, 2);
-        journal.mergeGroups(older, newer);
-
-        assertEquals(3, journal.discardStaleCheckpoints(
-                new BranchRef(new BranchName("main"), commit('9'), 2)));
-        assertTrue(journal.prepareUndo(PLAYER_A).isEmpty());
+                redoRestore.checkpoint());
+        journal.complete(redoRestore);
+        assertTrue(journal.prepareRedo(PLAYER_A).isEmpty());
     }
 
     @Test
