@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.domain.model.ActionReplayTarget;
 import io.github.lumi.domain.model.BranchSwitchTarget;
 import io.github.lumi.domain.model.BlockAreaTarget;
 import io.github.lumi.domain.model.BlockBox;
@@ -55,6 +56,67 @@ class OperationJournalRepositoryTest {
     }
 
     @Test
+    void retainsSelectedActionAndDirectionAcrossReopenAndPhaseAdvances() throws IOException {
+        for (boolean undo : new boolean[] {true, false}) {
+            Path root = repositoryRoot.resolve(undo ? "undo" : "redo");
+            var repository = new OperationJournalRepository(root);
+            var action = new ActionReplayTarget(new UUID(0, 1), new UUID(0, 2), undo);
+            var journal = repository.create(new OperationJournal(UUID.randomUUID(),
+                    OperationKind.ACTION_REPLAY, OperationPhase.PREPARED, target())
+                    .withActionReplay(action));
+            for (var phase : new OperationPhase[] {OperationPhase.APPLYING,
+                    OperationPhase.WORLD_PERSISTED, OperationPhase.COMPLETE}) {
+                journal = new OperationJournalRepository(root).advance(journal, phase);
+                assertEquals(Optional.of(action), journal.actionReplay());
+                assertEquals(journal, new OperationJournalRepository(root).read().orElseThrow());
+            }
+        }
+    }
+
+    @Test
+    void rejectsTruncatedOrInvalidActionIdentityWithoutChangingTheJournal() throws IOException {
+        var repository = new OperationJournalRepository(repositoryRoot);
+        var journal = repository.create(new OperationJournal(UUID.randomUUID(),
+                OperationKind.ACTION_REPLAY, OperationPhase.PREPARED, target())
+                .withActionReplay(new ActionReplayTarget(new UUID(0, 1), new UUID(0, 2), true)));
+        Path file = repositoryRoot.resolve("operations/active.bin");
+        byte[] valid = Files.readAllBytes(file);
+        byte[] flag = valid.clone();
+        flag[flag.length - 34] = 2;
+        byte[] direction = valid.clone();
+        direction[direction.length - 1] = 2;
+        byte[] wrongKind = valid.clone();
+        wrongKind[20] = (byte) OperationKind.RESTORE.code();
+        for (byte[] invalid : new byte[][] {flag, direction, wrongKind,
+                Arrays.copyOf(valid, valid.length - 1), Arrays.copyOf(valid, valid.length - 34)}) {
+            Files.write(file, invalid);
+            assertThrows(IOException.class, () -> new OperationJournalRepository(repositoryRoot).read());
+            assertEquals(invalid.length, Files.size(file));
+        }
+        Files.write(file, valid);
+        assertEquals(journal, repository.read().orElseThrow());
+        assertThrows(IllegalArgumentException.class, () -> new OperationJournal(
+                UUID.randomUUID(), OperationKind.RESTORE, OperationPhase.PREPARED, target())
+                .withActionReplay(journal.actionReplay().orElseThrow()));
+    }
+
+    @Test
+    void readsAndAdvancesPreviousJournalFormatWithoutActionIdentity() throws IOException {
+        var repository = new OperationJournalRepository(repositoryRoot);
+        var journal = repository.create(new OperationJournal(UUID.randomUUID(),
+                OperationKind.RESTORE, OperationPhase.PREPARED, target()));
+        Path file = repositoryRoot.resolve("operations/active.bin");
+        byte[] payload = Files.readAllBytes(file);
+        payload = Arrays.copyOf(payload, payload.length - 1);
+        payload[3] = '2'; // LOJ2 has no final action-identity field.
+        Files.write(file, payload);
+
+        assertEquals(journal, new OperationJournalRepository(repositoryRoot).read().orElseThrow());
+        var applying = repository.advance(journal, OperationPhase.APPLYING);
+        assertEquals(applying, new OperationJournalRepository(repositoryRoot).read().orElseThrow());
+    }
+
+    @Test
     void preservesCapturedGenerationsWithoutRewritingThemOnPhaseAdvance() throws IOException {
         OperationJournalRepository repository = new OperationJournalRepository(repositoryRoot);
         WorkingIndexSnapshot boundary = new WorkingIndexSnapshot(Map.of(
@@ -87,7 +149,9 @@ class OperationJournalRepositoryTest {
                 UUID.randomUUID(), OperationKind.SAVE, OperationPhase.PREPARED, target()));
         Path journal = repositoryRoot.resolve("operations/active.bin");
         byte[] current = Files.readAllBytes(journal);
-        Files.write(journal, Arrays.copyOf(current, current.length - 1));
+        byte[] legacy = Arrays.copyOf(current, current.length - 2);
+        legacy[3] = '2'; // LOJ2 before generation/action identity flags.
+        Files.write(journal, legacy);
 
         OperationJournal decoded = new OperationJournalRepository(repositoryRoot)
                 .read().orElseThrow();

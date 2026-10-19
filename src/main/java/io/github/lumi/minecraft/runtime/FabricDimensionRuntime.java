@@ -30,6 +30,7 @@ import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.WorldActionScope;
 import io.github.lumi.domain.model.BranchSwitchPlan;
 import io.github.lumi.domain.model.ActiveBranch;
+import io.github.lumi.domain.model.ActionReplayTarget;
 import io.github.lumi.domain.model.ActiveWorkspace;
 import io.github.lumi.domain.model.BlockAreaTarget;
 import io.github.lumi.domain.model.BlockBox;
@@ -1132,7 +1133,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         return RestoreOperation.startCheckpointAction(
                                 prepared, worldApply, new PendingRestorePublication(mutations),
                                 journals, operationId, restoreStateListener,
-                                OperationKind.ACTION_REPLAY, saved.commitId(), progress);
+                                OperationKind.ACTION_REPLAY, saved.commitId(),
+                                Optional.of(new ActionReplayTarget(plan.player(), plan.actionId(), undo)), progress);
                     } catch (IOException failed) {
                         throw new CompletionException(failed);
                     }

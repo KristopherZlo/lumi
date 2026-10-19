@@ -1,5 +1,6 @@
 package io.github.lumi.storage.repository;
 
+import io.github.lumi.domain.model.ActionReplayTarget;
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.BranchSwitchTarget;
 import io.github.lumi.domain.model.BlockAreaTarget;
@@ -36,7 +37,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class OperationJournalRepository {
-    private static final int MAGIC = 0x4C4F4A32;
+    private static final int MAGIC = 0x4C4F4A33;
+    private static final int LEGACY_MAGIC = 0x4C4F4A32;
     private static final int GENERATIONS_MAGIC = 0x4C4F4731;
     private static final int MAX_NAME_BYTES = 1024;
     private static final int MAX_JOURNAL_BYTES = 4 * 1024;
@@ -124,6 +126,13 @@ public final class OperationJournalRepository {
             writeWorkspaceSwitch(output, journal.target().workspaceSwitch());
             writeZoneRestore(output, journal.target().zoneRestore());
             output.writeBoolean(journal.capturedGenerations().isPresent());
+            output.writeBoolean(journal.actionReplay().isPresent());
+            if (journal.actionReplay().isPresent()) {
+                var action = journal.actionReplay().orElseThrow();
+                writeUuid(output, action.actor());
+                writeUuid(output, action.action());
+                output.writeBoolean(action.undo());
+            }
         }
         return bytes.toByteArray();
     }
@@ -135,8 +144,9 @@ public final class OperationJournalRepository {
     private OperationJournal decode(
             byte[] payload, WorkingIndexSnapshot knownGenerations) throws IOException {
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(payload))) {
-            if (input.readInt() != MAGIC) {
-                throw new IOException("Not a Lumi V2 operation journal");
+            int magic = input.readInt();
+            if (magic != MAGIC && magic != LEGACY_MAGIC) {
+                throw new IOException("Not a Lumi operation journal");
             }
             UUID operationId = readUuid(input);
             OperationKind kind = OperationKind.fromCode(input.readUnsignedByte());
@@ -179,6 +189,18 @@ public final class OperationJournalRepository {
                             ? readGenerations(operationId) : knownGenerations);
                 }
             }
+            Optional<ActionReplayTarget> actionReplay = Optional.empty();
+            if (magic == MAGIC) {
+                int present = input.readUnsignedByte();
+                if (present > 1) throw new IOException("Invalid action replay flag");
+                if (present == 1) {
+                    UUID actor = readUuid(input);
+                    UUID action = readUuid(input);
+                    int undo = input.readUnsignedByte();
+                    if (undo > 1) throw new IOException("Invalid action replay direction");
+                    actionReplay = Optional.of(new ActionReplayTarget(actor, action, undo == 1));
+                }
+            }
             OperationTarget target = new OperationTarget(
                     branchName, expected, revision, targetCommit, returnPoint,
                     branchSwitch, blockArea, excludeEntities, workspaceSwitch, zoneRestore);
@@ -186,7 +208,7 @@ public final class OperationJournalRepository {
                 throw new IOException("Trailing bytes in operation journal");
             }
             return new OperationJournal(
-                    operationId, kind, phase, target, capturedGenerations);
+                    operationId, kind, phase, target, capturedGenerations, actionReplay);
         } catch (IllegalArgumentException invalid) {
             throw new IOException("Invalid operation journal", invalid);
         }

@@ -1,6 +1,7 @@
 package io.github.lumi.minecraft.operation;
 
 import io.github.lumi.LumiMod;
+import io.github.lumi.domain.model.ActionReplayTarget;
 import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.BranchSwitchPlan;
 import io.github.lumi.domain.model.BranchSwitchTarget;
@@ -505,7 +506,12 @@ public final class RestoreOperation implements DimensionMutation {
             RestoreStateListener stateListener,
             OperationKind kind,
             CommitId returnPoint,
+            Optional<ActionReplayTarget> actionReplay,
             Consumer<OperationProgress> progress) throws IOException {
+        Objects.requireNonNull(actionReplay, "actionReplay");
+        if ((kind == OperationKind.ACTION_REPLAY) != actionReplay.isPresent()) {
+            throw new IllegalArgumentException("Action replay requires its selected history step");
+        }
         if (kind != OperationKind.CHECKPOINT_UNDO
                 && kind != OperationKind.QUICK_ROLLBACK
                 && kind != OperationKind.ACTION_REPLAY) {
@@ -516,8 +522,10 @@ public final class RestoreOperation implements DimensionMutation {
                 restore.expectedRef().name(), restore.expectedRef().commit(),
                 restore.expectedRef().revision(), Optional.of(restore.targetCommit()),
                 Optional.of(Objects.requireNonNull(returnPoint, "returnPoint")));
-        return start(restore, world, publication, journals, operationId,
+        var operation = start(restore, world, publication, journals, operationId,
                 stateListener, kind, target, Optional.empty(), progress);
+        actionReplay.ifPresent(action -> operation.journal = operation.journal.withActionReplay(action));
+        return operation;
     }
 
     public static RestoreOperation start(

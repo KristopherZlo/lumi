@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.domain.model.ActionReplayTarget;
 import io.github.lumi.domain.model.ActiveBranch;
 import io.github.lumi.domain.model.ActiveWorkspace;
 import io.github.lumi.domain.model.BranchRef;
@@ -68,9 +69,10 @@ class RestoreOperationTest {
         var prepared = new PreparedRestore(expected, id('3'),
                 Map.of(), Map.of(), Map.of(), Map.of());
         var journals = new OperationJournalRepository(repositoryRoot);
+        var action = new ActionReplayTarget(new UUID(0, 1), new UUID(0, 2), true);
         var operation = RestoreOperation.startCheckpointAction(prepared,
                 new ImmediatelyVerified(), ignored -> { }, journals, UUID.randomUUID(),
-                RestoreStateListener.NONE, OperationKind.ACTION_REPLAY, id('2'), ignored -> { });
+                RestoreStateListener.NONE, OperationKind.ACTION_REPLAY, id('2'), Optional.of(action), ignored -> { });
 
         operation.tick(Long.MAX_VALUE);
 
@@ -80,6 +82,7 @@ class RestoreOperationTest {
         assertEquals(expected.revision(), journal.target().expectedRevision());
         assertEquals(Optional.of(id('2')), journal.target().returnPoint());
         assertEquals(Optional.of(id('3')), journal.target().target());
+        assertEquals(Optional.of(action), journal.actionReplay());
     }
 
     @Test void refusesUndrainedExternalWorkBeforeCreatingAJournalOrPublishing() throws IOException {
@@ -351,7 +354,7 @@ class RestoreOperationTest {
         RestoreOperation operation = RestoreOperation.startCheckpointAction(
                 restore, new RepairThenVerify(), ignored -> { }, journals,
                 UUID.randomUUID(), RestoreStateListener.NONE,
-                OperationKind.CHECKPOINT_UNDO, source.commit(), ignored -> { });
+                OperationKind.CHECKPOINT_UNDO, source.commit(), Optional.empty(), ignored -> { });
         operation.tick(Long.MAX_VALUE);
 
         var journal = journals.read().orElseThrow();
