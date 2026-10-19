@@ -357,6 +357,7 @@ final class MinecraftStoredChunkAccess {
             if (stored == null || stored.chunkSection() == null) {
                 return "section is absent: " + entry.getKey();
             }
+            if (!MinecraftSectionCapture.matchesActionBiomes(stored.chunkSection(), entry.getValue())) return "action biomes differ in " + entry.getKey();
             int block = firstMismatchedState(stored.chunkSection(), entry.getValue());
             if (block >= 0) {
                 return "block " + MinecraftPreparedWorldAccess.position(

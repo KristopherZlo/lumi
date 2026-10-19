@@ -20,17 +20,23 @@ import net.minecraft.world.level.block.state.BlockState;
 /** Converts persistent strings and canonical NBT into Minecraft-native apply data. */
 public final class MinecraftBlockStateDecoder {
     private final HolderLookup<Block> blocks;
+    private final HolderLookup<net.minecraft.world.level.biome.Biome> biomes;
     private final ConcurrentHashMap<String, BlockState> decodedStates =
             new ConcurrentHashMap<>();
 
     public MinecraftBlockStateDecoder(HolderLookup<Block> blocks) {
+        this(blocks, null);
+    }
+
+    public MinecraftBlockStateDecoder(HolderLookup<Block> blocks, HolderLookup<net.minecraft.world.level.biome.Biome> biomes) {
         this.blocks = Objects.requireNonNull(blocks, "blocks");
+        this.biomes = biomes;
     }
 
     public DecodedSection decode(SectionBlob source) throws IOException {
         DecodedPayload decoded = decodePayload(source);
         return DecodedSection.fromPalette(
-                decoded.palette(), decoded.indexes(), decoded.blockEntities());
+                decoded.palette(), decoded.indexes(), decoded.blockEntities()).withActionBiomes(decodeBiomes(source));
     }
 
     DecodedSection decodeAgainst(SectionBlob source, SectionBlob before)
@@ -38,7 +44,18 @@ public final class MinecraftBlockStateDecoder {
         DecodedPayload target = decodePayload(source);
         return DecodedSection.fromPalette(
                 target.palette(), target.indexes(), target.blockEntities())
-                .prepareAgainst(source, before, this);
+                .withActionBiomes(decodeBiomes(source)).prepareAgainst(source, before, this);
+    }
+
+    private java.util.Map<Integer, net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> decodeBiomes(SectionBlob source) throws IOException {
+        var decoded = new HashMap<Integer, net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>>();
+        for (var entry : source.actionBiomes().entrySet()) {
+            var id = Identifier.tryParse(entry.getValue());
+            if (biomes == null || id == null) throw new IOException("Unknown action biome: " + entry.getValue());
+            var key = net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.BIOME, id);
+            decoded.put(entry.getKey(), biomes.get(key).orElseThrow(() -> new IOException("Missing action biome: " + id)));
+        }
+        return decoded;
     }
 
     private DecodedPayload decodePayload(SectionBlob source) throws IOException {
@@ -67,6 +84,7 @@ public final class MinecraftBlockStateDecoder {
         Objects.requireNonNull(source, "source");
         List<BlockState> palette = decodePalette(source);
         validateBlockEntities(source, palette);
+        decodeBiomes(source);
     }
 
     void validateBlockEntities(

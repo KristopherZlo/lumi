@@ -36,7 +36,8 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
         this.background = Objects.requireNonNull(background, "background");
         preparation = new MinecraftRestorePreparation(
                 new MinecraftBlockStateDecoder(
-                        level.registryAccess().lookupOrThrow(Registries.BLOCK)),
+                        level.registryAccess().lookupOrThrow(Registries.BLOCK),
+                        level.registryAccess().lookupOrThrow(Registries.BIOME)),
                 new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE));
         world = new MinecraftPreparedWorldAccess(level, freeze, background);
     }

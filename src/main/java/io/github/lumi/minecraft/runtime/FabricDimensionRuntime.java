@@ -1135,6 +1135,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             throw new IOException("Checkpoint action belongs to another branch");
         }
         boolean undo = plan.direction() == LiveActionJournal.Direction.UNDO;
+        AxiomBiomeCapture.prepareReplay(this, plan);
         UUID operationId = UUID.randomUUID();
         var workspace = activeWorkspace();
         var player = level.getServer().getPlayerList().getPlayer(plan.player());
@@ -1168,14 +1169,22 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                                     new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version()))
                                     .prepare(saved.commitId(), plan, locations, author);
                         }
+                        CommitId replaySource = saved.commitId();
+                        if (!plan.biomes().isEmpty()) {
+                            var biomePreparation = new ActionReplayPreparation(new WorldObjectRepository(repository),
+                                    new CommitRepository(repository), new OriginStore(repository),
+                                    new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version()));
+                            replaySource = biomePreparation.withBiomes(saved.commitId(), plan.biomes(), undo, author);
+                            replay = biomePreparation.withBiomes(replay, plan.biomes(), !undo, author);
+                        }
                         PreparedRestore prepared = restores.prepare(
-                                expected, saved.commitId(), replay,
+                                expected, replaySource, replay,
                                 value -> publishRestoreDiffProgress(progress, value));
                         return RestoreOperation.startCheckpointAction(
                                 prepared, worldApply, new ActionReplayPublication(new PendingRestorePublication(mutations),
                                         actionHistory, operationId, new ActionReplayTarget(plan.player(), plan.actionId(), undo), !undo, ignored -> { }),
                                 journals, operationId, restoreStateListener,
-                                OperationKind.ACTION_REPLAY, saved.commitId(),
+                                OperationKind.ACTION_REPLAY, replaySource,
                                 Optional.of(new ActionReplayTarget(plan.player(), plan.actionId(), undo)), progress);
                     } catch (IOException failed) {
                         throw new CompletionException(failed);

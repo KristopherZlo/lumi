@@ -35,6 +35,12 @@ final class MinecraftSectionRewriter {
             throw new IllegalArgumentException("Section is outside the loaded chunk: " + key);
         }
         LevelChunkSection section = chunk.getSection(sectionIndex);
+        if (target.applyBiomes(section)) {
+            chunk.markUnsaved();
+            var packet = net.minecraft.network.protocol.game.ClientboundChunksBiomesPacket.forChunks(List.of(chunk));
+            level.getChunkSource().chunkMap.getPlayers(chunk.getPos(), false)
+                    .forEach(player -> player.connection.send(packet));
+        }
         LevelChunkSection replacementSection = target.replacementFor(section);
         PreparedSectionDelta delta = target.deltaFrom(section);
         if (delta.changedCount() == 0) {

@@ -112,4 +112,26 @@ public final class ActionReplayPreparation {
         ObjectId id = leaves.get(key);
         return id == null ? origins.read(key) : Optional.of(id);
     }
+
+    /** Adds only selected biome cells to a hidden apply endpoint; normal snapshots remain biome-free. */
+    public CommitId withBiomes(CommitId base, Map<BiomePosition, WorldActionRecord.BiomeDelta> biomes,
+            boolean after, CommitAuthor author) throws IOException {
+        if (biomes.isEmpty()) return base;
+        try (var publication = objects.beginPublication()) {
+            var current = commits.read(base);
+            var leaves = new WorldObjectGraph(objects).scan(current.tree()).leaves();
+            var selected = new HashMap<SectionKey, Map<Integer, String>>();
+            biomes.forEach((position, delta) -> selected.computeIfAbsent(position.section(), ignored -> new HashMap<>())
+                    .put(position.localIndex(), after ? delta.after() : delta.before()));
+            Map<HistoryKey, ObjectId> changes = new HashMap<>();
+            for (var entry : selected.entrySet()) {
+                var id = leaf(leaves, entry.getKey()).orElseThrow(() -> new IOException("Missing biome action section origin"));
+                changes.put(entry.getKey(), objects.write(objects.readSection(id).withActionBiomes(entry.getValue())));
+            }
+            var tree = new MerkleTreeEditor(objects).update(Optional.of(current.tree()), changes);
+            return commits.write(new Commit(tree, List.of(base), author, "Biome action endpoint", Instant.now(),
+                    current.workspaceId(), Optional.empty(), CommitKind.HIDDEN_RETURN,
+                    new CommitStatistics(changes.size(), 0, 0, 0), current.playerSpawns()));
+        }
+    }
 }

@@ -9,6 +9,8 @@ public final class AxiomBufferDispatchContext {
     private static final ThreadLocal<Active> CURRENT = new ThreadLocal<>();
     private AxiomBufferDispatchContext() { }
 
+    public static Optional<ServerPlayer> actor() { return Optional.ofNullable(CURRENT.get()).map(Active::player); }
+
     public static Optional<UUID> current(ServerPlayer player) {
         Active active = CURRENT.get();
         return active != null && active.player == player ? Optional.of(active.dispatch) : Optional.empty();

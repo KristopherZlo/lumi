@@ -29,31 +29,44 @@ public final class LumiAxiomRegionGameTests {
     public void axiomBiomeWriteHonorsFreezeWithoutEnteringHistory(GameTestHelper helper) {
         var runtime = LumiMod.serverRuntime().find(helper.getLevel()).orElseThrow();
         UUID test = UUID.randomUUID();
+        var player = new AtomicReference<ServerPlayer>();
+        var operation = new AtomicReference<DimensionMutation>();
+        var original = new AtomicReference<net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome>>();
+        BlockPos position = helper.absolutePos(new BlockPos(2, 2, 2));
         helper.startSequence()
                 .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
                 .thenExecute(() -> {
-                    BlockPos position = helper.absolutePos(new BlockPos(2, 2, 2));
-                    var original = helper.getLevel().getNoiseBiome(position.getX() >> 2, position.getY() >> 2, position.getZ() >> 2);
-                    var replacement = original.is(Biomes.DESERT) ? Biomes.PLAINS : Biomes.DESERT;
+                    player.set(helper.makeMockServerPlayerInLevel());
+                    original.set(helper.getLevel().getNoiseBiome(position.getX() >> 2, position.getY() >> 2, position.getZ() >> 2).unwrapKey().orElseThrow());
                     var buffer = new BiomeBuffer();
-                    buffer.set(position.getX() >> 2, position.getY() >> 2, position.getZ() >> 2, replacement);
+                    buffer.set(position.getX() >> 2, position.getY() >> 2, position.getZ() >> 2,
+                            original.get().equals(Biomes.DESERT) ? Biomes.PLAINS : Biomes.DESERT);
                     var before = runtime.mutations().builderSnapshot();
                     var freeze = runtime.freeze().acquire();
                     try {
-                        applyBiomes(buffer, helper.getLevel());
-                        helper.assertValueEqual(original, helper.getLevel().getNoiseBiome(position.getX() >> 2, position.getY() >> 2, position.getZ() >> 2), "Frozen biome write changed the world");
-                    } finally {
-                        freeze.release();
-                    }
-                    applyBiomes(buffer, helper.getLevel());
-                    helper.assertTrue(helper.getLevel().getNoiseBiome(position.getX() >> 2, position.getY() >> 2, position.getZ() >> 2).is(replacement), "Native biome edit was not applied");
-                    helper.assertValueEqual(before, runtime.mutations().builderSnapshot(), "Excluded biome edit entered builder history");
-                    var reset = new BiomeBuffer();
-                    reset.set(position.getX() >> 2, position.getY() >> 2, position.getZ() >> 2, original.unwrapKey().orElseThrow());
-                    applyBiomes(reset, helper.getLevel());
-                    LumiGameTestLease.release(test);
+                        applyBiomes(buffer, helper.getLevel(), player.get());
+                        helper.assertTrue(helper.getLevel().getNoiseBiome(position.getX() >> 2, position.getY() >> 2, position.getZ() >> 2).is(original.get()), "Frozen biome write changed the world");
+                    } finally { freeze.release(); }
+                    applyBiomes(buffer, helper.getLevel(), player.get());
+                    helper.assertTrue(!helper.getLevel().getNoiseBiome(position.getX() >> 2, position.getY() >> 2, position.getZ() >> 2).is(original.get()), "Native biome edit was not applied");
+                    helper.assertValueEqual(before, runtime.mutations().builderSnapshot(), "Biome edit entered saved-version history");
+                    operation.set(runtime.startLiveAction(player.get().getUUID(), LiveActionJournal.Direction.UNDO, ignored -> { }));
                 })
-                .thenSucceed();
+                .thenWaitUntil(() -> requireSuccess(helper, operation.get(), "Biome Undo"))
+                .thenExecute(() -> {
+                    helper.assertTrue(helper.getLevel().getNoiseBiome(position.getX() >> 2, position.getY() >> 2, position.getZ() >> 2).is(original.get()), "Biome Undo mismatch");
+                    operation.set(runtime.startLiveAction(player.get().getUUID(), LiveActionJournal.Direction.REDO, ignored -> { }));
+                })
+                .thenWaitUntil(() -> requireSuccess(helper, operation.get(), "Biome Redo"))
+                .thenExecute(() -> {
+                    helper.assertTrue(!helper.getLevel().getNoiseBiome(position.getX() >> 2, position.getY() >> 2, position.getZ() >> 2).is(original.get()), "Biome Redo mismatch");
+                    operation.set(runtime.startLiveAction(player.get().getUUID(), LiveActionJournal.Direction.UNDO, ignored -> { }));
+                })
+                .thenWaitUntil(() -> requireSuccess(helper, operation.get(), "Biome cleanup Undo"))
+                .thenExecute(() -> {
+                    helper.getLevel().getServer().getPlayerList().remove(player.get());
+                    LumiGameTestLease.release(test);
+                }).thenSucceed();
     }
 
     @GameTest(maxTicks = 300000)
@@ -139,7 +152,21 @@ public final class LumiAxiomRegionGameTests {
                 .thenSucceed();
     }
 
-    private static void applyBiomes(BiomeBuffer buffer, ServerLevel level) {
+    private static void requireSuccess(GameTestHelper helper, DimensionMutation operation, String label) {
+        helper.assertTrue(operation.isTerminal(), label + " has not finished");
+        helper.assertValueEqual(MutationTerminalState.SUCCEEDED, operation.terminalState(), label + " failed: " + operation.failure());
+    }
+
+    private static void applyBiomes(BiomeBuffer buffer, ServerLevel level, ServerPlayer player) {
+        var runtime = LumiMod.serverRuntime().find(level).orElseThrow();
+        UUID dispatch = UUID.randomUUID();
+        runtime.axiomBufferActions().begin(player.connection, player.getUUID(), dispatch);
+        try {
+            io.github.lumi.minecraft.runtime.AxiomBufferDispatchContext.run(player, dispatch, () -> invokeBiomes(buffer, level));
+        } finally { runtime.axiomBufferActions().complete(player.connection, dispatch); }
+    }
+
+    private static void invokeBiomes(BiomeBuffer buffer, ServerLevel level) {
         try {
             var method = AxiomServerboundSetBuffer.class.getDeclaredMethod("applyBiomeBufferServer", BiomeBuffer.class, ServerLevel.class);
             method.setAccessible(true);

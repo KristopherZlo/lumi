@@ -36,8 +36,18 @@ public final class MinecraftSectionCapture {
         if (!matchesStates(chunk.getSection(sectionIndex), target.blockStates())) {
             return false;
         }
+        if (!matchesActionBiomes(chunk.getSection(sectionIndex), source)) return false;
         return source.blockEntities().equals(
                 captureBlockEntities(level, chunk, sectionY));
+    }
+
+    static boolean matchesActionBiomes(LevelChunkSection section, SectionBlob source) {
+        for (var entry : source.actionBiomes().entrySet()) {
+            int cell = entry.getKey();
+            var actual = section.getNoiseBiome(cell & 3, (cell >>> 4) & 3, (cell >>> 2) & 3);
+            if (actual.unwrapKey().isEmpty() || !actual.unwrapKey().orElseThrow().identifier().toString().equals(entry.getValue())) return false;
+        }
+        return true;
     }
 
     private static Map<Integer, CanonicalNbt> captureBlockEntities(

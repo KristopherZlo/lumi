@@ -31,6 +31,7 @@ public final class DecodedSection {
     private final Map<Integer, CompoundTag> blockEntities;
     private final PalettedContainer<BlockState> preparedStates;
     private final PreparedSectionDelta delta;
+    private final Map<Integer, net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> actionBiomes;
 
     public DecodedSection(
             List<BlockState> blockStates,
@@ -61,12 +62,19 @@ public final class DecodedSection {
             Map<Integer, CompoundTag> blockEntities,
             PalettedContainer<BlockState> preparedStates,
             PreparedSectionDelta delta) {
+        this(palette, paletteIndexes, blockStates, blockEntities, preparedStates, delta, Map.of());
+    }
+
+    private DecodedSection(List<BlockState> palette, short[] paletteIndexes, List<BlockState> blockStates,
+            Map<Integer, CompoundTag> blockEntities, PalettedContainer<BlockState> preparedStates,
+            PreparedSectionDelta delta, Map<Integer, net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> biomes) {
         this.palette = palette;
         this.paletteIndexes = paletteIndexes;
         this.blockStates = blockStates;
         this.blockEntities = blockEntities;
         this.preparedStates = preparedStates;
         this.delta = delta;
+        this.actionBiomes = Map.copyOf(biomes);
         if (this.blockStates.size() != SectionBlob.BLOCK_COUNT) {
             throw new IllegalArgumentException("Decoded section must contain 4096 blocks");
         }
@@ -78,6 +86,18 @@ public final class DecodedSection {
 
     public Map<Integer, CompoundTag> blockEntities() {
         return blockEntities;
+    }
+
+    DecodedSection withActionBiomes(Map<Integer, net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> biomes) {
+        return new DecodedSection(palette, paletteIndexes, blockStates, blockEntities, preparedStates, delta, biomes);
+    }
+
+    boolean applyBiomes(LevelChunkSection section) {
+        if (actionBiomes.isEmpty()) return false;
+        @SuppressWarnings("unchecked")
+        var biomes = (PalettedContainer<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>>) section.getBiomes();
+        actionBiomes.forEach((cell, biome) -> biomes.set(cell & 3, (cell >>> 4) & 3, (cell >>> 2) & 3, biome));
+        return true;
     }
 
     LevelChunkSection replacementFor(LevelChunkSection current) {
@@ -112,7 +132,7 @@ public final class DecodedSection {
         return new DecodedSection(
                 palette, paletteIndexes, blockStates, blockEntities, preparedStates,
                 PreparedSectionDelta.between(
-                        source, before, beforePalette, this));
+                        source, before, beforePalette, this)).withActionBiomes(actionBiomes);
     }
 
     PreparedSectionDelta deltaFrom(LevelChunkSection current) {
@@ -124,7 +144,7 @@ public final class DecodedSection {
     }
 
     boolean supportsStoredRewrite() {
-        return delta != null && delta.poiIndexes().length == 0;
+        return actionBiomes.isEmpty() && delta != null && delta.poiIndexes().length == 0;
     }
 
     PreparedSectionDelta preparedDelta() {

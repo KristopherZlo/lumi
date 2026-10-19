@@ -46,7 +46,11 @@ abstract class AxiomDispatcherBarrierMixin {
             var player = actor == null ? null : server.getPlayerList().getPlayer(actor);
             if (runtime.freeze().replacementGeneration() == generation
                     && AxiomClientWorkBarrier.generation() == clientGeneration
-                    && player != null && player.level() == runtime.level()) task.run();
+                    && player != null && player.level() == runtime.level()) {
+                try (var ignored = io.github.lumi.minecraft.runtime.DirectLiveActionContext.open(runtime.liveActions(), actor)) {
+                    task.run();
+                }
+            }
         });
     }
 }
