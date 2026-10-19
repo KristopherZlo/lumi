@@ -143,8 +143,22 @@ tasks.register('runPackagedGameTest', lumiServerProductionRunTaskType) {
     if (testPosition != null) jvmArgs.add("-Dlumi.gametest.position=${testPosition}")
     def filter = System.getProperty('fabric-api.gametest.filter')
     if (filter != null) jvmArgs.add("-Dfabric-api.gametest.filter=${filter}")
+    def cachedGame = new File(gradle.gradleUserHomeDir, "caches/fabric-loom/${game}")
+    def cachedServer = new File(cachedGame, 'minecraft-server.jar')
+    def cachedInfo = new File(cachedGame, 'mojang_minecraft_info.json')
+    boolean useCachedServer = cachedServer.isFile() && cachedInfo.isFile()
+    if (useCachedServer) jvmArgs.add("-Dfabric.installer.server.gameJar=${cachedServer.absolutePath}")
     def record = [:]
     doFirst {
+        if (useCachedServer) {
+            def expectedServer = new groovy.json.JsonSlurper().parse(cachedInfo).downloads.server.sha1
+            def digest = java.security.MessageDigest.getInstance('SHA-1')
+            cachedServer.withInputStream { input ->
+                byte[] buffer = new byte[16384]
+                for (int read; (read = input.read(buffer)) != -1;) digest.update(buffer, 0, read)
+            }
+            if (digest.digest().encodeHex().toString() != expectedServer) throw new GradleException('Cached vanilla server checksum mismatch')
+        }
         def candidate = artifact.singleFile
         new MinecraftArtifactVerifier().verify(candidate.toPath(), target, candidateVersion)
         def directory = runDirectory.get().asFile
