@@ -60,6 +60,17 @@ public record WorldActionIndex(
         }
     }
 
+    /** Forgetting payloads also forgets their overlap proof, so older steps keep an eviction barrier. */
+    public WorldActionIndex forget(UUID actor) {
+        var removed = actions.stream().filter(action -> action.actor().equals(actor)).toList();
+        if (removed.isEmpty()) return this;
+        var cursors = new HashMap<>(players);
+        cursors.remove(actor);
+        return new WorldActionIndex(Math.addExact(revision, 1), nextSequence,
+                Math.max(unsafeBeforeSequence, removed.stream().mapToLong(WorldActionRecord.Metadata::sequence).max().orElse(0)),
+                actions.stream().filter(action -> !action.actor().equals(actor)).toList(), cursors);
+    }
+
     public WorldActionIndex appendCheckpoint(UUID actionId, UUID actor, WorldActionCheckpoint checkpoint) {
         if (actions.stream().anyMatch(action -> action.id().equals(actionId))) throw new IllegalStateException("Action was already recorded");
         var stacks = players.getOrDefault(actor, new Stacks(List.of(), List.of()));

@@ -111,9 +111,7 @@ public final class WorldActionHistory {
             throw new IOException("Active context changed before recording its switch");
         }
         var index = persisted.index().appendCheckpoint(operation, actor, checkpoint);
-        var blobs = new HashMap<>(persisted.payloads());
-        var retained = index.actions().stream().map(WorldActionRecord.Metadata::id).collect(java.util.stream.Collectors.toSet());
-        blobs.keySet().retainAll(retained);
+        var blobs = retainedPayloads(index);
         var context = checkpoint.context().map(WorldActionContext.Change::after).orElse(new WorldActionContext(workspace, branch));
         var next = new WorldActionIndexCodec.State(epoch, version, context.workspace(), context.branch(), index, blobs, persisted.publication());
         // A new dimension mutation can start only after its predecessor's journal was resolved.
@@ -139,5 +137,23 @@ public final class WorldActionHistory {
     }
 
     public synchronized boolean hasPreparedCheckpoint(UUID operation) { return repository.hasStagedCheckpoint(operation); }
+    /** Metadata-only publication: no world data or other builder's cursor is changed. */
+    public synchronized WorldActionIndexCodec.State forget(UUID actor) throws IOException {
+        if (persisted == null) throw new IOException("History has not been stored");
+        var index = persisted.index().forget(actor);
+        var blobs = retainedPayloads(index);
+        var next = new WorldActionIndexCodec.State(epoch, version, persisted.workspace(), persisted.branch(), index, blobs, persisted.publication());
+        repository.pruneStagedCheckpoints(Optional.empty());
+        repository.writeIndex(next);
+        persisted = next;
+        return next;
+    }
     public UUID epoch() { return epoch; }
+
+    private Map<UUID, UUID> retainedPayloads(WorldActionIndex index) {
+        var blobs = new HashMap<>(persisted.payloads());
+        var retained = index.actions().stream().map(WorldActionRecord.Metadata::id).collect(java.util.stream.Collectors.toSet());
+        blobs.keySet().retainAll(retained);
+        return blobs;
+    }
 }

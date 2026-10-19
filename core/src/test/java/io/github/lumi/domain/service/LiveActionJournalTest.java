@@ -154,6 +154,16 @@ class LiveActionJournalTest {
         assertThrows(java.io.IOException.class, () -> history.flush(workspace, branch, current,
                 metadata -> { throw new java.io.IOException("injected capture failure"); }, () -> true));
         assertEquals(published, repository.readIndex().orElseThrow());
+        UUID foreign = reopened.begin(PLAYER_B);
+        reopened.record(foreign, new BlockPosition(40, 0, 0), block("air"), block("diamond_block"));
+        reopened.close(foreign);
+        assertTrue(history.flush(workspace, branch, reopened.snapshotIndex(), reopened::snapshotAction, () -> true));
+        var cleared = history.forget(PLAYER_A);
+        assertTrue(cleared.index().actions().stream().noneMatch(entry -> entry.actor().equals(PLAYER_A)));
+        var afterClear = new LiveActionJournal();
+        new WorldActionHistory(repository, version).restore(afterClear, workspace, branch);
+        assertTrue(afterClear.prepareUndo(PLAYER_A).isEmpty());
+        assertEquals(foreign, afterClear.prepareUndo(PLAYER_B).orElseThrow().actionId());
     }
 
     @Test void reopensUndoRedoAndRefusesAnInterruptedProducer() throws Exception {

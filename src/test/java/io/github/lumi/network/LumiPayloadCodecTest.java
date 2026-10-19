@@ -106,6 +106,10 @@ class LumiPayloadCodecTest {
 
     @Test
     void commandRoundTripsExpectedRefAndArgument() {
+        var clear = new HistoryCommandPayload(UUID.randomUUID(), HistoryCommandPayload.Kind.WORLD_ACTIONS_CLEAR, "", id('a'), 0);
+        assertEquals(clear, roundTrip(HistoryCommandPayload.CODEC, clear));
+        assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(UUID.randomUUID(),
+                HistoryCommandPayload.Kind.WORLD_ACTIONS_CLEAR, "all players", id('a'), 0));
         HistoryCommandPayload command = new HistoryCommandPayload(
                 UUID.fromString("10000000-0000-0000-0000-000000000001"),
                 HistoryCommandPayload.Kind.SAVE, "Builder idea", id('1'), 42);

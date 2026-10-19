@@ -10,6 +10,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class DeferredDimensionMutationTest {
+    @Test void historyClearKeepsItsFreezeIfDurableMetadataCannotBeInstalled() {
+        var failedWrite = new WorldActionClearOperation(() -> { throw new IOException("disk full"); }, state -> () -> { }, Runnable::run);
+        failedWrite.advance(1);
+        assertEquals(MutationTerminalState.FAILED, failedWrite.terminalState());
+        assertTrue(failedWrite.isSafeToRelease());
+        var failedInstall = new WorldActionClearOperation(() -> null, state -> { throw new IllegalStateException("install failure"); }, Runnable::run);
+        failedInstall.advance(1);
+        assertEquals(MutationTerminalState.DEGRADED, failedInstall.terminalState());
+        assertFalse(failedInstall.isSafeToRelease());
+    }
     @Test void refOnlySwitchWaitsBeforeCreatingOrPublishingItsDelegate() throws Exception {
         var admitted = new AtomicBoolean();
         var creations = new AtomicInteger();

@@ -1130,6 +1130,23 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return operation;
     }
 
+    public synchronized DimensionMutation startClearWorldActions(UUID player, Consumer<DimensionMutation> terminalObserver) throws IOException {
+        requireNoRecovery();
+        if (operations.hasActiveOperation() || operations.queuedCount() > 0) throw new IllegalStateException("luma.status.world_operation_busy");
+        var operation = new DeferredDimensionMutation(true, () -> {
+            liveEntities.finalizeOwned();
+            return new io.github.lumi.minecraft.operation.WorldActionClearOperation(() -> {
+                if (!persistActionHistory()) throw new IOException("Action changed during history clear");
+                return actionHistory.forget(player);
+            }, state -> {
+                try { return installActionHistory(state); }
+                catch (IOException failed) { throw new java.io.UncheckedIOException(failed); }
+            }, background);
+        });
+        enqueueForeground(operation, OperationPriority.NORMAL, terminalObserver);
+        return operation;
+    }
+
     private DimensionMutation createSessionAction(
             UUID player,
             LiveActionJournal.Direction direction) throws IOException {

@@ -788,6 +788,7 @@ public final class LumiServerNetworking {
                     player.getUUID(), LiveActionJournal.Direction.UNDO, terminal);
             case REDO -> runtime.startLiveAction(
                     player.getUUID(), LiveActionJournal.Direction.REDO, terminal);
+            case WORLD_ACTIONS_CLEAR -> runtime.startClearWorldActions(player.getUUID(), terminal);
             case BRANCH_SWITCH -> runtime.startBranchSwitch(
                     expected, new BranchName(payload.argument()), player.getUUID(), terminal);
             case BRANCH_CREATE -> runtime.startBranchCreation(

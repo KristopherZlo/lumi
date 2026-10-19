@@ -118,7 +118,7 @@ public record HistoryCommandPayload(
         if (kind == Kind.PACKAGE_IMPORT) {
             UUID.fromString(argument);
         }
-        if ((kind == Kind.UNDO || kind == Kind.REDO
+        if ((kind == Kind.UNDO || kind == Kind.REDO || kind == Kind.WORLD_ACTIONS_CLEAR
                 || kind == Kind.RECOVER_RESUME || kind == Kind.RECOVER_RETURN)
                 && !argument.isEmpty()) {
             throw new IllegalArgumentException(kind + " does not accept an argument");
@@ -175,7 +175,7 @@ public record HistoryCommandPayload(
         BRANCH_CREATE_AT(34), CLEANUP_INSPECT(35), CLEANUP_APPLY(36),
         ZONE_AMEND(37), RESTORE_AREA_PLAN(38), RESTORE_AREA_APPLY(39),
         ZONE_CELLS(40), ZONE_DELETE(41), ZONE_OVERLAY(42),
-        SURVIVAL_STATUS(43), SURVIVAL_SETTINGS(44), RESTORE_PREWARM(45), ZONE_PENDING_PREVIEW(46);
+        SURVIVAL_STATUS(43), SURVIVAL_SETTINGS(44), RESTORE_PREWARM(45), ZONE_PENDING_PREVIEW(46), WORLD_ACTIONS_CLEAR(47);
         private final int code;
         Kind(int code) { this.code = code; }
         private static Kind fromCode(int code) {
