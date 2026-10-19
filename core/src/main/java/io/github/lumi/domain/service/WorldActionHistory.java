@@ -38,9 +38,12 @@ public final class WorldActionHistory {
         if (!persisted.workspace().equals(workspace) || !persisted.branch().equals(branch)) {
             throw new IOException("Undo history belongs to another active workspace or branch");
         }
-        journal.restore(persisted.index(), metadata -> metadata.checkpoint().isPresent()
-                ? new WorldActionRecord(metadata, new WorldActionRecord.Payload(Map.of(), Map.of()))
-                : repository.readPayload(metadata, persisted.payloads().get(metadata.id()), version, 128L << 20));
+        journal.restore(persisted.index(), metadata -> readRecord(persisted, metadata));
+    }
+
+    public synchronized WorldActionRecord readRecord(WorldActionIndexCodec.State state, WorldActionRecord.Metadata metadata) throws IOException {
+        return metadata.checkpoint().isPresent() ? new WorldActionRecord(metadata, new WorldActionRecord.Payload(Map.of(), Map.of()))
+                : repository.readPayload(metadata, state.payloads().get(metadata.id()), version, 128L << 20);
     }
 
     /** An edit that changes during capture retries; the previous durable root remains untouched. */

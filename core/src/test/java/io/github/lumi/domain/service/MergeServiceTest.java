@@ -62,6 +62,15 @@ class MergeServiceTest {
         assertEquals(Optional.of(saved), refs.read(saved.name()));
         var conflict = commits.write(commit(objects, List.of(), section("minecraft:diamond_block", "minecraft:barrel"), "Conflict"));
         assertThrows(java.io.IOException.class, () -> service.prepare(conflict, plan, Map.of(), author()));
+
+        // A partial Restore's target commit also contains changes outside its prepared cells.
+        var key = new io.github.lumi.domain.model.SectionKey(0, 0, 0);
+        var clipped = section("minecraft:stone", "minecraft:barrel");
+        var endpoint = service.checkpoint(saved, new PreparedRestore(saved, conflict,
+                Map.of(key, clipped), Map.of(), Map.of(key, section("minecraft:gold_block", "minecraft:barrel")), Map.of()));
+        assertEquals(clipped, readSection(objects, commits.read(endpoint.after())));
+        assertEquals(captured, endpoint.before());
+        assertEquals(Optional.of(saved), refs.read(saved.name()));
     }
 
     @TempDir java.nio.file.Path repositoryRoot;

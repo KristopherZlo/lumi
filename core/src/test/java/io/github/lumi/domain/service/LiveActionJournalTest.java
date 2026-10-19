@@ -99,8 +99,12 @@ class LiveActionJournalTest {
         var appliedReplacement = history.publishCheckpoint(replacement, true);
         assertEquals(replacement, appliedReplacement.index().players().get(PLAYER_A).undo().getLast());
         assertTrue(appliedReplacement.index().players().get(PLAYER_A).redo().isEmpty());
+        journal.installIndex(appliedReplacement.index(), metadata -> history.readRecord(appliedReplacement, metadata));
+        assertEquals(replacement, journal.prepareUndo(PLAYER_A).orElseThrow().actionId());
         assertEquals(appliedReplacement, history.publishCheckpoint(replacement, true));
-        history.publishCheckpoint(replacement, false);
+        var returned = history.publishCheckpoint(replacement, false);
+        journal.installIndex(returned.index(), metadata -> history.readRecord(returned, metadata));
+        assertEquals(action, journal.prepareRedo(PLAYER_A).orElseThrow().actionId());
         assertEquals(beforeReplacement.index().players(), repository.readIndex().orElseThrow().index().players());
         assertTrue(history.hasPreparedCheckpoint(replacement));
         var reopened = new LiveActionJournal();

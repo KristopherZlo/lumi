@@ -6,6 +6,11 @@ import java.io.IOException;
 /** Publishes durable history selection only after a Restore verifies exactly. */
 @FunctionalInterface
 public interface RestorePublication {
+    /** Worker phase before journal creation; optional action roots must already be durable. */
+    default void prepare(PreparedRestore restore) throws IOException { }
+
+    default java.util.Optional<io.github.lumi.domain.model.ActionReplayTarget> historyTarget() { return java.util.Optional.empty(); }
+
     /** Synchronous standalone publication, retained for repository callers. */
     void publish(PreparedRestore restore) throws IOException;
 

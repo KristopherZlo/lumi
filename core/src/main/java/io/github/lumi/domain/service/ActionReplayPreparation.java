@@ -30,6 +30,23 @@ public final class ActionReplayPreparation {
         this.version = version;
     }
 
+    /** Records the actual prepared result, including clipped Restore plans, without moving saved refs. */
+    public WorldActionCheckpoint checkpoint(BranchRef before, PreparedRestore restore) throws IOException {
+        try (var publication = objects.beginPublication()) {
+            var captured = commits.read(before.commit());
+            Map<HistoryKey, ObjectId> changes = new HashMap<>();
+            for (var entry : restore.sections().entrySet()) changes.put(entry.getKey(), objects.write(entry.getValue()));
+            for (var entry : restore.entities().entrySet()) changes.put(entry.getKey(), objects.write(entry.getValue()));
+            var tree = new MerkleTreeEditor(objects).update(Optional.of(captured.tree()), changes);
+            var after = commits.write(new Commit(tree, List.of(before.commit()), captured.author(),
+                    "World action endpoint", Instant.now(), captured.workspaceId(), Optional.empty(), CommitKind.HIDDEN_RETURN,
+                    new CommitStatistics(restore.sections().size(), restore.entities().size(), 0, 0),
+                    restore.restorePlayerSpawns() ? restore.playerSpawns() : captured.playerSpawns()));
+            var scope = WorldActionScope.between(restore.returnSections(), restore.sections(), restore.returnEntities(), restore.entities());
+            return new WorldActionCheckpoint(restore.expectedRef().name(), before.commit(), after, before, scope);
+        }
+    }
+
     public CommitId prepare(CommitId captured, LiveActionJournal.Plan plan,
             Map<EntityState, EntityChunkKey> locations, CommitAuthor author) throws IOException {
         try (var publication = objects.beginPublication()) {

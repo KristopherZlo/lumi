@@ -522,50 +522,8 @@ public final class LiveActionJournal {
     /** Startup only, off-thread. An interrupted producer is retained on disk but cannot be replayed. */
     public synchronized void restore(WorldActionIndex index, ActionSource source) throws IOException {
         if (!actions.isEmpty() || nextSequence != 0) throw new IllegalStateException("History was already opened");
-        for (var metadata : index.actions()) {
-            WorldActionRecord record = source.read(metadata);
-            if (!record.metadata().equals(metadata)) throw new IOException("Restored action identity mismatch");
-            var action = new MutableAction(metadata.id(), metadata.actor(), metadata.sequence());
-            action.groupId = metadata.group();
-            action.revision = metadata.revision();
-            action.applied = metadata.applied();
-            action.closed = metadata.closed();
-            action.started = true;
-            action.checkpoint = metadata.checkpoint().orElse(null);
-            action.changes.putAll(record.payload().blocks());
-            action.entities.putAll(record.payload().entities());
-            action.biomes.putAll(record.payload().biomes());
-            action.sections.putAll(record.payload().sections());
-            action.sections.forEach((key, delta) -> action.sectionScopes.put(key, sectionScope(key, delta)));
-            action.bytes = action.changes.values().stream().mapToLong(LiveActionJournal::estimatedBytes).sum()
-                    + action.entities.values().stream().mapToLong(LiveActionJournal::estimatedBytes).sum()
-                    + action.biomes.values().stream().mapToLong(LiveActionJournal::biomeBytes).sum()
-                    + action.sections.values().stream().mapToLong(LiveActionJournal::sectionBytes).sum()
-                    + metadata.checkpoint().map(value -> value.scope().estimatedBytes()).orElse(0L);
-            if (action.bytes > limits.maxActionBytes || retainedBytes + action.bytes > limits.maxDimensionBytes
-                    || playerBytes.getOrDefault(action.player, 0L) + action.bytes > limits.maxPlayerBytes) {
-                throw new IOException("Stored history exceeds its memory budget");
-            }
-            actions.put(action.id, action);
-            adjustBytes(action.player, action.bytes);
-            action.changes.forEach((position, delta) -> {
-                retainBlockStates(delta);
-                blockOwners.set(position, action, action.applied);
-            });
-            action.entities.forEach((id, delta) -> {
-                entityStates.retain(delta.before());
-                entityStates.retain(delta.after());
-                entityOwners.set(id, action, action.applied);
-            });
-            action.biomes.keySet().forEach(position -> biomeOwners.set(position, action, action.applied));
-        }
-        index.players().forEach((actor, cursor) -> {
-            var stacks = stacks(actor);
-            stacks.undo.addAll(cursor.undo());
-            stacks.redo.addAll(cursor.redo());
-            cursor.undo().forEach(id -> stacks.add(requireAction(id).groupId));
-            cursor.redo().forEach(id -> stacks.add(requireAction(id).groupId));
-        });
+        for (var metadata : index.actions()) restoreRecord(metadata, source.read(metadata));
+        installStacks(index);
         nextSequence = index.nextSequence();
         unsafeBeforeSequence = index.unsafeBeforeSequence();
         revision = index.revision();
@@ -579,6 +537,75 @@ public final class LiveActionJournal {
             }
         }
         revision++;
+    }
+
+    /** Worker phase under the dimension freeze; unchanged live owners retain their causal leases. */
+    public synchronized void installIndex(WorldActionIndex index, ActionSource source) throws IOException {
+        var retained = index.actions().stream().map(WorldActionRecord.Metadata::id).collect(java.util.stream.Collectors.toSet());
+        for (var action : List.copyOf(actions.values())) {
+            if (action.available && !retained.contains(action.id)) evictOne(action);
+        }
+        for (var metadata : index.actions()) {
+            var existing = actions.get(metadata.id());
+            if (existing == null || !existing.available) restoreRecord(metadata, source.read(metadata));
+            else if (existing.revision != metadata.revision()) throw new IOException("Action changed while installing a prepared history root");
+            var action = requireAction(metadata.id());
+            action.groupId = metadata.group();
+            action.closed = metadata.closed();
+            setApplied(action, metadata.applied());
+        }
+        playerStacks.clear();
+        installStacks(index);
+        nextSequence = Math.max(nextSequence, index.nextSequence());
+        unsafeBeforeSequence = index.unsafeBeforeSequence();
+        revision = Math.max(revision + 1, index.revision());
+    }
+
+    private void installStacks(WorldActionIndex index) {
+        index.players().forEach((actor, cursor) -> {
+            var stacks = stacks(actor);
+            stacks.undo.addAll(cursor.undo());
+            stacks.redo.addAll(cursor.redo());
+            cursor.undo().forEach(id -> stacks.add(requireAction(id).groupId));
+            cursor.redo().forEach(id -> stacks.add(requireAction(id).groupId));
+        });
+    }
+
+    private void restoreRecord(WorldActionRecord.Metadata metadata, WorldActionRecord record) throws IOException {
+        if (!record.metadata().equals(metadata)) throw new IOException("Restored action identity mismatch");
+        var action = new MutableAction(metadata.id(), metadata.actor(), metadata.sequence());
+        action.groupId = metadata.group();
+        action.revision = metadata.revision();
+        action.applied = metadata.applied();
+        action.closed = metadata.closed();
+        action.started = true;
+        action.checkpoint = metadata.checkpoint().orElse(null);
+        action.changes.putAll(record.payload().blocks());
+        action.entities.putAll(record.payload().entities());
+        action.biomes.putAll(record.payload().biomes());
+        action.sections.putAll(record.payload().sections());
+        action.sections.forEach((key, delta) -> action.sectionScopes.put(key, sectionScope(key, delta)));
+        action.bytes = action.changes.values().stream().mapToLong(LiveActionJournal::estimatedBytes).sum()
+                + action.entities.values().stream().mapToLong(LiveActionJournal::estimatedBytes).sum()
+                + action.biomes.values().stream().mapToLong(LiveActionJournal::biomeBytes).sum()
+                + action.sections.values().stream().mapToLong(LiveActionJournal::sectionBytes).sum()
+                + metadata.checkpoint().map(value -> value.scope().estimatedBytes()).orElse(0L);
+        if (action.bytes > limits.maxActionBytes || retainedBytes + action.bytes > limits.maxDimensionBytes
+                || playerBytes.getOrDefault(action.player, 0L) + action.bytes > limits.maxPlayerBytes) {
+            throw new IOException("Stored history exceeds its memory budget");
+        }
+        actions.put(action.id, action);
+        adjustBytes(action.player, action.bytes);
+        action.changes.forEach((position, delta) -> {
+            retainBlockStates(delta);
+            blockOwners.set(position, action, action.applied);
+        });
+        action.entities.forEach((id, delta) -> {
+            entityStates.retain(delta.before());
+            entityStates.retain(delta.after());
+            entityOwners.set(id, action, action.applied);
+        });
+        action.biomes.keySet().forEach(position -> biomeOwners.set(position, action, action.applied));
     }
 
     @FunctionalInterface

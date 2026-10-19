@@ -86,7 +86,7 @@ class OperationJournalRepositoryTest {
         byte[] direction = valid.clone();
         direction[direction.length - 1] = 2;
         byte[] wrongKind = valid.clone();
-        wrongKind[20] = (byte) OperationKind.RESTORE.code();
+        wrongKind[20] = (byte) OperationKind.SAVE.code();
         for (byte[] invalid : new byte[][] {flag, direction, wrongKind,
                 Arrays.copyOf(valid, valid.length - 1), Arrays.copyOf(valid, valid.length - 34)}) {
             Files.write(file, invalid);
@@ -96,7 +96,7 @@ class OperationJournalRepositoryTest {
         Files.write(file, valid);
         assertEquals(journal, repository.read().orElseThrow());
         assertThrows(IllegalArgumentException.class, () -> new OperationJournal(
-                UUID.randomUUID(), OperationKind.RESTORE, OperationPhase.PREPARED, target())
+                UUID.randomUUID(), OperationKind.SAVE, OperationPhase.PREPARED, target())
                 .withActionReplay(journal.actionReplay().orElseThrow()));
     }
 

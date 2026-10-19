@@ -621,11 +621,13 @@ public final class RestoreOperation implements DimensionMutation {
         WorldStateApply.State returnState = returnState(restore);
         WorldStateApply.PreparedStates prepared = prepareWorldStates(
                 restore, world, targetState, returnState, progress);
+        try { publication.prepare(restore); }
+        catch (IOException | RuntimeException failure) { restore.close(); throw failure; }
         OperationJournal journal = new OperationJournal(
                 Objects.requireNonNull(operationId, "operationId"),
                 Objects.requireNonNull(kind, "kind"), OperationPhase.PREPARED,
                 Objects.requireNonNull(target, "target"),
-                Objects.requireNonNull(capturedGenerations, "capturedGenerations"));
+                Objects.requireNonNull(capturedGenerations, "capturedGenerations"), publication.historyTarget());
         return new RestoreOperation(
                 restore, world, publication, journals, journal, false,
                 prepared.target(), prepared.returnPoint(), null, stateListener);
@@ -661,11 +663,13 @@ public final class RestoreOperation implements DimensionMutation {
         Objects.requireNonNull(journals, "journals");
         Objects.requireNonNull(stateListener, "stateListener");
         PreparedRestore restore = prewarmed.restore();
+        try { publication.prepare(restore); }
+        catch (IOException | RuntimeException failure) { prewarmed.close(); throw failure; }
         OperationJournal journal = new OperationJournal(
                 Objects.requireNonNull(operationId, "operationId"),
                 Objects.requireNonNull(kind, "kind"), OperationPhase.PREPARED,
                 Objects.requireNonNull(target, "target"),
-                Objects.requireNonNull(capturedGenerations, "capturedGenerations"));
+                Objects.requireNonNull(capturedGenerations, "capturedGenerations"), publication.historyTarget());
         return new RestoreOperation(
                 restore, world, publication, journals, journal, false,
                 prewarmed.states().target(), prewarmed.states().returnPoint(),

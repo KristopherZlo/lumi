@@ -18,9 +18,9 @@ public record OperationJournal(
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(capturedGenerations, "capturedGenerations");
         Objects.requireNonNull(actionReplay, "actionReplay");
-        if (actionReplay.isPresent() && (kind != OperationKind.ACTION_REPLAY
+        if (actionReplay.isPresent() && (kind == OperationKind.SAVE
                 || target.target().isEmpty() || target.returnPoint().isEmpty())) {
-            throw new IllegalArgumentException("Action identity requires an action replay with both world endpoints");
+            throw new IllegalArgumentException("Action history publication requires both world endpoints");
         }
     }
 
