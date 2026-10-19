@@ -207,9 +207,23 @@ public final class LumiAxiomCaptureGameTests {
                     .thenExecute(this::initialize)
                     .thenWaitUntil(this::awaitIdle);
             if (cold) sequence.thenIdle(400);
-            sequence.thenExecute(this::editAndSave)
-                    .thenWaitUntil(this::awaitIdle)
-                    .thenExecute(() -> {
+            sequence.thenExecute(this::editAndSave).thenWaitUntil(this::awaitIdle);
+            if (!verificationFailure) {
+                sequence.thenExecute(() -> {
+                            succeeded();
+                            operation = runtime.startLiveAction(author.id(), io.github.lumi.domain.service.LiveActionJournal.Direction.UNDO, ignored -> { });
+                        }).thenWaitUntil(this::awaitIdle)
+                        .thenExecute(() -> {
+                            succeeded();
+                            assertSnapshot(baseline, "Compact Axiom Undo lost the exact before image");
+                            operation = runtime.startLiveAction(author.id(), io.github.lumi.domain.service.LiveActionJournal.Direction.REDO, ignored -> { });
+                        }).thenWaitUntil(this::awaitIdle)
+                        .thenExecute(() -> {
+                            succeeded();
+                            assertSnapshot(edited, "Compact Axiom Redo lost the exact after image");
+                        });
+            }
+            sequence.thenExecute(() -> {
                         succeeded();
                         editedCommit = activeCommit();
                         restore(baselineCommit);
@@ -283,8 +297,7 @@ public final class LumiAxiomCaptureGameTests {
                         getBlockEntityChunkMap(long key) {
                     appliedSections++;
                     if (verificationFailure && appliedSections == 1) {
-                        if (fallback) LumiAxiomVerificationFault.arm(injectedVerification);
-                        else LumiAxiomVerificationFault.armBlockRead(injectedVerification, 1);
+                        LumiAxiomVerificationFault.arm(injectedVerification);
                     }
                     if (partialApply && appliedSections == 2) throw injectedFailure;
                     return super.getBlockEntityChunkMap(key);
@@ -344,11 +357,11 @@ public final class LumiAxiomCaptureGameTests {
                                 .containsKey(key),
                         "Axiom fallback omitted a builder section");
             }
-            helper.assertTrue(runtime.liveActions().prepareUndo(author.id()).isEmpty() == (fallback || verificationFailure),
+            helper.assertTrue(runtime.liveActions().prepareUndo(author.id()).isEmpty() == verificationFailure,
                     "Capture boundary offered an incorrect or partial live Undo");
-            if (fallback || verificationFailure) {
+            if (verificationFailure) {
                 helper.assertTrue(runtime.liveActions().lastUnavailableReason(author.id())
-                                .filter(reason -> reason.contains(verificationFailure ? "Cannot verify" : "capture limit")).isPresent(),
+                                .filter(reason -> reason.contains("Cannot verify")).isPresent(),
                         "Capture fallback did not explain why live Undo is unavailable");
             }
             if (sparseNbt) assertNoUnownedPreparedNbt();
