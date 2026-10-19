@@ -766,15 +766,20 @@ public final class RestoreOperation implements DimensionMutation {
             }
         }
         beginTargetSession();
-        switch (status) {
-            case APPLYING -> applyTarget(deadlineNanos);
-            case VERIFYING -> verifyTarget(deadlineNanos);
-            case REPAIRING -> repairTarget(deadlineNanos);
-            case PERSISTING -> persistTarget(deadlineNanos);
-            case PUBLISHING -> finishPublication(deadlineNanos);
-            case RETURNING -> returnToPreviousState(deadlineNanos);
-            default -> { }
-        }
+        RestoreStatus previous;
+        do {
+            previous = status;
+            switch (status) {
+                case APPLYING -> applyTarget(deadlineNanos);
+                case VERIFYING -> verifyTarget(deadlineNanos);
+                case REPAIRING -> repairTarget(deadlineNanos);
+                case PERSISTING -> persistTarget(deadlineNanos);
+                case PUBLISHING -> finishPublication(deadlineNanos);
+                case RETURNING -> returnToPreviousState(deadlineNanos);
+                default -> { }
+            }
+        } while (status != previous && !isTerminal() && deadlineNanos != Long.MAX_VALUE
+                && System.nanoTime() < deadlineNanos);
         return status;
     }
 

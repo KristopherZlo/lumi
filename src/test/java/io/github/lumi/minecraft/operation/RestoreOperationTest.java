@@ -85,6 +85,18 @@ class RestoreOperationTest {
         assertEquals(Optional.of(action), journal.actionReplay());
     }
 
+    @Test
+    void finishesReadyPhasesWithinTheCurrentTickBudget() throws IOException {
+        var journals = new OperationJournalRepository(repositoryRoot);
+        var operation = RestoreOperation.start(new PreparedRestore(
+                new BranchRef(new BranchName("main"), id('a'), 1), id('b'),
+                Map.of(), Map.of(), Map.of(), Map.of()), new ImmediatelyVerified(),
+                ignored -> { }, journals, UUID.randomUUID());
+        operation.tick(System.nanoTime() + 1_000_000_000L);
+        assertEquals(RestoreStatus.COMPLETE, operation.status());
+        assertTrue(journals.read().isEmpty());
+    }
+
     @Test void refusesUndrainedExternalWorkBeforeCreatingAJournalOrPublishing() throws IOException {
         var journals = new OperationJournalRepository(repositoryRoot);
         var publications = new AtomicInteger();

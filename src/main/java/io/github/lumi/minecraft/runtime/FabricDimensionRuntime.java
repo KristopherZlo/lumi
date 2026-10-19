@@ -1186,7 +1186,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 }, this::publishLiveAction, this::createActionReplay);
     }
 
-    private ReturnPointRestoreOperation createActionReplay(
+    private DimensionMutation createActionReplay(
             LiveActionJournal.Plan plan) throws IOException {
         WorldActionCheckpoint checkpoint = plan.checkpoint().orElse(null);
         BranchRef expected = activeRef();
@@ -1199,6 +1199,27 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var workspace = activeWorkspace();
         var player = level.getServer().getPlayerList().getPlayer(plan.player());
         var author = new CommitAuthor(plan.player(), player == null ? "Builder" : player.getName().getString());
+        var sections = captureSectionReplay(plan);
+        if (sections != null) {
+            var spawns = worldReader.readPlayerSpawns();
+            return new BackgroundPreparedMutation<>(CompletableFuture.supplyAsync(() -> {
+                try {
+                    requireExpectedRef(expected);
+                    if (!selectedPlan(plan.player(), plan.direction()).equals(Optional.of(plan)) || !persistActionHistory()) {
+                        throw new IOException("Action changed during durable capture");
+                    }
+                    var replay = new ActionReplayPreparation(new WorldObjectRepository(repository),
+                            new CommitRepository(repository), new OriginStore(repository),
+                            new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version()))
+                            .prepareSections(expected, sections, spawns, plan, author);
+                    return RestoreOperation.startCheckpointAction(replay.restore(), worldApply,
+                            new ActionReplayPublication(new PendingRestorePublication(mutations), actionHistory,
+                                    operationId, new ActionReplayTarget(plan.player(), plan.actionId(), undo), !undo, ignored -> { }),
+                            journals, operationId, restoreStateListener, OperationKind.ACTION_REPLAY,
+                            replay.returnPoint(), Optional.of(new ActionReplayTarget(plan.player(), plan.actionId(), undo)), ignored -> { });
+                } catch (IOException failed) { throw new CompletionException(failed); }
+            }, background), () -> requireExpectedRef(expected), RestoreOperation::cancelBeforeApply, true);
+        }
         SaveRequest request = new SaveRequest(expected, author, "Return point before action replay",
                 Instant.now(), workspace.id(), Optional.empty(), CommitKind.HIDDEN_RETURN);
         var capture = createChunkReadySave(request, scopedReturnPointPreparation(request),
@@ -1261,6 +1282,21 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     }
                 }, background), saved -> releaseSessionCheckpoint(saved.branchRef()));
         return restore;
+    }
+
+    private Map<SectionKey, io.github.lumi.domain.model.SectionBlob> captureSectionReplay(LiveActionJournal.Plan plan) throws IOException {
+        // ponytail: bound eager capture to eight loaded, NBT-free sections; all other edits keep streaming preparation.
+        if (plan.checkpoint().isPresent() || plan.sections().isEmpty() || plan.sections().size() > MinecraftWorldStateApply.EAGER_SECTION_LIMIT
+                || !plan.expected().isEmpty() || !plan.expectedEntities().isEmpty() || !plan.biomes().isEmpty()
+                || plan.sections().values().stream().anyMatch(delta -> !delta.before().blockEntities().isEmpty()
+                        || !delta.after().blockEntities().isEmpty())) return null;
+        var captured = new java.util.LinkedHashMap<SectionKey, io.github.lumi.domain.model.SectionBlob>();
+        for (var key : plan.sections().keySet()) {
+            var chunk = level.getChunkSource().getChunkNow(key.chunkX(), key.chunkZ());
+            if (chunk == null || chunk.getBlockEntities().keySet().stream().anyMatch(position -> position.getY() >> 4 == key.sectionY())) return null;
+            captured.put(key, worldReader.read(key));
+        }
+        return Map.copyOf(captured);
     }
 
     private boolean persistActionHistory() throws IOException {

@@ -19,6 +19,7 @@ import net.minecraft.world.level.ChunkPos;
 
 /** Complete Minecraft WorldStateApply adapter: off-thread decode plus bounded mutation. */
 public final class MinecraftWorldStateApply implements WorldStateApply {
+    public static final int EAGER_SECTION_LIMIT = 8;
     private final MinecraftRestorePreparation preparation;
     private final PreparedWorldAccess world;
     private final ServerLevel level;
@@ -73,6 +74,14 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
             State returnPoint,
             LongConsumer targetProgress,
             LongConsumer returnProgress) throws IOException {
+        if (target.sections().size() <= EAGER_SECTION_LIMIT && returnPoint.sections().size() <= EAGER_SECTION_LIMIT
+                && target.entities().isEmpty() && returnPoint.entities().isEmpty()
+                && !target.playerSpawnsIncluded() && !returnPoint.playerSpawnsIncluded()
+                && target.sections().values().stream().allMatch(section -> section.blockEntities().isEmpty())
+                && returnPoint.sections().values().stream().allMatch(section -> section.blockEntities().isEmpty())) {
+            return new PreparedStates(preparation.prepare(target, returnPoint, targetProgress),
+                    preparation.prepare(returnPoint, target, returnProgress));
+        }
         targetProgress.accept(0);
         PreparedMinecraftPlanState plan = preparation.preflight(
                 target, returnPoint, targetProgress);

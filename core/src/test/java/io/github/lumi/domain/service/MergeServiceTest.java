@@ -63,6 +63,28 @@ class MergeServiceTest {
         var conflict = commits.write(commit(objects, List.of(), section("minecraft:diamond_block", "minecraft:barrel"), "Conflict"));
         assertThrows(java.io.IOException.class, () -> service.prepare(conflict, plan, Map.of(), author()));
 
+        if (compact) {
+            var key = new io.github.lumi.domain.model.SectionKey(0, 0, 0);
+            var observed = section("minecraft:gold_block", "minecraft:barrel");
+            var replay = service.prepareSections(saved, Map.of(key, observed), Map.of(), plan, author());
+            assertEquals(Map.of(key, section("minecraft:stone", "minecraft:barrel")), replay.restore().sections());
+            assertEquals(Map.of(key, observed), replay.restore().returnSections());
+            var operation = new io.github.lumi.domain.model.OperationJournal(UUID.randomUUID(),
+                    io.github.lumi.domain.model.OperationKind.ACTION_REPLAY, io.github.lumi.domain.model.OperationPhase.APPLYING,
+                    new io.github.lumi.domain.model.OperationTarget(saved.name(), saved.commit(), saved.revision(),
+                            Optional.of(replay.restore().targetCommit()), Optional.of(replay.returnPoint())))
+                    .withActionReplay(new io.github.lumi.domain.model.ActionReplayTarget(actor, action, true));
+            var recovery = new RecoveryService(new RestoreService(objects, commits, origins));
+            for (var choice : RecoveryChoice.values()) {
+                try (var recovered = recovery.prepare(operation, choice)) {
+                    assertEquals(choice == RecoveryChoice.RESUME_TARGET ? replay.restore().sections() : Map.of(key, observed), recovered.sections());
+                }
+            }
+            assertEquals(Optional.of(saved), refs.read(saved.name()));
+            assertThrows(java.io.IOException.class, () -> service.prepareSections(saved,
+                    Map.of(key, section("minecraft:diamond_block", "minecraft:barrel")), Map.of(), plan, author()));
+        }
+
         // A partial Restore's target commit also contains changes outside its prepared cells.
         var key = new io.github.lumi.domain.model.SectionKey(0, 0, 0);
         var clipped = section("minecraft:stone", "minecraft:barrel");
