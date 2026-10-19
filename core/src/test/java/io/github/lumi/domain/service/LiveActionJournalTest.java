@@ -25,6 +25,39 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class LiveActionJournalTest {
+    @Test void publishesDurableCursorsOnceAndKeepsTheLastRootOnCaptureFailure(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path root) throws Exception {
+        var repository = new io.github.lumi.storage.repository.WorldActionHistoryRepository(root);
+        var version = new io.github.lumi.domain.model.WorldDataVersion(5000);
+        UUID workspace = UUID.randomUUID();
+        var branch = new BranchName("main");
+        var journal = new LiveActionJournal();
+        add(journal, 1);
+        UUID action = add(journal, 2);
+        journal.complete(journal.prepareUndo(PLAYER_A).orElseThrow());
+        var history = new WorldActionHistory(repository, version);
+        var index = journal.snapshotIndex();
+        assertTrue(history.flush(workspace, branch, index, journal::snapshotAction, () -> true));
+        var reopened = new LiveActionJournal();
+        new WorldActionHistory(repository, version).restore(reopened, workspace, branch);
+        assertEquals(action, reopened.prepareRedo(PLAYER_A).orElseThrow().actionId());
+        var step = new io.github.lumi.domain.model.ActionReplayTarget(PLAYER_A, action, false);
+        UUID operation = UUID.randomUUID();
+        history.publishReplay(operation, step, true);
+        var published = repository.readIndex().orElseThrow();
+        history.publishReplay(operation, step, true);
+        assertEquals(published, repository.readIndex().orElseThrow());
+        assertTrue(!history.flush(workspace, branch, index, journal::snapshotAction, () -> true));
+        reopened = new LiveActionJournal();
+        new WorldActionHistory(repository, version).restore(reopened, workspace, branch);
+        assertEquals(action, reopened.prepareUndo(PLAYER_A).orElseThrow().actionId());
+        add(reopened, 3);
+        var current = reopened.snapshotIndex();
+        assertThrows(java.io.IOException.class, () -> history.flush(workspace, branch, current,
+                metadata -> { throw new java.io.IOException("injected capture failure"); }, () -> true));
+        assertEquals(published, repository.readIndex().orElseThrow());
+    }
+
     @Test void reopensUndoRedoAndRefusesAnInterruptedProducer() throws Exception {
         var journal = new LiveActionJournal();
         UUID first = add(journal, 1);
