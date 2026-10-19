@@ -44,13 +44,56 @@ public final class WorldActionHistoryRepository {
     }
 
     public Optional<WorldActionIndexCodec.State> readIndex() throws IOException {
-        Path file = root.resolve("index.bin.gz");
+        return readState(root.resolve("index.bin.gz"));
+    }
+
+    private Optional<WorldActionIndexCodec.State> readState(Path file) throws IOException {
         if (!Files.exists(file)) return Optional.empty();
         try (var input = compressedInput(file, MAX_INDEX_BYTES)) {
             byte[] content = input.readNBytes(MAX_INDEX_BYTES + 1);
             if (content.length > MAX_INDEX_BYTES) throw new IOException("Action index exceeds its byte limit");
             return Optional.of(indexes.decode(new DataInputStream(new ByteArrayInputStream(content))));
         }
+    }
+
+    /** History pointer candidates owned by the existing world-operation journal. */
+    public void stageCheckpoint(UUID operation, WorldActionIndexCodec.State before,
+            WorldActionIndexCodec.State after) throws IOException {
+        try (var publication = beginPublication()) {
+            writeCompressed(stagedPath(operation, false), output -> indexes.encode(before, output));
+            writeCompressed(stagedPath(operation, true), output -> indexes.encode(after, output));
+        }
+    }
+
+    public WorldActionIndexCodec.State stagedCheckpoint(UUID operation, boolean applied) throws IOException {
+        return readState(stagedPath(operation, applied)).orElseThrow(() -> new IOException("Missing prepared action root: " + operation));
+    }
+
+    public boolean hasStagedCheckpoint(UUID operation) {
+        return Files.isRegularFile(stagedPath(operation, true)) && Files.isRegularFile(stagedPath(operation, false));
+    }
+
+    public void pruneStagedCheckpoints(Optional<UUID> activeOperation) throws IOException {
+        Path directory = root.resolve("staged");
+        if (!Files.isDirectory(directory)) return;
+        try (var files = Files.newDirectoryStream(directory, "*.bin.gz")) {
+            for (Path file : files) {
+                if (activeOperation.isEmpty() || !file.getFileName().toString().startsWith(activeOperation.orElseThrow() + "-")) Files.delete(file);
+            }
+        }
+    }
+
+    private Path stagedPath(UUID operation, boolean applied) {
+        return root.resolve("staged").resolve(operation + (applied ? "-after.bin.gz" : "-before.bin.gz"));
+    }
+
+    private java.util.List<WorldActionIndexCodec.State> stagedRoots() throws IOException {
+        var states = new java.util.ArrayList<WorldActionIndexCodec.State>();
+        Path directory = root.resolve("staged");
+        if (Files.isDirectory(directory)) try (var files = Files.newDirectoryStream(directory, "*.bin.gz")) {
+            for (Path file : files) states.add(readState(file).orElseThrow());
+        }
+        return states;
     }
 
     public void writeIndex(WorldActionIndexCodec.State state) throws IOException {
@@ -79,10 +122,12 @@ public final class WorldActionHistoryRepository {
     public Set<CommitId> retainedCommits() throws IOException {
         var retained = new HashSet<CommitId>();
         var state = readIndex();
-        if (state.isPresent()) state.orElseThrow().index().actions().forEach(action -> action.checkpoint().ifPresent(checkpoint -> {
+        var roots = stagedRoots();
+        state.ifPresent(roots::add);
+        roots.forEach(value -> value.index().actions().forEach(action -> action.checkpoint().ifPresent(checkpoint -> {
             retained.add(checkpoint.before());
             retained.add(checkpoint.after());
-        }));
+        })));
         if (Files.isDirectory(root)) try (var directories = Files.newDirectoryStream(root)) {
             for (Path directory : directories) {
                 if (Files.isDirectory(directory) && directory.getFileName().toString().matches("[0-9]+")) {
@@ -100,6 +145,7 @@ public final class WorldActionHistoryRepository {
         if (state.isEmpty()) return;
         Set<String> retained = new HashSet<>();
         state.orElseThrow().payloads().values().forEach(id -> retained.add(id + ".bin.gz"));
+        stagedRoots().forEach(value -> value.payloads().values().forEach(id -> retained.add(id + ".bin.gz")));
         Path directory = root.resolve("payloads");
         if (!Files.isDirectory(directory)) return;
         try (var files = Files.newDirectoryStream(directory, "*.bin.gz")) {

@@ -92,6 +92,17 @@ class LiveActionJournalTest {
         var history = new WorldActionHistory(repository, version);
         var index = journal.snapshotIndex();
         assertTrue(history.flush(workspace, branch, index, journal::snapshotAction, () -> true));
+        var beforeReplacement = repository.readIndex().orElseThrow();
+        UUID replacement = UUID.randomUUID();
+        history.prepareCheckpoint(replacement, PLAYER_A, checkpoint('4'), workspace, branch);
+        assertEquals(beforeReplacement, repository.readIndex().orElseThrow());
+        var appliedReplacement = history.publishCheckpoint(replacement, true);
+        assertEquals(replacement, appliedReplacement.index().players().get(PLAYER_A).undo().getLast());
+        assertTrue(appliedReplacement.index().players().get(PLAYER_A).redo().isEmpty());
+        assertEquals(appliedReplacement, history.publishCheckpoint(replacement, true));
+        history.publishCheckpoint(replacement, false);
+        assertEquals(beforeReplacement.index().players(), repository.readIndex().orElseThrow().index().players());
+        assertTrue(history.hasPreparedCheckpoint(replacement));
         var reopened = new LiveActionJournal();
         new WorldActionHistory(repository, version).restore(reopened, workspace, branch);
         assertEquals(action, reopened.prepareRedo(PLAYER_A).orElseThrow().actionId());

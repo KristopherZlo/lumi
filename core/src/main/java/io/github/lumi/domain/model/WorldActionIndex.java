@@ -60,6 +60,21 @@ public record WorldActionIndex(
         }
     }
 
+    public WorldActionIndex appendCheckpoint(UUID actionId, UUID actor, WorldActionCheckpoint checkpoint) {
+        if (actions.stream().anyMatch(action -> action.id().equals(actionId))) throw new IllegalStateException("Action was already recorded");
+        var stacks = players.getOrDefault(actor, new Stacks(List.of(), List.of()));
+        var abandoned = new HashSet<>(stacks.redo());
+        var retained = new ArrayList<>(actions.stream().filter(action -> !abandoned.contains(action.id())).toList());
+        long sequence = Math.addExact(nextSequence, 1);
+        retained.add(new WorldActionRecord.Metadata(actionId, actor, sequence, actionId, 1, true, true, false,
+                java.util.Optional.of(checkpoint)));
+        var undo = new ArrayList<>(stacks.undo());
+        undo.add(actionId);
+        var cursors = new HashMap<>(players);
+        cursors.put(actor, new Stacks(undo, List.of()));
+        return new WorldActionIndex(Math.addExact(revision, 1), sequence, unsafeBeforeSequence, retained, cursors);
+    }
+
     /** Projects one whole group; publication can retry without moving the cursor twice. */
     public WorldActionIndex move(ActionReplayTarget step, boolean applied) {
         var selected = actions.stream().filter(action -> action.id().equals(step.action())

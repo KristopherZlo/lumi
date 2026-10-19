@@ -5,6 +5,7 @@ import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.WorldActionIndex;
 import io.github.lumi.domain.model.WorldActionRecord;
 import io.github.lumi.domain.model.WorldDataVersion;
+import io.github.lumi.domain.model.WorldActionCheckpoint;
 import io.github.lumi.storage.object.WorldActionIndexCodec;
 import io.github.lumi.storage.repository.WorldActionHistoryRepository;
 import java.io.IOException;
@@ -89,4 +90,34 @@ public final class WorldActionHistory {
         repository.writeIndex(next);
         persisted = next;
     }
+
+    public synchronized ActionReplayTarget prepareCheckpoint(UUID operation, UUID actor, WorldActionCheckpoint checkpoint,
+            UUID workspace, BranchName branch) throws IOException {
+        if (persisted == null) throw new IOException("History must be captured before preparing a replacement action");
+        var index = persisted.index().appendCheckpoint(operation, actor, checkpoint);
+        var blobs = new HashMap<>(persisted.payloads());
+        var retained = index.actions().stream().map(WorldActionRecord.Metadata::id).collect(java.util.stream.Collectors.toSet());
+        blobs.keySet().retainAll(retained);
+        var next = new WorldActionIndexCodec.State(epoch, version, workspace, branch, index, blobs, persisted.publication());
+        repository.stageCheckpoint(operation, persisted, next);
+        return new ActionReplayTarget(actor, operation, false);
+    }
+
+    public synchronized WorldActionIndexCodec.State publishCheckpoint(UUID operation, boolean applied) throws IOException {
+        var next = repository.stagedCheckpoint(operation, applied);
+        var after = repository.stagedCheckpoint(operation, true);
+        var action = after.index().actions().stream().filter(value -> value.id().equals(operation)).findFirst().orElseThrow();
+        var marker = new WorldActionIndexCodec.Publication(operation, new ActionReplayTarget(action.actor(), operation, false), applied);
+        if (persisted != null && persisted.publication().filter(marker::equals).isPresent()) return persisted;
+        if (!next.epoch().equals(epoch)) throw new IOException("Prepared action belongs to another history epoch");
+        var old = next.index();
+        var index = new WorldActionIndex(Math.max(old.revision(), persisted == null ? 0 : persisted.index().revision()) + 1,
+                old.nextSequence(), old.unsafeBeforeSequence(), old.actions(), old.players());
+        next = new WorldActionIndexCodec.State(epoch, version, next.workspace(), next.branch(), index, next.payloads(), Optional.of(marker));
+        repository.writeIndex(next);
+        persisted = next;
+        return next;
+    }
+
+    public synchronized boolean hasPreparedCheckpoint(UUID operation) { return repository.hasStagedCheckpoint(operation); }
 }
