@@ -9,6 +9,8 @@ import com.moulberry.axiom.world_modification.BlockOrBiomeBuffer;
 import com.moulberry.axiom.world_modification.ChunkDataConsumer;
 import com.moulberry.axiom.world_modification.EntityDataConsumer;
 import com.moulberry.axiom.world_modification.HistoryEntry;
+import com.moulberry.axiom.world_modification.DummyBuffer;
+import com.moulberry.axiom.clipboard.SelectionHistoryElement;
 import com.moulberry.axiom.UserAction;
 import com.moulberry.axiom.world_modification.DispatchTask;
 import com.moulberry.axiom.world_modification.Dispatcher;
@@ -69,6 +71,16 @@ final class LumiAxiomPendingWork implements AutoCloseable {
                         ghost, "Lumi stale history fixture", 0));
                 if (AxiomDispatcherPendingAccess.lumi$history().getSize() == 0) {
                     throw new AssertionError("Native Axiom history fixture was not accepted");
+                }
+                Dispatcher.clearActiveSelectionHistory();
+                int position = AxiomDispatcherPendingAccess.lumi$history().getPosition();
+                nativeHistoryStep(true);
+                if (AxiomDispatcherPendingAccess.lumi$history().getPosition() != position - 1) {
+                    throw new AssertionError("Native world Undo control was not exercised");
+                }
+                nativeHistoryStep(false);
+                if (AxiomDispatcherPendingAccess.lumi$history().getPosition() != position) {
+                    throw new AssertionError("Native world Redo control was not exercised");
                 }
                 ((Long2ObjectMap<ChunkDataConsumer>) (Long2ObjectMap<?>) AxiomDispatcherPendingAccess.lumi$chunkCallbacks())
                         .put(chunkRequest, (entities, sections) -> callbacks.incrementAndGet());
@@ -144,6 +156,7 @@ final class LumiAxiomPendingWork implements AutoCloseable {
         try {
             if (lateCalculation != null || finished.getCount() != 0 || !AxiomClientWorkBarrier.isPaused()
                     || acknowledgement.get(barrier) != State.READY) return;
+            assertPausedHistoryControls();
             // A queued input can start another calculation after READY, before RESUME is handled.
             lateCalculation = Tool.sharedSingleThreadExecutor.submit(() -> {
                 lateStarted.countDown();
@@ -178,6 +191,41 @@ final class LumiAxiomPendingWork implements AutoCloseable {
         } catch (ReflectiveOperationException failed) {
             throw new AssertionError("Cannot install late native Axiom work", failed);
         }
+    }
+
+    private static void assertPausedHistoryControls() throws ReflectiveOperationException {
+        var history = AxiomDispatcherPendingAccess.lumi$history();
+        if (history.getSize() != 0) throw new AssertionError("Native history was not quiesced");
+        var empty = new DummyBuffer();
+        var entry = new HistoryEntry<BlockOrBiomeBuffer>(empty, empty, BlockPos.ZERO, "Paused history probe", 0);
+        var localSteps = new AtomicInteger();
+        try {
+            history.push(entry);
+            history.push(entry);
+            history.undo(0); // Leave both an Undo entry and a Redo entry.
+            nativeHistoryStep(true);
+            if (history.getPosition() != 0) throw new AssertionError("Paused Axiom Undo moved its world cursor");
+            nativeHistoryStep(false);
+            if (history.getPosition() != 0) throw new AssertionError("Paused Axiom Redo moved its world cursor");
+            SelectionHistoryElement local = localSteps::incrementAndGet;
+            Dispatcher.pushActiveSelection(new HistoryEntry<>(local, local, BlockPos.ZERO, "Local selection probe", 0));
+            nativeHistoryStep(true);
+            nativeHistoryStep(false);
+            if (localSteps.get() != 2 || history.getPosition() != 0) {
+                throw new AssertionError("Pausing world history changed local selection Undo/Redo");
+            }
+        } finally {
+            Dispatcher.clearActiveSelectionHistory();
+            history.clear();
+        }
+    }
+
+    private static void nativeHistoryStep(boolean undo) throws ReflectiveOperationException {
+        var types = undo ? new Class<?>[] {boolean.class, boolean.class, boolean.class}
+                : new Class<?>[] {boolean.class, boolean.class};
+        var method = Dispatcher.class.getDeclaredMethod(undo ? "undo" : "redo", types);
+        method.setAccessible(true);
+        method.invoke(null, undo ? new Object[] {false, false, false} : new Object[] {false, false});
     }
 
     void assertDrained() {

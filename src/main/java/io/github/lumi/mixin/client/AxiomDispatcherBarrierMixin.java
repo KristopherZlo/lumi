@@ -26,6 +26,13 @@ abstract class AxiomDispatcherBarrierMixin {
         if (AxiomClientWorkBarrier.isPaused()) callback.cancel();
     }
 
+    // Selection/placement cancellation has already run; stop before the world cursor moves.
+    @Inject(method = {"undo(ZZZ)V", "redo(ZZ)V"}, at = @At(value = "FIELD", ordinal = 0,
+            target = "Lcom/moulberry/axiom/world_modification/Dispatcher;history:Lcom/moulberry/axiom/world_modification/HistoryBuffer;"), cancellable = true)
+    private static void lumi$guardWorldHistory(CallbackInfo callback) {
+        if (AxiomClientWorkBarrier.isPaused()) callback.cancel();
+    }
+
     @WrapOperation(method = {"applyBlockBuffer", "applyBiomeBuffer"}, at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/server/IntegratedServer;submit(Ljava/lang/Runnable;)Ljava/util/concurrent/CompletableFuture;", remap = true))
     private static CompletableFuture<Void> lumi$fenceSubmission(
