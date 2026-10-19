@@ -26,17 +26,23 @@ public final class WorldActionHistoryRepository {
     private final Path root;
     private final RepositoryMaintenance maintenance;
     private final WorldActionIndexCodec indexes = new WorldActionIndexCodec();
-    private final WorldActionPayloadCodec payloads = new WorldActionPayloadCodec();
+    private final WorldActionPayloadCodec payloads;
 
     public WorldActionHistoryRepository(Path dimensionRepository) {
         root = dimensionRepository.resolve("actions");
         maintenance = RepositoryMaintenance.forRepository(dimensionRepository);
+        payloads = new WorldActionPayloadCodec();
     }
 
     /** Undo payloads stay with their original game data; saved versions use normal conversion. */
     public WorldActionHistoryRepository(Path dimensionRepository, WorldDataVersion version) {
+        this(dimensionRepository, version, null);
+    }
+
+    public WorldActionHistoryRepository(Path dimensionRepository, WorldDataVersion version, NbtSpool spool) {
         root = dimensionRepository.resolve("actions").resolve(Integer.toString(version.value()));
         maintenance = RepositoryMaintenance.forRepository(dimensionRepository);
+        payloads = new WorldActionPayloadCodec(spool);
     }
 
     public RepositoryMaintenance.Publication beginPublication() {

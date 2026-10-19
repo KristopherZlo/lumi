@@ -3,7 +3,6 @@ package io.github.lumi.minecraft.world;
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.BlockSnapshot;
 import io.github.lumi.domain.model.CanonicalNbt;
-import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
 import java.util.HashMap;
@@ -43,25 +42,6 @@ public final class MinecraftLiveBlockWorldAccess implements LiveBlockWorldAccess
 
     @Override public boolean awaitMutationAdmission() throws IOException {
         return freeze.awaitReplacementAdmission();
-    }
-
-    /** Decodes only changed Restore endpoints before a later live Undo/Redo. */
-    public void prepareRestore(
-            Map<SectionKey, SectionBlob> target,
-            Map<SectionKey, SectionBlob> checkpoint) throws IOException {
-        for (var entry : target.entrySet()) {
-            SectionBlob after = entry.getValue();
-            SectionBlob before = checkpoint.get(entry.getKey());
-            for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
-                var oldNbt = before.blockEntities().get(index);
-                var newNbt = after.blockEntities().get(index);
-                String oldState = before.blockStates().get(index);
-                String newState = after.blockStates().get(index);
-                if (oldState.equals(newState) && Objects.equals(oldNbt, newNbt)) continue;
-                prepare(new BlockSnapshot(oldState, Optional.ofNullable(oldNbt)));
-                prepare(new BlockSnapshot(newState, Optional.ofNullable(newNbt)));
-            }
-        }
     }
 
     @Override

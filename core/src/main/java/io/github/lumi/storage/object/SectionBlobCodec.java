@@ -19,6 +19,10 @@ public final class SectionBlobCodec {
     private static final int ACTION_MAGIC = 0x4C555334;
     private static final int MAX_STRING_BYTES = 1024 * 1024;
     private static final int MAX_NBT_BYTES = 16 * 1024 * 1024;
+    private final CanonicalNbt.Store spool;
+
+    public SectionBlobCodec() { this(null); }
+    public SectionBlobCodec(CanonicalNbt.Store spool) { this.spool = spool; }
 
     public byte[] encode(SectionBlob section) throws IOException {
         SectionBlob.PaletteBlockStates states = section.palette();
@@ -91,8 +95,8 @@ public final class SectionBlobCodec {
                     throw new IOException("Block entities are not in canonical order");
                 }
                 previousIndex = localIndex;
-                blockEntities.put(localIndex,
-                        new CanonicalNbt(CanonicalBytes.read(input, MAX_NBT_BYTES, "block entity NBT")));
+                var nbt = new CanonicalNbt(CanonicalBytes.read(input, MAX_NBT_BYTES, "block entity NBT"));
+                blockEntities.put(localIndex, spool == null ? nbt : spool.store(nbt));
             }
             var biomes = new LinkedHashMap<Integer, String>();
             if (magic == ACTION_MAGIC) {

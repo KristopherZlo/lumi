@@ -12,7 +12,7 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 /** Worker-only temporary pages; durable action payloads still contain the original NBT bytes. */
-public final class NbtSpool implements AutoCloseable {
+public final class NbtSpool implements CanonicalNbt.Store, AutoCloseable {
     private static final int MAX_PAGE_BYTES = 16 << 20;
     private final Path directory;
     private final int threshold;
@@ -29,7 +29,7 @@ public final class NbtSpool implements AutoCloseable {
         Files.createDirectories(directory);
     }
 
-    public synchronized CanonicalNbt store(CanonicalNbt value) throws IOException {
+    @Override public synchronized CanonicalNbt store(CanonicalNbt value) throws IOException {
         if (closed) throw new IOException("NBT spool is closed");
         if (value.residentByteSize() < threshold) return value;
         if (value.byteSize() > MAX_PAGE_BYTES) throw new IOException("NBT page exceeds its byte limit");
@@ -77,6 +77,22 @@ public final class NbtSpool implements AutoCloseable {
             byte[] result = input.readNBytes(size + 1);
             if (result.length != size) throw new IOException("Invalid NBT page length");
             return result;
+        }
+    }
+
+    /** After loading durable history, no value can refer to a previous session's temporary pages. */
+    public synchronized void pruneAbandonedSessions() throws IOException {
+        try (var sessions = Files.newDirectoryStream(directory.getParent())) {
+            for (Path session : sessions) {
+                if (session.equals(directory) || !Files.isDirectory(session)) continue;
+                try { UUID.fromString(session.getFileName().toString()); }
+                catch (IllegalArgumentException unknown) { continue; }
+                try (var files = Files.newDirectoryStream(session, "*.nbt.gz")) {
+                    for (Path file : files) if (Files.isRegularFile(file)) Files.delete(file);
+                }
+                try { Files.delete(session); }
+                catch (java.nio.file.DirectoryNotEmptyException unknownContents) { /* Leave unowned files in place. */ }
+            }
         }
     }
 

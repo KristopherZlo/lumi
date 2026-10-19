@@ -206,6 +206,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final UUID defaultWorkspaceId;
     private final LiveActionJournal liveActions;
     private final WorldActionHistory actionHistory;
+    private final io.github.lumi.storage.repository.NbtSpool actionNbt;
     private CompletableFuture<Void> historyWrite = CompletableFuture.completedFuture(null);
     private volatile long storedActionRevision = -1;
     private final AxiomSetBlockActionGrouper axiomSetBlockActions;
@@ -297,7 +298,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 checkpoint -> releaseSessionCheckpoint(checkpoint.retainedRef()),
                 liveWorld::releasePrepared, liveEntityWorld.references());
         var actionVersion = new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version());
-        actionHistory = new WorldActionHistory(new WorldActionHistoryRepository(repository, actionVersion), actionVersion);
+        actionNbt = new io.github.lumi.storage.repository.NbtSpool(repository, 64 << 10, 1L << 30);
+        actionHistory = new WorldActionHistory(new WorldActionHistoryRepository(repository, actionVersion, actionNbt), actionVersion);
         axiomSetBlockActions = new AxiomSetBlockActionGrouper(liveActions);
         axiomBufferActions = new AxiomBufferActionGrouper(liveActions);
         axiomBarrier = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom")
@@ -438,6 +440,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 defaultWorkspaceId, activeWorkspaceId,
                 interrupted.orElse(null), recoveryLease);
         runtime.restoreActionHistory();
+        try { runtime.actionNbt.pruneAbandonedSessions(); }
+        catch (IOException failed) { LumiMod.LOGGER.warn("Cannot collect abandoned temporary NBT pages", failed); }
         var retainedActions = new java.util.HashSet<>(retainedSessionCheckpointCommits(interrupted.orElse(null)));
         retainedActions.addAll(new WorldActionHistoryRepository(repository).retainedCommits());
         runtime.pruneSessionCheckpointRefs(retainedActions);
@@ -1345,6 +1349,20 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     public LiveActionJournal liveActions() { return liveActions; }
+
+    /** Native capture owns immutable bytes; page writes stay on a worker before capture proceeds. */
+    public SectionBlob retainActionSection(SectionBlob section) throws IOException {
+        if (section.blockEntities().values().stream().noneMatch(nbt -> nbt.residentByteSize() >= (64 << 10))) return section;
+        try {
+            return CompletableFuture.supplyAsync(() -> {
+                try { return actionNbt.store(section); }
+                catch (IOException failure) { throw new CompletionException(failure); }
+            }, background).join();
+        } catch (CompletionException failed) {
+            if (failed.getCause() instanceof IOException io) throw io;
+            throw failed;
+        }
+    }
     public AxiomBufferActionGrouper axiomBufferActions() { return axiomBufferActions; }
     public AxiomSetBlockActionGrouper axiomSetBlockActions() {
         return axiomSetBlockActions;
@@ -2571,7 +2589,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         } finally {
             mutations.flushForShutdown();
         }
-        // Repository state has no open handles; background work is owned by the server session.
+        actionNbt.close();
     }
 
     private void closeRuntimeState() throws IOException {

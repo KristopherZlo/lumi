@@ -25,7 +25,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class LiveActionJournalTest {
-    @Test void compactSectionsKeepChangedCellOwnershipAndAbsorbLaterCausalWrites() throws Exception {
+    @Test void compactSectionsKeepChangedCellOwnershipAndAbsorbLaterCausalWrites(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path root) throws Exception {
         var journal = new LiveActionJournal();
         var key = new SectionKey(0, 0, 0);
         var empty = new SectionBlob(java.util.Collections.nCopies(4096, "minecraft:air"), Map.of());
@@ -53,6 +54,24 @@ class LiveActionJournalTest {
         journal.complete(journal.prepareUndo(PLAYER_B).orElseThrow());
         journal.complete(journal.prepareUndo(PLAYER_A).orElseThrow());
         assertEquals(action, journal.prepareRedo(PLAYER_A).orElseThrow().actionId());
+        try (var spool = new io.github.lumi.storage.repository.NbtSpool(root, 64, 4096)) {
+            var nbt = new CanonicalNbt(new byte[128 << 10]);
+            var paged = spool.store(new SectionBlob(placed.blockStates(), Map.of(0, nbt)));
+            var bounded = new LiveActionJournal(new LiveActionJournal.Limits(4, 48 << 10, 64 << 10, 128 << 10));
+            UUID large = bounded.begin(PLAYER_A);
+            bounded.recordSection(large, key, paged, empty);
+            bounded.close(large);
+            assertEquals(large, bounded.prepareUndo(PLAYER_A).orElseThrow().actionId());
+            var version = paged.dataVersion();
+            var history = new WorldActionHistory(new io.github.lumi.storage.repository.WorldActionHistoryRepository(root, version, spool), version);
+            UUID workspace = UUID.randomUUID();
+            history.flush(workspace, new BranchName("main"), bounded.snapshotIndex(), bounded::snapshotAction, () -> true);
+            var restored = new LiveActionJournal(new LiveActionJournal.Limits(4, 48 << 10, 64 << 10, 128 << 10));
+            history.restore(restored, workspace, new BranchName("main"));
+            var before = restored.prepareUndo(PLAYER_A).orElseThrow().sections().get(key).before().blockEntities().get(0);
+            assertEquals(0, before.residentByteSize());
+            org.junit.jupiter.api.Assertions.assertArrayEquals(nbt.bytes(), before.bytes());
+        }
     }
 
     @Test void biomeActionsShareOrderingAndPreserveEarlierRedoAfterANoop() throws Exception {

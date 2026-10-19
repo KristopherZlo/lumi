@@ -26,10 +26,17 @@ import java.util.UUID;
 /** Streamed action payload with a shared state palette and a bounded decoder. */
 public final class WorldActionPayloadCodec {
     private static final int MAGIC = 0x4C415033;
-    private final SectionBlobCodec sections = new SectionBlobCodec();
+    private final SectionBlobCodec sections;
+    private final CanonicalNbt.Store spool;
     private static final int MAX_STRING = 1024 * 1024;
     private static final int MAX_NBT = 16 * 1024 * 1024;
     private static final int MAX_ENTRIES = 4_000_000;
+
+    public WorldActionPayloadCodec() { this(null); }
+    public WorldActionPayloadCodec(CanonicalNbt.Store spool) {
+        this.spool = spool;
+        sections = new SectionBlobCodec(spool);
+    }
 
     public void encode(WorldActionRecord record, WorldDataVersion version, DataOutputStream output) throws IOException {
         if (record.payload().blocks().size() > MAX_ENTRIES || record.payload().entities().size() > MAX_ENTRIES) {
@@ -83,7 +90,7 @@ public final class WorldActionPayloadCodec {
                 || input.readLong() != expected.revision() || input.readInt() != version.value()) {
             throw new IOException("Action payload identity, revision or data version mismatch");
         }
-        var budget = new Budget(maximumBytes);
+        var budget = new Budget(maximumBytes, spool);
         try {
             int count = budget.count(input, 64);
             var palette = new ArrayList<String>();
@@ -118,8 +125,7 @@ public final class WorldActionPayloadCodec {
             var sectionChanges = new LinkedHashMap<SectionKey, SectionDelta>();
             for (int index = 0; index < count; index++) {
                 var key = new SectionKey(input.readInt(), input.readInt(), input.readInt());
-                var delta = new SectionDelta(sections.decode(budget.bytes(input, MAX_NBT, "before section")),
-                        sections.decode(budget.bytes(input, MAX_NBT, "after section")));
+                var delta = new SectionDelta(readSection(input, budget), readSection(input, budget));
                 if (!delta.before().dataVersion().equals(version) || sectionChanges.put(key, delta) != null) {
                     throw new IOException("Duplicate or incorrectly versioned action section");
                 }
@@ -129,6 +135,17 @@ public final class WorldActionPayloadCodec {
         } catch (IllegalArgumentException invalid) {
             throw new IOException("Invalid action payload", invalid);
         }
+    }
+
+    private io.github.lumi.domain.model.SectionBlob readSection(DataInputStream input, Budget budget) throws IOException {
+        if (spool == null) return sections.decode(budget.bytes(input, MAX_NBT, "action section"));
+        // Only one bounded encoded section is temporary; the root budget counts retained data.
+        byte[] encoded = CanonicalBytes.read(input, MAX_NBT, "action section");
+        var section = sections.decode(encoded);
+        long retained = encoded.length;
+        for (var nbt : section.blockEntities().values()) retained += nbt.residentByteSize() - (long) nbt.byteSize() + 96;
+        budget.retain(2 * retained);
+        return section;
     }
 
     private void writeBlock(DataOutputStream output, BlockSnapshot block, Map<String, Integer> palette) throws IOException {
@@ -172,9 +189,16 @@ public final class WorldActionPayloadCodec {
 
     private static final class Budget {
         private long remaining;
-        private Budget(long bytes) {
+        private final CanonicalNbt.Store spool;
+        private Budget(long bytes, CanonicalNbt.Store spool) {
             if (bytes < 1) throw new IllegalArgumentException("Invalid action decode budget");
             remaining = bytes;
+            this.spool = spool;
+        }
+
+        private void retain(long bytes) throws IOException {
+            if (bytes < 0 || bytes > remaining) throw new IOException("Action payload exceeds its retained-memory budget");
+            remaining -= bytes;
         }
 
         private int count(DataInputStream input, int entryBytes) throws IOException {
@@ -197,7 +221,10 @@ public final class WorldActionPayloadCodec {
         }
 
         private CanonicalNbt nbt(DataInputStream input) throws IOException {
-            return new CanonicalNbt(bytes(input, MAX_NBT, "action NBT"));
+            if (spool == null) return new CanonicalNbt(bytes(input, MAX_NBT, "action NBT"));
+            var value = spool.store(new CanonicalNbt(CanonicalBytes.read(input, MAX_NBT, "action NBT")));
+            retain(96L + 2L * value.residentByteSize());
+            return value;
         }
     }
 }

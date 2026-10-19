@@ -37,21 +37,6 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
         entityRestorer = new MinecraftEntityRestorer(level, freeze, capture, entityLookup);
     }
 
-    /** Decodes persistent Restore entities and remembers their owning chunks off-thread. */
-    public Map<EntityChunkKey, EntityChunkBlob> prepareRestore(
-            Map<EntityChunkKey, EntityChunkBlob> source) throws IOException {
-        Map<EntityChunkKey, EntityChunkBlob> normalized = decoder.normalize(source);
-        for (var entry : normalized.entrySet()) {
-            var states = entry.getValue().entities();
-            var decoded = decoder.decodeNormalized(entry.getValue()).entities();
-            for (int index = 0; index < states.size(); index++) {
-                prepared.put(states.get(index), decoded.get(index));
-                chunks.put(states.get(index), entry.getKey());
-            }
-        }
-        return normalized;
-    }
-
     public Optional<EntityState> capture(Entity entity) throws IOException {
         return capture(entity, true);
     }

@@ -41,7 +41,7 @@ abstract class AxiomSetBufferMixin {
                     .attach(player.connection, player.getUUID(), dispatch, action));
             Map<SectionKey, SectionBlob> before = new LinkedHashMap<>();
             for (var key : keys) {
-                var captured = capture(level, key);
+                var captured = capture(runtime, level, key);
                 before.put(key, captured);
                 runtime.mutations().registerSectionMutation(key, () -> captured);
                 runtime.blockEntityBaselines().discard(key);
@@ -52,7 +52,7 @@ abstract class AxiomSetBufferMixin {
             finally {
                 try {
                     for (var entry : before.entrySet()) {
-                        var after = capture(level, entry.getKey());
+                        var after = capture(runtime, level, entry.getKey());
                         runtime.liveActions().recordSection(action, entry.getKey(), entry.getValue(), after);
                         if (!entry.getValue().equals(after)) runtime.mutations().markBuilderMutation(entry.getKey());
                         runtime.liveBlocks().rebase(entry.getKey(), after);
@@ -66,8 +66,8 @@ abstract class AxiomSetBufferMixin {
         }
     }
 
-    private static SectionBlob capture(ServerLevel level, SectionKey key) {
-        try { return LUMI_SECTIONS.capture(level, level.getChunk(key.chunkX(), key.chunkZ()), key.sectionY()); }
+    private static SectionBlob capture(io.github.lumi.minecraft.runtime.FabricDimensionRuntime runtime, ServerLevel level, SectionKey key) {
+        try { return runtime.retainActionSection(LUMI_SECTIONS.capture(level, level.getChunk(key.chunkX(), key.chunkZ()), key.sectionY())); }
         catch (IOException failure) { throw new UncheckedIOException("Cannot capture Axiom section", failure); }
     }
 }

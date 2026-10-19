@@ -247,7 +247,7 @@ public final class LiveActionJournal {
 
     private static long sectionBytes(SectionDelta delta) { return sectionBytes(delta.before()) + sectionBytes(delta.after()); }
     private static long sectionBytes(SectionBlob section) {
-        long bytes = 16_384 + section.blockEntities().values().stream().mapToLong(nbt -> nbt.byteSize()).sum();
+        long bytes = 16_384 + section.blockEntities().values().stream().mapToLong(nbt -> 96L + nbt.residentByteSize()).sum();
         for (String state : section.distinctBlockStates()) bytes += 2L * state.length();
         return bytes;
     }

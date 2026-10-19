@@ -53,7 +53,8 @@ public final class LumiAxiomCaptureGameTests {
         new Scenario(helper, Capture.EXPANDED_FALLBACK).run();
     }
 
-    @GameTest(maxTicks = 300000)
+    // Headless ticks outrun asynchronous writes of the 64 MiB NBT baseline.
+    @GameTest(maxTicks = 3000000)
     public void axiomSparseNbtCaptureReleasesUnownedPreparedStates(GameTestHelper helper) {
         new Scenario(helper, Capture.SPARSE_NBT_FALLBACK).run();
     }

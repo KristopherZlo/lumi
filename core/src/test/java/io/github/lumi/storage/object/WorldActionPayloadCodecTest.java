@@ -79,6 +79,12 @@ class WorldActionPayloadCodecTest {
             var delta = new BlockDelta(new BlockSnapshot("minecraft:chest", Optional.of(page)),
                     new BlockSnapshot("minecraft:air", Optional.empty()));
             paged = new WorldActionRecord(metadata(1), new WorldActionRecord.Payload(Map.of(new BlockPosition(0, 0, 0), delta), Map.of()));
+            var encoded = new ByteArrayOutputStream();
+            new WorldActionPayloadCodec().encode(paged, version, new DataOutputStream(encoded));
+            var decoded = new WorldActionPayloadCodec(spool).decode(metadata(1), version, 4096, input(encoded.toByteArray()));
+            var decodedNbt = decoded.payload().blocks().values().iterator().next().before().blockEntity().orElseThrow();
+            assertEquals(0, decodedNbt.residentByteSize());
+            org.junit.jupiter.api.Assertions.assertArrayEquals(nbt.bytes(), decodedNbt.bytes());
             stored = repository.writePayload(paged, version);
         }
         // A durable payload owns its contents independently of the temporary pages.

@@ -35,6 +35,9 @@ public final class CanonicalNbt {
         byte[] read() throws IOException;
     }
 
+    @FunctionalInterface
+    public interface Store { CanonicalNbt store(CanonicalNbt value) throws IOException; }
+
     public byte[] bytes() {
         if (bytes != null) return bytes.clone();
         try {
