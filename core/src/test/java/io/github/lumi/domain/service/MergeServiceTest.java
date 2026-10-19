@@ -99,6 +99,16 @@ class MergeServiceTest {
         assertEquals(List.of(saved), undo.parents());
         assertEquals(CommitKind.HIDDEN_RETURN, undo.kind());
         assertEquals(Optional.of(active), refs.read(active.name()));
+        // Context replay uses the current workspace while preserving strict physical endpoint checks.
+        var current = commits.read(saved);
+        var foreign = commits.write(new Commit(current.tree(), List.of(), author(), "Other workspace", Instant.EPOCH,
+                new UUID(0, 90), Optional.empty(), CommitKind.HIDDEN_RETURN, current.statistics(), current.playerSpawns()));
+        var checkpoint = new io.github.lumi.domain.model.WorldActionCheckpoint(active.name(), replacement, expected,
+                new BranchRef(new BranchName("hidden/session-undo/context"), replacement, 0), io.github.lumi.domain.model.WorldActionScope.empty());
+        var replay = new ActionReplayPreparation(objects, commits, origins, io.github.lumi.domain.model.WorldDataVersion.LEGACY_12111)
+                .replayCheckpoint(foreign, checkpoint, true, author());
+        assertEquals(section("minecraft:dirt", "minecraft:barrel"), readSection(objects, commits.read(replay)));
+        assertEquals(new UUID(0, 90), commits.read(replay).workspaceId());
         var redo = service.prepareReplay(new MergeService.ReplayRequest(
                 result.commit(), replacement, expected, author(),
                 "Redo action", Instant.EPOCH, new UUID(0, 2)));

@@ -6,6 +6,7 @@ import io.github.lumi.domain.model.WorldActionIndex;
 import io.github.lumi.domain.model.WorldActionRecord;
 import io.github.lumi.domain.model.WorldDataVersion;
 import io.github.lumi.domain.model.WorldActionCheckpoint;
+import io.github.lumi.domain.model.WorldActionContext;
 import io.github.lumi.storage.object.WorldActionIndexCodec;
 import io.github.lumi.storage.repository.WorldActionHistoryRepository;
 import java.io.IOException;
@@ -88,7 +89,10 @@ public final class WorldActionHistory {
         } catch (IllegalStateException conflict) {
             throw new IOException("Undo cursor no longer matches the journaled action", conflict);
         }
-        var next = new WorldActionIndexCodec.State(epoch, version, persisted.workspace(), persisted.branch(),
+        var context = persisted.index().actions().stream().filter(action -> action.id().equals(step.action()))
+                .findFirst().orElseThrow().checkpoint().flatMap(WorldActionCheckpoint::context)
+                .map(change -> change.endpoint(applied)).orElse(new WorldActionContext(persisted.workspace(), persisted.branch()));
+        var next = new WorldActionIndexCodec.State(epoch, version, context.workspace(), context.branch(),
                 index, persisted.payloads(), Optional.of(marker));
         repository.writeIndex(next);
         persisted = next;
@@ -97,11 +101,16 @@ public final class WorldActionHistory {
     public synchronized ActionReplayTarget prepareCheckpoint(UUID operation, UUID actor, WorldActionCheckpoint checkpoint,
             UUID workspace, BranchName branch) throws IOException {
         if (persisted == null) throw new IOException("History must be captured before preparing a replacement action");
+        var currentContext = new WorldActionContext(persisted.workspace(), persisted.branch());
+        if (checkpoint.context().isPresent() && !checkpoint.context().orElseThrow().before().equals(currentContext)) {
+            throw new IOException("Active context changed before recording its switch");
+        }
         var index = persisted.index().appendCheckpoint(operation, actor, checkpoint);
         var blobs = new HashMap<>(persisted.payloads());
         var retained = index.actions().stream().map(WorldActionRecord.Metadata::id).collect(java.util.stream.Collectors.toSet());
         blobs.keySet().retainAll(retained);
-        var next = new WorldActionIndexCodec.State(epoch, version, workspace, branch, index, blobs, persisted.publication());
+        var context = checkpoint.context().map(WorldActionContext.Change::after).orElse(new WorldActionContext(workspace, branch));
+        var next = new WorldActionIndexCodec.State(epoch, version, context.workspace(), context.branch(), index, blobs, persisted.publication());
         // A new dimension mutation can start only after its predecessor's journal was resolved.
         repository.pruneStagedCheckpoints(Optional.of(operation));
         repository.stageCheckpoint(operation, persisted, next);

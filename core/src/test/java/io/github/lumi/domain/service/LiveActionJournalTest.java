@@ -94,14 +94,24 @@ class LiveActionJournalTest {
         assertTrue(history.flush(workspace, branch, index, journal::snapshotAction, () -> true));
         var beforeReplacement = repository.readIndex().orElseThrow();
         UUID replacement = UUID.randomUUID();
-        history.prepareCheckpoint(replacement, PLAYER_A, checkpoint('4'), workspace, branch);
+        var nextContext = new io.github.lumi.domain.model.WorldActionContext(UUID.randomUUID(), new BranchName("next"));
+        var context = new io.github.lumi.domain.model.WorldActionContext.Change(
+                new io.github.lumi.domain.model.WorldActionContext(workspace, branch), nextContext);
+        history.prepareCheckpoint(replacement, PLAYER_A, checkpoint('4').withContext(context), workspace, branch);
         assertEquals(beforeReplacement, repository.readIndex().orElseThrow());
         var appliedReplacement = history.publishCheckpoint(replacement, true);
+        assertEquals(nextContext.workspace(), appliedReplacement.workspace());
+        assertEquals(nextContext.branch(), appliedReplacement.branch());
         assertEquals(replacement, appliedReplacement.index().players().get(PLAYER_A).undo().getLast());
         assertTrue(appliedReplacement.index().players().get(PLAYER_A).redo().isEmpty());
         journal.installIndex(appliedReplacement.index(), metadata -> history.readRecord(appliedReplacement, metadata));
         assertEquals(replacement, journal.prepareUndo(PLAYER_A).orElseThrow().actionId());
         assertEquals(appliedReplacement, history.publishCheckpoint(replacement, true));
+        var switchStep = new io.github.lumi.domain.model.ActionReplayTarget(PLAYER_A, replacement, true);
+        history.publishReplay(UUID.randomUUID(), switchStep, false);
+        assertEquals(workspace, repository.readIndex().orElseThrow().workspace());
+        history.publishReplay(UUID.randomUUID(), switchStep, true);
+        assertEquals(nextContext.workspace(), repository.readIndex().orElseThrow().workspace());
         var returned = history.publishCheckpoint(replacement, false);
         journal.installIndex(returned.index(), metadata -> history.readRecord(returned, metadata));
         assertEquals(action, journal.prepareRedo(PLAYER_A).orElseThrow().actionId());
@@ -486,13 +496,18 @@ class LiveActionJournalTest {
         assertThrows(IllegalStateException.class, () -> journal.prepareUndo(PLAYER_A));
     }
 
-    @Test
-    void newerCheckpointProtectsOlderBuildersUntilItIsUndone() {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void newerCheckpointProtectsOlderBuildersUntilItIsUndone(boolean switchesContext) {
         var journal = new LiveActionJournal();
         UUID older = journal.begin(PLAYER_A);
         journal.record(older, POSITION, block("stone"), block("gold_block"));
         journal.close(older);
-        journal.pushCheckpoint(PLAYER_B, scopedCheckpoint(POSITION));
+        var checkpoint = scopedCheckpoint(POSITION);
+        if (switchesContext) checkpoint = checkpoint('1').withContext(new io.github.lumi.domain.model.WorldActionContext.Change(
+                new io.github.lumi.domain.model.WorldActionContext(PLAYER_A, new BranchName("main")),
+                new io.github.lumi.domain.model.WorldActionContext(PLAYER_A, new BranchName("next"))));
+        journal.pushCheckpoint(PLAYER_B, checkpoint);
 
         assertThrows(IllegalStateException.class, () -> journal.prepareUndo(PLAYER_A));
         journal.complete(journal.prepareUndo(PLAYER_B).orElseThrow());

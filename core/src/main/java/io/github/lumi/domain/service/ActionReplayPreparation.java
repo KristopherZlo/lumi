@@ -47,6 +47,24 @@ public final class ActionReplayPreparation {
         }
     }
 
+    public CommitId replayCheckpoint(CommitId captured, WorldActionCheckpoint checkpoint, boolean undo, CommitAuthor author) throws IOException {
+        try (var publication = objects.beginPublication()) {
+            var workspace = commits.read(captured).workspaceId();
+            var expected = inWorkspace(undo ? checkpoint.after() : checkpoint.before(), workspace);
+            var target = inWorkspace(undo ? checkpoint.before() : checkpoint.after(), workspace);
+            return new MergeService(objects, commits, origins, new MerkleTreeEditor(objects)).prepareReplay(
+                    new MergeService.ReplayRequest(captured, expected, target, author,
+                            undo ? "Undo action" : "Redo action", Instant.now(), workspace)).commit();
+        }
+    }
+
+    private CommitId inWorkspace(CommitId id, UUID workspace) throws IOException {
+        var value = commits.read(id);
+        if (value.workspaceId().equals(workspace)) return id;
+        return commits.write(new Commit(value.tree(), value.parents(), value.author(), value.message(), value.timestamp(),
+                workspace, Optional.empty(), CommitKind.HIDDEN_RETURN, value.statistics(), value.playerSpawns()));
+    }
+
     public CommitId prepare(CommitId captured, LiveActionJournal.Plan plan,
             Map<EntityState, EntityChunkKey> locations, CommitAuthor author) throws IOException {
         try (var publication = objects.beginPublication()) {

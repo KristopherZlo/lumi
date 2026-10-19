@@ -67,8 +67,9 @@ class WorldActionPayloadCodecTest {
         assertThrows(IOException.class, () -> repository.readPayload(metadata(1), blob, version, 4096));
     }
 
-    @Test
-    void roundTripsTheCursorWithCheckpointOwnershipAndRejectsCorruption() throws IOException {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void roundTripsTheCursorWithCheckpointOwnershipAndRejectsCorruption(boolean changesContext) throws IOException {
         var before = CommitId.hash(new byte[] {1});
         var after = CommitId.hash(new byte[] {2});
         long[] mask = new long[64];
@@ -77,6 +78,9 @@ class WorldActionPayloadCodecTest {
         mask[63] = 0;
         var checkpoint = new WorldActionCheckpoint(new BranchName("main"), before, after,
                 new BranchRef(new BranchName("hidden/session-undo/test"), before, 0), scope);
+        if (changesContext) checkpoint = checkpoint.withContext(new io.github.lumi.domain.model.WorldActionContext.Change(
+                new io.github.lumi.domain.model.WorldActionContext(new UUID(0, 200), new BranchName("main")),
+                new io.github.lumi.domain.model.WorldActionContext(new UUID(0, 201), new BranchName("next"))));
         var second = new WorldActionRecord.Metadata(new UUID(0, 3), new UUID(0, 2), 2, new UUID(0, 3),
                 1, false, true, false, Optional.of(checkpoint));
         var index = new WorldActionIndex(7, 2, 0, List.of(metadata(1), second),

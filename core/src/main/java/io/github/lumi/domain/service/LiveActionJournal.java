@@ -771,6 +771,9 @@ public final class LiveActionJournal {
             for (MutableAction later : actions.values()) {
                 if (!later.applied || !later.available || later.sequence <= selected.sequence
                         || later.groupId.equals(selected.groupId)) continue;
+                if (later.checkpoint != null && later.checkpoint.context().isPresent()) {
+                    throw new IllegalStateException("A newer branch or workspace switch must be undone first");
+                }
                 if (selected.overlapsCheckpoint(later)) {
                     throw new IllegalStateException("A newer action overlaps the selected live action");
                 }

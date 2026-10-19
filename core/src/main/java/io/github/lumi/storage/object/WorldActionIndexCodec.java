@@ -6,6 +6,7 @@ import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorldActionCheckpoint;
+import io.github.lumi.domain.model.WorldActionContext;
 import io.github.lumi.domain.model.WorldActionIndex;
 import io.github.lumi.domain.model.WorldActionRecord;
 import io.github.lumi.domain.model.WorldActionScope;
@@ -25,7 +26,8 @@ import java.util.UUID;
 
 /** Small history root: cursors, checkpoint roots and immutable delta-file identities. */
 public final class WorldActionIndexCodec {
-    private static final int MAGIC = 0x4C414931;
+    private static final int MAGIC = 0x4C414932;
+    private static final int PREVIOUS_MAGIC = 0x4C414931;
     private static final int MAX_ACTIONS = 16_384;
     private static final int MAX_SECTIONS = 32_768;
     private static final int MAX_SCOPE_ENTITIES = 262_144;
@@ -105,7 +107,8 @@ public final class WorldActionIndexCodec {
     }
 
     public State decode(DataInputStream input) throws IOException {
-        if (input.readInt() != MAGIC) throw new IOException("Not a Lumi action index");
+        int magic = input.readInt();
+        if (magic != MAGIC && magic != PREVIOUS_MAGIC) throw new IOException("Not a Lumi action index");
         try {
             UUID epoch = CanonicalBytes.readUuid(input);
             var version = new WorldDataVersion(input.readInt());
@@ -124,7 +127,7 @@ public final class WorldActionIndexCodec {
                 int flags = input.readUnsignedByte();
                 if ((flags & ~7) != 0) throw new IOException("Invalid action index flags");
                 Optional<WorldActionCheckpoint> checkpoint = Optional.empty();
-                if (flag(input)) checkpoint = Optional.of(readCheckpoint(input, scopeBudget));
+                if (flag(input)) checkpoint = Optional.of(readCheckpoint(input, scopeBudget, magic == MAGIC));
                 else payloads.put(id, CanonicalBytes.readUuid(input));
                 actions.add(new WorldActionRecord.Metadata(id, actor, order, group, contentRevision,
                         (flags & 1) != 0, (flags & 2) != 0, (flags & 4) != 0, checkpoint));
@@ -167,9 +170,15 @@ public final class WorldActionIndexCodec {
             for (long word : words) output.writeLong(word);
         }
         writeIds(output, scope.entityIds().stream().sorted().toList());
+        output.writeBoolean(checkpoint.context().isPresent());
+        if (checkpoint.context().isPresent()) {
+            var change = checkpoint.context().orElseThrow();
+            context(output, change.before());
+            context(output, change.after());
+        }
     }
 
-    private WorldActionCheckpoint readCheckpoint(DataInputStream input, ScopeBudget budget) throws IOException {
+    private WorldActionCheckpoint readCheckpoint(DataInputStream input, ScopeBudget budget, boolean hasContext) throws IOException {
         BranchName branch = branch(input);
         var before = new CommitId(CanonicalBytes.readId(input));
         var after = new CommitId(CanonicalBytes.readId(input));
@@ -188,7 +197,17 @@ public final class WorldActionIndexCodec {
         var ids = readIds(input, budget.entities);
         budget.entities -= ids.size();
         if (new HashSet<>(ids).size() != ids.size()) throw new IOException("Duplicate action scope entity");
-        return new WorldActionCheckpoint(branch, before, after, ref, WorldActionScope.fromMasks(masks, new HashSet<>(ids)));
+        Optional<WorldActionContext.Change> change = hasContext && flag(input)
+                ? Optional.of(new WorldActionContext.Change(context(input), context(input))) : Optional.empty();
+        return new WorldActionCheckpoint(branch, before, after, ref, WorldActionScope.fromMasks(masks, new HashSet<>(ids)), change);
+    }
+
+    private void context(DataOutputStream output, WorldActionContext context) throws IOException {
+        CanonicalBytes.writeUuid(output, context.workspace());
+        branch(output, context.branch());
+    }
+    private WorldActionContext context(DataInputStream input) throws IOException {
+        return new WorldActionContext(CanonicalBytes.readUuid(input), branch(input));
     }
 
     private void branch(DataOutputStream output, BranchName branch) throws IOException { CanonicalBytes.writeString(output, branch.value(), 1024, "action branch"); }
