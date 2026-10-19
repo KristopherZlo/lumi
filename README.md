@@ -1,134 +1,95 @@
-# Lumi
-
 <p align="center">
-  <img alt="Lumi banner" src="lumi-banner.png" />
+  <img src="lumi-banner.png" alt="Lumi — version control for Minecraft" />
 </p>
 
+<h1 align="center">Lumi</h1>
+<p align="center"><strong>Version control for Minecraft worlds.</strong></p>
 <p align="center">
-  <strong>Save the build. Try the idea. Undo the mistake.</strong>
+  <a href="https://github.com/KristopherZlo/lumi/releases/tag/v0.2.0-rc.2">Download</a>
+  · <a href="https://github.com/KristopherZlo/lumi/issues">Report an issue</a>
+  · <a href="docs/developer/README.md">Developer docs</a>
 </p>
 
-<p align="center">
-  <img alt="Minecraft 1.21.11" src="https://img.shields.io/badge/Minecraft-1.21.11-5E7C16?style=for-the-badge" />
-  <img alt="Fabric" src="https://img.shields.io/badge/Loader-Fabric-DBD0B4?style=for-the-badge" />
-  <img alt="Java 21" src="https://img.shields.io/badge/Java-21-1F6FEB?style=for-the-badge" />
-  <img alt="GPL 3.0" src="https://img.shields.io/badge/License-GPL%203.0-2EA043?style=for-the-badge" />
-</p>
+Lumi lets you save your Minecraft world, try changes on separate branches, and return to an earlier version. You can keep these versions without copying the world folder.
 
-Lumi keeps durable world history for Minecraft builders.
-
-Save a good moment. Test another idea on a branch. Compare the result, then
-return without copying the world or learning Git.
+Each save covers the active workspace or zone. A workspace without bounds covers **the active dimension**.
 
 > [!WARNING]
-> Lumi 0.2.0-rc.2 is a release candidate. Keep normal backups of worlds you care about.
+> **Lumi 0.2.0 RC2 is a pre-release.** Keep independent backups of worlds you care about.
 
-## What Lumi Does
+## How it works
 
-- Saves named versions of visible blocks, block entities, durable non-player
-  entities, and player respawn positions.
-- Creates branches for experiments without copying stored world data.
-- Compares two saved versions and highlights added, removed, and changed blocks.
-- Restores a complete version, a wooden-sword selection, or everything outside
-  the selection.
-- Shows workspaces and colored work zones as views of one shared dimension
-  history.
-- Gives builders session Undo/Redo and Quick Restore for unsaved changes.
-- Supports safe Amend, branch merge, tags, renaming, search, and isometric save
-  previews.
-- Keeps soft-deleted history available for recovery.
-- Imports and exports portable Lumi packages after you inspect and confirm them.
-- Recovers interrupted operations and keeps earlier valid history safe.
-- Integrates with normal Minecraft edits and supported WorldEdit and Axiom
-  workflows.
+Press `Alt+S` to save the current state under a name. Lumi tracks blocks, block entities, supported persistent non-player entities, and player respawn positions. Each dimension starts with a protected **Initial** version.
 
-Lumi uses one shared, server-authoritative world model in integrated and
-dedicated servers. Multiple builders can work in the same dimension; its active
-workspace, branch, and mutating history operation are global. Player-specific
-live branches are not virtualized.
+Lumi does not record biome changes. Restore preserves the current biomes.
 
-## Quick Start
+Branches let you try a different build without losing the original. You can switch branches, compare saved versions in the world, or merge branches. Compare marks added blocks in **green**, removed blocks in **red**, and changed blocks in **amber**. When merging conflicting changes, the **incoming branch takes priority**; changes made only on the current branch remain.
 
-1. Install Lumi and Fabric API for Minecraft `1.21.11`.
-2. Open a world and follow the first-run builder tour.
-3. Make a few changes and press `Alt+S` to save them.
-4. Press `U` to open Lumi and browse the new version.
-5. Create a branch before you test a risky idea.
-6. Compare the result or restore an earlier version.
+Restoring a version can affect the entire saved state or just part of it. Use a **wooden sword** to select an area with left-click and right-click, then restore that area or everything outside it. For recent edits, use session Undo/Redo; `Alt+R` restores unsaved changes to the active saved version, and you can undo that action if needed.
 
-Each initialized dimension starts with one protected **Initial** version. This
-version preserves the original state from the start of Lumi history.
+Lumi also has colored zones, version previews, tags, search, and import/export packages.
 
-## Default Controls
+## Installation
 
-| Key | Action |
-| --- | --- |
-| `U` | Open Lumi |
-| `Alt+S` | Save the active workspace or zone |
-| `Alt+Z` / `Alt+Y` | Undo / Redo the latest session action |
-| `Alt+R` | Quick Restore unsaved changes to the active version |
-| `H` | Show or hide the compare highlight |
-| `Alt+I` | Open the hotkey guide |
-| `Alt+1` … `Alt+0` | Switch to an assigned branch |
-| Hold `Alt` | Preview pending work and use Lumi action shortcuts |
-| Wooden sword | Select restore bounds and edit active-zone cells |
+### Published RC2
 
-While holding the wooden sword, Undo/Redo affects only your selection. An empty
-selection history shows a message. Put the sword away to undo or redo world edits.
-
-You can change all key bindings in Minecraft controls.
-
-With the GUI HUD enabled, Compare shows a preparation percentage and bar.
-The first world highlight appears when its visible parts are ready.
-The preparation bar disappears when the highlight is ready or hidden.
-
-Lumi screens use a fixed GUI scale of 2. Minecraft's GUI Scale setting does not
-change their size. Resizing the window or entering fullscreen updates the
-available layout space while keeping controls at the same pixel scale.
-
-Zone Save, Amend, and See Changes use the zone's current pending state. Changes
-elsewhere in the workspace do not enable these controls. They show a reason
-while statistics load or the zone is clean; entity-only edits remain savable.
-Zone See Changes displays only points inside that zone.
-
-## Install
-
-1. Download a release-candidate build from
-   [GitHub Releases](https://github.com/KristopherZlo/lumi/releases).
-2. Put Lumi and Fabric API in the `mods` folder.
+The published [0.2.0 RC2 release](https://github.com/KristopherZlo/lumi/releases/tag/v0.2.0-rc.2) is built for Minecraft **1.21.11**.
 
 | Requirement | Version |
 | --- | --- |
 | Minecraft | `1.21.11` |
-| Fabric Loader | `0.19.2` or newer compatible release |
-| Fabric API | `0.141.3+1.21.11` or newer compatible release |
+| Fabric Loader | `0.19.2` or a newer compatible version |
+| Fabric API | `0.141.3+1.21.11` or a newer compatible version |
 | Java | `21` |
 
-For a dedicated server, install Lumi on the server. Also install it on clients
-that use Lumi screens and overlays. Server actions require operator permission.
-Lumi settings must also allow access from Survival mode.
+Install Fabric Loader, then place the [Lumi JAR](https://github.com/KristopherZlo/lumi/releases/download/v0.2.0-rc.2/lumi-0.2.0-rc.2.jar) and Fabric API in your `mods` folder. **Axiom and WorldEdit are optional.**
 
-WorldEdit and Axiom are optional. Lumi does not require these mods for ordinary
-play.
+### Current branch builds
 
-## World safety
+The current branch builds four Lumi JARs for six Minecraft versions:
 
-Lumi saves the visible state of your build and verifies restored world data
-before it reports success. Earlier valid history remains available if an
-operation fails or the server stops.
+| Minecraft | Lumi JAR suffix | Java |
+| --- | --- | --- |
+| `1.21.11` | `+mc1.21.11.jar` | `21` |
+| `26.1`, `26.1.1`, `26.1.2` | `+mc26.1.jar` | `25` |
+| `26.2` | `+mc26.2.jar` | `25` |
+| `26.3` | `+mc26.3.jar` | `25` |
 
-A completed operation leaves a normal playable Minecraft world. If the server
-stops during Restore, keep Lumi installed until recovery finishes.
+The three `26.1` releases share one Lumi JAR. Use matching Fabric API, Axiom, and WorldEdit versions for your game. Keep only one Lumi JAR in each instance.
 
-Keep independent backups of important worlds, especially with release-candidate
-builds. Lumi V2 starts a new history and does not import legacy patch-v9 or
-snapshot-v8 projects.
+Building all four JARs requires JDK 21 and JDK 25. Use the [build script](scripts/build-supported-artifacts.ps1) with `-RunBuild`.
 
-## Developer documentation
+## Default controls
 
-For setup, the code map, workflow walkthroughs, and verification commands,
-read the [developer documentation](docs/developer/README.md).
+| Shortcut | Action |
+| --- | --- |
+| `U` | Open Lumi |
+| `Alt+S` | Save |
+| `Alt+Z` / `Alt+Y` | Undo / Redo |
+| `Alt+R` | Restore unsaved changes |
+| `H` | Show or hide Compare highlights |
+| `Alt+I` | Open the hotkey guide |
+| `Alt+1`–`Alt+0` | Switch to an assigned branch |
+| Hold `Alt` | Preview unsaved work and use action shortcuts |
+
+With a wooden sword equipped, Undo/Redo applies to selection edits instead of world edits. Put it away to undo building actions. Shortcuts can be reassigned in Minecraft Controls, including ones that overlap with Axiom.
+
+In builds from this branch, Lumi clears pending Axiom edits and Axiom's Undo/Redo history before Undo, Redo, or Restore. This prevents queued Axiom work from changing the restored world.
+
+## Multiplayer
+
+Lumi stores history on the server, including in singleplayer. Everyone in a dimension shares the same active workspace and branch, so switching branches or restoring a version changes the world for **everyone**, not just the player who requested it.
+
+On a dedicated server, install Lumi on the server and on clients that use its menus or highlights. Server actions require operator permission, and Lumi's settings must allow Survival access when applicable.
+
+## Recovery
+
+Lumi keeps recovery data for interrupted operations and verifies restored world data before reporting success. If a Restore is interrupted, **keep Lumi installed until recovery finishes**. RC2 still has incomplete verification for some large Restores and multiplayer failure cases; see the [release notes](https://github.com/KristopherZlo/lumi/releases/tag/v0.2.0-rc.2).
+
+## Development
+
+Build instructions, architecture, tests, and storage details are in the [developer documentation](docs/developer/README.md).
 
 ## License
 
-GPL-3.0-only. See [LICENSE](LICENSE).
+[GPL-3.0-only](LICENSE).
