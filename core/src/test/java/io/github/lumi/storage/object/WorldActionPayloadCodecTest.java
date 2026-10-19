@@ -161,6 +161,7 @@ class WorldActionPayloadCodecTest {
         byte[] valid = bytes.toByteArray();
 
         var restored = codec.decode(metadata(1), version, 262144, input(valid));
+        assertEquals(record, codec.decode(metadata(1), version, 40 << 10, input(valid)));
         assertEquals(record, restored);
         assertEquals(List.copyOf(blocks.keySet()), List.copyOf(restored.payload().blocks().keySet()));
         assertThrows(IOException.class, () -> codec.decode(metadata(2), version, 262144, input(valid)));

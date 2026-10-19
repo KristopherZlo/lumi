@@ -121,7 +121,7 @@ public final class WorldActionPayloadCodec {
                     throw new IOException("Duplicate action biome position");
                 }
             }
-            count = budget.count(input, 65_536);
+            count = budget.count(input, 1024);
             var sectionChanges = new LinkedHashMap<SectionKey, SectionDelta>();
             for (int index = 0; index < count; index++) {
                 var key = new SectionKey(input.readInt(), input.readInt(), input.readInt());
@@ -138,13 +138,10 @@ public final class WorldActionPayloadCodec {
     }
 
     private io.github.lumi.domain.model.SectionBlob readSection(DataInputStream input, Budget budget) throws IOException {
-        if (spool == null) return sections.decode(budget.bytes(input, MAX_NBT, "action section"));
         // Only one bounded encoded section is temporary; the root budget counts retained data.
         byte[] encoded = CanonicalBytes.read(input, MAX_NBT, "action section");
         var section = sections.decode(encoded);
-        long retained = encoded.length;
-        for (var nbt : section.blockEntities().values()) retained += nbt.residentByteSize() - (long) nbt.byteSize() + 96;
-        budget.retain(2 * retained);
+        budget.retain(section.retainedActionBytes());
         return section;
     }
 

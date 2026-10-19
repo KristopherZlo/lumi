@@ -211,7 +211,7 @@ public final class LiveActionJournal {
         biomeOwners.set(position, action, bytes != 0 && action.applied);
     }
 
-    private static long biomeBytes(BiomeDelta delta) { return 32L + 2L * (delta.before().length() + delta.after().length()); }
+    private static long biomeBytes(BiomeDelta delta) { return 256L + 2L * (delta.before().length() + delta.after().length()); }
 
     public synchronized void recordSection(UUID actionId, SectionKey key, SectionBlob before, SectionBlob after) {
         revision++;
@@ -246,12 +246,7 @@ public final class LiveActionJournal {
         return WorldActionScope.between(Map.of(key, delta.before()), Map.of(key, delta.after()), Map.of(), Map.of());
     }
 
-    private static long sectionBytes(SectionDelta delta) { return sectionBytes(delta.before()) + sectionBytes(delta.after()); }
-    private static long sectionBytes(SectionBlob section) {
-        long bytes = 16_384 + section.blockEntities().values().stream().mapToLong(nbt -> 96L + nbt.residentByteSize()).sum();
-        for (String state : section.distinctBlockStates()) bytes += 2L * state.length();
-        return bytes;
-    }
+    private static long sectionBytes(SectionDelta delta) { return 1024 + delta.before().retainedActionBytes() + delta.after().retainedActionBytes(); }
 
     private UUID replaceEntity(MutableAction action, UUID entityId, EntityDelta updated) {
         EntityDelta previous = action.entities.get(entityId);
@@ -1064,7 +1059,7 @@ public final class LiveActionJournal {
     }
 
     private static long estimatedBytes(BlockDelta change) {
-        return 24L + estimatedBytes(change.before()) + estimatedBytes(change.after());
+        return 384L + estimatedBytes(change.before()) + estimatedBytes(change.after());
     }
 
     private static long estimatedBytes(BlockSnapshot snapshot) {
@@ -1073,7 +1068,7 @@ public final class LiveActionJournal {
     }
 
     private static long estimatedBytes(EntityDelta change) {
-        return 24L + change.before().map(LiveActionJournal::estimatedBytes).orElse(0L)
+        return 512L + change.before().map(LiveActionJournal::estimatedBytes).orElse(0L)
                 + change.after().map(LiveActionJournal::estimatedBytes).orElse(0L);
     }
 

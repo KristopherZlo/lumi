@@ -318,7 +318,7 @@ class LiveActionJournalTest {
 
     @Test void actionEvictionDoesNotReleaseEndpointsPreparedForNewRecord() {
         var prepared = new HashSet<BlockSnapshot>();
-        var journal = new LiveActionJournal(new LiveActionJournal.Limits(64, 1000, 1000, 80),
+        var journal = new LiveActionJournal(new LiveActionJournal.Limits(64, 1000, 1000, 600),
                 ignored -> { }, prepared::remove);
         prepared.addAll(List.of(block("air"), block("stone")));
         add(journal, 1);
@@ -981,7 +981,7 @@ class LiveActionJournalTest {
     @Test
     void dimensionByteLimitEvictsOldestClosedPlayerAction() {
         LiveActionJournal journal = new LiveActionJournal(
-                new LiveActionJournal.Limits(64, 1_000, 1_000, 80));
+                new LiveActionJournal.Limits(64, 1_000, 1_000, 600));
         add(journal, 1);
         UUID newer = journal.begin(PLAYER_B);
         journal.record(newer, new BlockPosition(2, 0, 0), block("air"), block("stone"));

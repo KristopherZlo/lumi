@@ -65,6 +65,14 @@ public record SectionBlob(List<String> blockStates, Map<Integer, CanonicalNbt> b
         return palette().palette();
     }
 
+    /** Conservative retained action estimate; temporary codec buffers have a separate fixed bound. */
+    public long retainedActionBytes() {
+        long bytes = 16_384 + blockEntities.values().stream().mapToLong(nbt -> 96L + nbt.residentByteSize()).sum();
+        for (String state : distinctBlockStates()) bytes += 48L + 2L * state.length();
+        for (String biome : actionBiomes.values()) bytes += 96L + 2L * biome.length();
+        return bytes;
+    }
+
     /** Compact immutable palette with unsigned 16-bit cell indexes. */
     public static final class PaletteBlockStates extends AbstractList<String>
             implements RandomAccess {
