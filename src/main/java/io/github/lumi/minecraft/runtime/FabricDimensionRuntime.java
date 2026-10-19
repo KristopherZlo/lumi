@@ -180,6 +180,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final MinecraftWorldStateReader worldReader;
     private final SaveService saves;
     private final RestoreService restores;
+    private final ActionReplayPreparation actionReplays;
     private final MinecraftWorldStateApply worldApply;
     private final OperationJournalRepository journals;
     private final BranchService branches;
@@ -298,6 +299,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 checkpoint -> releaseSessionCheckpoint(checkpoint.retainedRef()),
                 liveWorld::releasePrepared, liveEntityWorld.references());
         var actionVersion = new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version());
+        actionReplays = new ActionReplayPreparation(new WorldObjectRepository(repository), commits,
+                new OriginStore(repository), actionVersion);
         actionNbt = new io.github.lumi.storage.repository.NbtSpool(repository, 64 << 10, 1L << 30);
         actionHistory = new WorldActionHistory(new WorldActionHistoryRepository(repository, actionVersion, actionNbt), actionVersion);
         axiomSetBlockActions = new AxiomSetBlockActionGrouper(liveActions);
@@ -1208,10 +1211,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     if (!selectedPlan(plan.player(), plan.direction()).equals(Optional.of(plan)) || !persistActionHistory()) {
                         throw new IOException("Action changed during durable capture");
                     }
-                    var replay = new ActionReplayPreparation(new WorldObjectRepository(repository),
-                            new CommitRepository(repository), new OriginStore(repository),
-                            new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version()))
-                            .prepareSections(expected, sections, spawns, plan, author);
+                    var replay = actionReplays.prepareSections(expected, sections, spawns, plan, author);
                     return RestoreOperation.startCheckpointAction(replay.restore(), worldApply,
                             new ActionReplayPublication(new PendingRestorePublication(mutations), actionHistory,
                                     operationId, new ActionReplayTarget(plan.player(), plan.actionId(), undo), !undo, ignored -> { }),
@@ -1236,9 +1236,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         CommitId replay;
                         RestorePublication world = new PendingRestorePublication(mutations);
                         if (checkpoint != null) {
-                            replay = new ActionReplayPreparation(new WorldObjectRepository(repository), new CommitRepository(repository),
-                                    new OriginStore(repository), new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version()))
-                                    .replayCheckpoint(saved.commitId(), checkpoint, undo, author);
+                            replay = actionReplays.replayCheckpoint(saved.commitId(), checkpoint, undo, author);
                             if (checkpoint.context().isPresent()) {
                                 var change = checkpoint.context().orElseThrow();
                                 var from = change.endpoint(undo);
@@ -1255,18 +1253,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                             for (var value : plan.replacementEntities().values()) {
                                 if (value.isPresent()) locations.put(value.orElseThrow(), liveEntityWorld.chunk(value.orElseThrow()));
                             }
-                            replay = new ActionReplayPreparation(new WorldObjectRepository(repository),
-                                    new CommitRepository(repository), new OriginStore(repository),
-                                    new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version()))
-                                    .prepare(saved.commitId(), plan, locations, author);
+                            replay = actionReplays.prepare(saved.commitId(), plan, locations, author);
                         }
                         CommitId replaySource = saved.commitId();
                         if (!plan.biomes().isEmpty()) {
-                            var biomePreparation = new ActionReplayPreparation(new WorldObjectRepository(repository),
-                                    new CommitRepository(repository), new OriginStore(repository),
-                                    new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version()));
-                            replaySource = biomePreparation.withBiomes(saved.commitId(), plan.biomes(), undo, author);
-                            replay = biomePreparation.withBiomes(replay, plan.biomes(), !undo, author);
+                            replaySource = actionReplays.withBiomes(saved.commitId(), plan.biomes(), undo, author);
+                            replay = actionReplays.withBiomes(replay, plan.biomes(), !undo, author);
                         }
                         PreparedRestore prepared = restores.prepare(
                                 expected, replaySource, replay,
@@ -1367,8 +1359,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             if (!persistActionHistory()) throw new IOException("Action changed during replacement capture");
             var objects = new WorldObjectRepository(repository);
             try (var publication = objects.beginPublication()) {
-                var checkpoint = new ActionReplayPreparation(objects, new CommitRepository(repository), new OriginStore(repository),
-                        new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version())).checkpoint(captured, restore);
+                var checkpoint = actionReplays.checkpoint(captured, restore);
                 if (context.isPresent()) checkpoint = checkpoint.withContext(context.orElseThrow());
                 return actionHistory.prepareCheckpoint(operation, actor, checkpoint, workspace, restore.expectedRef().name());
             }

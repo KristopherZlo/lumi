@@ -66,7 +66,8 @@ class MergeServiceTest {
         if (compact) {
             var key = new io.github.lumi.domain.model.SectionKey(0, 0, 0);
             var observed = section("minecraft:gold_block", "minecraft:barrel");
-            var replay = service.prepareSections(saved, Map.of(key, observed), Map.of(), plan, author());
+            var spawns = Map.of(actor, new PlayerSpawn(12, 64, -3, 0, 0, false));
+            var replay = service.prepareSections(saved, Map.of(key, observed), spawns, plan, author());
             assertEquals(Map.of(key, section("minecraft:stone", "minecraft:barrel")), replay.restore().sections());
             assertEquals(Map.of(key, observed), replay.restore().returnSections());
             var operation = new io.github.lumi.domain.model.OperationJournal(UUID.randomUUID(),
@@ -78,6 +79,8 @@ class MergeServiceTest {
             for (var choice : RecoveryChoice.values()) {
                 try (var recovered = recovery.prepare(operation, choice)) {
                     assertEquals(choice == RecoveryChoice.RESUME_TARGET ? replay.restore().sections() : Map.of(key, observed), recovered.sections());
+                    assertEquals(spawns, recovered.playerSpawns());
+                    assertEquals(spawns, recovered.returnPlayerSpawns());
                 }
             }
             assertEquals(Optional.of(saved), refs.read(saved.name()));
