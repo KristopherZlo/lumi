@@ -74,7 +74,7 @@ class LiveActionOperationTest {
                                 events.add("recovery");
                                 if (mode == 4) return new NoChangeMutation("recovered test");
                                 throw new IOException("recovery unavailable");
-                            }, true));
+                            }));
             operation.advance(Long.MAX_VALUE);
             if (mode == 1) {
                 assertTrue(!operation.isTerminal());
@@ -99,24 +99,34 @@ class LiveActionOperationTest {
     }
 
     @Test void nativeBlocksCanApplyWhileTheIntentIsPendingButCannotPublishOrComplete() throws Exception {
-        for (boolean early : new boolean[] {false, true}) {
+        for (boolean failedIntent : new boolean[] {false, true}) {
             var events = new ArrayList<String>();
             var jobs = new java.util.ArrayDeque<Runnable>();
             var plan = action(block("stone"), block("gold_block")).prepareUndo(PLAYER).orElseThrow();
             var operation = new LiveReplayOperation(plan, new ReplaySession(events, "source", false),
                     new ReplaySession(events, "native", false), ignored -> { }, jobs::add,
-                    () -> events.add("intent"), () -> events.add("hold"), () -> events.add("release"),
+                    () -> { events.add("intent"); if (failedIntent) throw new IOException("intent failed"); },
+                    () -> events.add("hold"), () -> events.add("release"),
                     () -> events.add("cursor"), () -> { },
                     ignored -> { throw new AssertionError("unexpected fallback"); },
-                    ignored -> { throw new AssertionError("unexpected recovery"); }, early);
+                    ignored -> { throw new AssertionError("unexpected recovery"); });
             operation.advance(Long.MAX_VALUE);
-            assertEquals(early, events.contains("native.apply"));
+            assertTrue(events.contains("native.apply"));
             assertTrue(events.contains("hold"));
             assertTrue(!events.contains("release"));
             assertTrue(!events.contains("native.persist"));
             assertTrue(!operation.isTerminal());
             jobs.removeFirst().run();
             operation.advance(Long.MAX_VALUE);
+            if (failedIntent) {
+                operation.advance(Long.MAX_VALUE);
+                assertEquals(MutationTerminalState.DEGRADED, operation.terminalState());
+                assertTrue(!operation.isSafeToRelease());
+                assertTrue(!events.contains("release"));
+                assertTrue(!events.contains("native.persist"));
+                operation.close();
+                continue;
+            }
             assertTrue(events.contains("release"));
             assertTrue(events.contains("native.persist"));
             assertTrue(!operation.isTerminal());

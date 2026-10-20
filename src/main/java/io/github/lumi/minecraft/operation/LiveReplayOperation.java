@@ -18,7 +18,6 @@ public final class LiveReplayOperation implements DimensionMutation {
     private final Executor background;
     private final Work prepareIntent, registerOrigins, releasePublication, publishCursor, clearIntent;
     private final LiveActionOperation.ReplayFactory portable, recovery;
-    private final boolean earlyApply;
     private Phase phase = Phase.PREFLIGHT;
     private CompletableFuture<Void> io;
     private boolean intentStarted, mutationStarted;
@@ -28,7 +27,7 @@ public final class LiveReplayOperation implements DimensionMutation {
     public LiveReplayOperation(LiveActionJournal.Plan plan, WorldStateApply.ApplySession before,
             WorldStateApply.ApplySession replay, RestorePublication origins, Executor background,
             Work prepareIntent, Work registerOrigins, Work releasePublication, Work publishCursor, Work clearIntent,
-            LiveActionOperation.ReplayFactory portable, LiveActionOperation.ReplayFactory recovery, boolean earlyApply) {
+            LiveActionOperation.ReplayFactory portable, LiveActionOperation.ReplayFactory recovery) {
         this.plan = plan;
         this.before = before;
         this.replay = replay;
@@ -41,7 +40,6 @@ public final class LiveReplayOperation implements DimensionMutation {
         this.clearIntent = clearIntent;
         this.portable = portable;
         this.recovery = recovery;
-        this.earlyApply = earlyApply;
     }
 
     @Override public void advance(long deadline) throws IOException {
@@ -58,9 +56,8 @@ public final class LiveReplayOperation implements DimensionMutation {
                         intentStarted = true;
                         registerOrigins.run();
                         io = async(prepareIntent);
-                        phase = earlyApply ? Phase.APPLY : Phase.WAIT_APPLY;
+                        phase = Phase.APPLY;
                     }
-                    case WAIT_APPLY -> { if (!io.isDone()) return; io.join(); phase = Phase.APPLY; }
                     case INTENT -> {
                         if (!io.isDone()) return;
                         io.join();
@@ -126,5 +123,5 @@ public final class LiveReplayOperation implements DimensionMutation {
     @Override public void close() throws IOException { try { if (delegate != null) delegate.close(); } finally { before.close(); replay.close(); } }
 
     @FunctionalInterface public interface Work { void run() throws IOException; }
-    private enum Phase { PREFLIGHT, WAIT_APPLY, INTENT, APPLY, VERIFY, PERSIST, PUBLISH, ABORT, RECOVER, SUCCEEDED, FAILED, DEGRADED }
+    private enum Phase { PREFLIGHT, INTENT, APPLY, VERIFY, PERSIST, PUBLISH, ABORT, RECOVER, SUCCEEDED, FAILED, DEGRADED }
 }

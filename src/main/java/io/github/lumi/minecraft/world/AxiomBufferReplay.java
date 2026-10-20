@@ -78,9 +78,7 @@ public final class AxiomBufferReplay implements WorldStateApply.ApplySession {
         return !remaining.hasNext();
     }
 
-    public boolean canApplyBeforeIntent() {
-        return target.canApplyBeforeIntent();
-    }
+
 
     @Override public WorldStateApply.Verification verifyUntil(long deadline) throws IOException { return verification.verifyUntil(deadline); }
     @Override public boolean persistUntil(long deadline) throws IOException { return verification.persistUntil(deadline); }

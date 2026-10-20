@@ -33,6 +33,7 @@
     "PlayerListPersistenceAccessor",
     "RegionFileStoragePersistenceAccessor",
     "SectionStoragePersistenceAccessor",
+    "SectionStoragePublicationMixin",
     "ServerPlayerGameModeMixin",
     "ServerChunkCacheAccessor",
     "ServerExplosionMixin",

@@ -43,11 +43,13 @@ class MutationDurabilityTrackerTest {
         while (background.size() > 0) background.runNext();
         assertTrue(tracker.isDurable(tracker.snapshot()));
         assertFalse(tracker.canPublishChunk(0, 0));
+        assertTrue(tracker.hasPublicationHold());
         assertTrue(tracker.canPublishChunk(1, 0));
         hold.release();
         hold.release();
         assertFalse(tracker.canPublishChunk(0, 0));
         nested.release();
+        assertFalse(tracker.hasPublicationHold());
         assertTrue(tracker.canPublishChunk(0, 0));
     }
 

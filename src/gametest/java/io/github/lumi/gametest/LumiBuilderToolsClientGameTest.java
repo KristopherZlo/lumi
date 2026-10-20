@@ -128,6 +128,22 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
             if (tick >= 200) throw new AssertionError(tool + " client edit did not reach the server");
             context.waitTick();
         }
+        if (tool.equals("axiom")) server.runOnServer(minecraft -> {
+            var level = minecraft.getPlayerList().getPlayers().getFirst().level();
+            var runtime = LumiMod.serverRuntime().find(level).orElseThrow();
+            var key = io.github.lumi.minecraft.world.MinecraftSectionCapture.key(target.east());
+            var hold = runtime.mutations().holdPublication(List.of(key));
+            try {
+                var poi = level.getChunkSource().getPoiManager();
+                poi.remove(target.east());
+                poi.add(target.east(), net.minecraft.world.entity.ai.village.poi.PoiTypes.forState(Blocks.BARREL.defaultBlockState()).orElseThrow());
+                poi.flush(new net.minecraft.world.level.ChunkPos(target));
+                poi.flushAll();
+                poi.tick(() -> true);
+                if (!((io.github.lumi.mixin.SectionStoragePersistenceAccessor) poi).lumi$dirtyChunks().contains(
+                        new net.minecraft.world.level.ChunkPos(target).toLong())) throw new AssertionError("Replay hold lost dirty POI data");
+            } finally { hold.release(); }
+        });
         operations.awaitDurability(tool + "_edited");
         var editedState = checks.snapshot(tool + "_edited", area);
         var repository = server.computeOnServer(minecraft -> LumiMod.serverRuntime()

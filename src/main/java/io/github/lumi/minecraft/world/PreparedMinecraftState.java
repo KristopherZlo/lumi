@@ -41,10 +41,7 @@ public record PreparedMinecraftState(
         }
     }
 
-    public boolean canApplyBeforeIntent() {
-        // POI is stored independently of terrain and cannot use the terrain publication hold.
-        return sections.values().stream().allMatch(section -> section.hasPreparedDelta() && section.preparedDelta().poiIndexes().length == 0);
-    }
+
 
     Set<ChunkCoordinate> persistencePoiChunks(Set<ChunkCoordinate> alreadyStored) {
         Set<ChunkCoordinate> chunks = new HashSet<>();

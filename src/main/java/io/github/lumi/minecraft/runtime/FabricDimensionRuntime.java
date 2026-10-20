@@ -318,6 +318,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.recoveryLease = recoveryLease;
         worldReader = new MinecraftWorldStateReader(level);
         entityDurability = new EntityChunkDurabilityGate(mutations);
+        ((io.github.lumi.minecraft.world.StoragePublicationGate) level.getChunkSource().getPoiManager())
+                .lumi$bindPublication(() -> !mutations.hasPublicationHold());
         liveBlocks = new MinecraftLiveBlockTracker(
                 liveActions, liveWorld, this::recordCausalZoneGrowth);
         liveEntities = new MinecraftLiveEntityTracker(
@@ -1214,9 +1216,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         new WorldStateApply.State(recoveryPlan.replacementSections(), Map.of()),
                         new WorldStateApply.State(source, Map.of()), ignored -> { }, ignored -> { });
                 var before = worldApply.beginLoaded(nativeAxiom ? worldApply.prepare(new WorldStateApply.State(source, Map.of())) : states.returnPoint());
-                var target = nativeAxiom ? null : (io.github.lumi.minecraft.world.PreparedMinecraftState) states.target();
-                var replay = nativeAxiom ? worldApply.prepareAxiomReplay(plan) : worldApply.beginLoaded(target);
-                boolean early = nativeAxiom ? ((AxiomBufferReplay) replay).canApplyBeforeIntent() : target.canApplyBeforeIntent();
+                var replay = nativeAxiom ? worldApply.prepareAxiomReplay(plan) : worldApply.beginLoaded(states.target());
                 return new LiveReplayOperation(plan, before, replay, publication, background,
                         () -> {
                             requireExpectedRef(expected);
@@ -1234,7 +1234,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                             LumiMod.LOGGER.info("Lumi {} {} completed: {} sections, no hidden Save/Restore",
                                     nativeAxiom ? "native Axiom" : "loaded block", undo ? "Undo" : "Redo", source.size());
                         }, () -> actionHistory.clearNativeReplay(operation),
-                        this::createPortableActionReplay, ignored -> createNativeRecovery(expected), early);
+                        this::createPortableActionReplay, ignored -> createNativeRecovery(expected));
             } catch (IOException failed) { throw new CompletionException(failed); }
         }, background), () -> requireExpectedRef(expected), value -> { value.cancel(); value.close(); }, true);
     }
