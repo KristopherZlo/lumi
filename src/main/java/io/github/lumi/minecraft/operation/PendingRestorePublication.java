@@ -2,6 +2,10 @@ package io.github.lumi.minecraft.operation;
 
 import io.github.lumi.domain.service.PreparedRestore;
 import io.github.lumi.domain.model.HistoryKey;
+import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.SectionBlob;
+import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.minecraft.world.MutationDurabilityTracker;
 import java.util.HashMap;
@@ -38,18 +42,27 @@ public final class PendingRestorePublication implements RestorePublication {
 
     @Override
     public void publish(PreparedRestore restore) throws IOException {
+        publishOrigins(restore.returnSections(), restore.returnEntities());
+    }
+
+    public void publishSections(Map<SectionKey, SectionBlob> before) throws IOException {
+        publishOrigins(before, Map.of());
+    }
+
+    private void publishOrigins(Map<SectionKey, SectionBlob> sections,
+            Map<EntityChunkKey, EntityChunkBlob> entities) throws IOException {
         if (boundary != null) {
             throw new IllegalStateException("Pending Restore was already published");
         }
         Map<HistoryKey, Long> generations = new HashMap<>();
         try {
-            for (var key : restore.sections().keySet()) {
-                var before = restore.returnSections().get(key);
+            for (var key : sections.keySet()) {
+                var before = sections.get(key);
                 generations.put(key,
                         mutations.registerSectionMutation(key, () -> before));
             }
-            for (var key : restore.entities().keySet()) {
-                var before = restore.returnEntities().get(key);
+            for (var key : entities.keySet()) {
+                var before = entities.get(key);
                 generations.put(key,
                         mutations.registerEntityMutation(key, () -> before));
             }

@@ -15,6 +15,10 @@ import io.github.lumi.minecraft.operation.CheckpointActionOperation;
 import io.github.lumi.minecraft.operation.PendingRestorePublication;
 import io.github.lumi.minecraft.operation.ActionReplayPublication;
 import io.github.lumi.domain.service.ActionReplayPreparation;
+import io.github.lumi.domain.service.NativeActionRecovery;
+import io.github.lumi.minecraft.operation.AxiomReplayOperation;
+import io.github.lumi.minecraft.world.AxiomBufferReplay;
+import io.github.lumi.minecraft.world.WorldStateApply;
 import io.github.lumi.domain.service.WorldActionHistory;
 import io.github.lumi.storage.repository.WorldActionHistoryRepository;
 import io.github.lumi.minecraft.operation.PendingStatisticsOperation;
@@ -403,6 +407,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var actionVersion = new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version());
         var actionRepository = new WorldActionHistoryRepository(repository, actionVersion);
         var recoveringHistory = new WorldActionHistory(actionRepository, actionVersion);
+        var selectedBranch = refs.read(active.read().orElseThrow().name()).orElseThrow();
+        interrupted = new NativeActionRecovery(recoveringHistory,
+                new ActionReplayPreparation(objects, commits, origins, actionVersion), journals)
+                .open(selectedBranch, workspaceService.active().id());
         if (interrupted.isPresent()
                 && new PublishedApplyRecovery(
                         refs, active, activeWorkspaces, working, journals)
@@ -1189,7 +1197,54 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 }, this::publishLiveAction, this::createActionReplay);
     }
 
-    private DimensionMutation createActionReplay(
+    private DimensionMutation createActionReplay(LiveActionJournal.Plan plan) throws IOException {
+        if (axiomBarrier == null || !AxiomBufferReplay.supports(plan, level)) {
+            return createPortableActionReplay(plan);
+        }
+        var expected = activeRef();
+        UUID operation = UUID.randomUUID();
+        boolean undo = plan.direction() == LiveActionJournal.Direction.UNDO;
+        var source = plan.expectedSections();
+        var publication = new PendingRestorePublication(mutations);
+        return new BackgroundPreparedMutation<>(CompletableFuture.supplyAsync(() -> {
+            try {
+                var before = worldApply.beginLoadedVerification(worldApply.prepare(new WorldStateApply.State(source, Map.of())));
+                var nativeReplay = worldApply.prepareAxiomReplay(plan);
+                return new AxiomReplayOperation(plan, before, nativeReplay, publication, background,
+                        () -> {
+                            requireExpectedRef(expected);
+                            if (!selectedPlan(plan.player(), plan.direction()).equals(Optional.of(plan)) || !persistActionHistory()) {
+                                throw new IOException("Action changed during native replay preparation");
+                            }
+                            actionHistory.beginNativeReplay(operation, plan);
+                        }, () -> {
+                            publication.publishSections(source);
+                            source.keySet().forEach(mutations::markBuilderMutation);
+                        },
+                        () -> {
+                            actionHistory.publishReplay(operation, new ActionReplayTarget(plan.player(), plan.actionId(), undo), !undo);
+                            LumiMod.LOGGER.info("Lumi native Axiom {} completed: {} sections, no hidden Save/Restore", undo ? "Undo" : "Redo", source.size());
+                        }, () -> actionHistory.clearNativeReplay(operation),
+                        this::createPortableActionReplay, ignored -> createNativeRecovery(expected));
+            } catch (IOException failed) { throw new CompletionException(failed); }
+        }, background), () -> requireExpectedRef(expected), value -> { value.cancel(); value.close(); }, true);
+    }
+
+    private DimensionMutation createNativeRecovery(BranchRef expected) {
+        return new BackgroundPreparedMutation<>(CompletableFuture.supplyAsync(() -> {
+            try {
+                var journal = new NativeActionRecovery(actionHistory, actionReplays, journals)
+                        .open(expected, selectedWorkspaceId).orElseThrow(() -> new IOException("Native replay recovery intent is missing"));
+                var restore = recoveries.prepare(journal, RecoveryChoice.RESUME_TARGET);
+                var step = journal.actionReplay().orElseThrow();
+                var publication = new ActionReplayPublication(new PendingRestorePublication(mutations), actionHistory,
+                        journal.operationId(), step, !step.undo(), ignored -> { });
+                return RestoreOperation.resume(restore, worldApply, publication, journals, journal, restoreStateListener, ignored -> { });
+            } catch (IOException failed) { throw new CompletionException(failed); }
+        }, background), () -> requireExpectedRef(expected), ignored -> { }, true, true);
+    }
+
+    private DimensionMutation createPortableActionReplay(
             LiveActionJournal.Plan plan) throws IOException {
         WorldActionCheckpoint checkpoint = plan.checkpoint().orElse(null);
         BranchRef expected = activeRef();
@@ -1438,6 +1493,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     private void publishLiveAction(LiveActionJournal.Plan plan) {
+        plan.sections().keySet().forEach(blockEntityBaselines::discard);
+        try { liveBlocks.rebaseSections(plan.sections().keySet()); }
+        catch (IOException failed) { throw new java.io.UncheckedIOException(failed); }
         Map<SectionKey, Long> generations = new HashMap<>();
         plan.expected().keySet().forEach(position -> {
             SectionKey section = new SectionKey(

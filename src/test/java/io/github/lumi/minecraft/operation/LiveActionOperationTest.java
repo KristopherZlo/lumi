@@ -51,6 +51,71 @@ class LiveActionOperationTest {
         }
     }
 
+    @Test void nativeExecutorWaitsForDurabilityAndKeepsOneCursorOnFailure() throws Exception {
+        for (int scenario = 0; scenario < 5; scenario++) {
+            int mode = scenario; // conflict, success, unsafe failure, refused intent, recovered failure
+            var journal = action(block("stone"), block("gold_block"));
+            var world = new FakeWorld(block("gold_block"));
+            var events = new ArrayList<String>();
+            var durable = new java.util.concurrent.atomic.AtomicBoolean();
+            var origins = new RestorePublication() {
+                @Override public void publish(io.github.lumi.domain.service.PreparedRestore restore) { }
+                @Override public boolean awaitDurable(long deadline) { return durable.get(); }
+            };
+            var source = new ReplaySession(events, "source", mode == 0);
+            var nativeReplay = new ReplaySession(events, "native", mode == 2 || mode == 4);
+            var operation = new LiveActionOperation(journal, PLAYER, LiveActionJournal.Direction.UNDO,
+                    world, LiveEntityWorldAccess.UNSUPPORTED, ignored -> false, ignored -> events.add("complete"),
+                    plan -> new AxiomReplayOperation(plan, source, nativeReplay, origins, Runnable::run,
+                            () -> { events.add("intent"); if (mode == 3) throw new IOException("intent failure"); },
+                            () -> events.add("origins"), () -> events.add("cursor"), () -> events.add("discard"),
+                            ignored -> { events.add("portable"); return new NoChangeMutation("portable test"); },
+                            ignored -> {
+                                events.add("recovery");
+                                if (mode == 4) return new NoChangeMutation("recovered test");
+                                throw new IOException("recovery unavailable");
+                            }));
+            operation.advance(Long.MAX_VALUE);
+            if (mode == 1) {
+                assertTrue(!operation.isTerminal());
+                assertTrue(journal.prepareRedo(PLAYER).isEmpty());
+                assertTrue(!events.contains("cursor"));
+                assertTrue(!events.contains("native.persist"));
+            }
+            durable.set(true);
+            for (int tick = 0; tick < 8 && !operation.isTerminal(); tick++) operation.advance(Long.MAX_VALUE);
+            var expected = mode < 2 || mode == 4 ? MutationTerminalState.SUCCEEDED
+                    : mode == 2 ? MutationTerminalState.DEGRADED : MutationTerminalState.FAILED;
+            assertEquals(expected, operation.terminalState());
+            assertEquals(mode < 2 || mode == 4, journal.prepareRedo(PLAYER).isPresent());
+            assertEquals(mode == 0, events.contains("portable"));
+            assertEquals(mode == 1, events.contains("cursor"));
+            assertEquals(mode == 2 || mode == 4, events.contains("recovery"));
+            assertEquals(mode == 3, events.contains("discard"));
+            assertEquals(mode == 1 || mode == 2 || mode == 4, events.contains("native.apply"));
+            assertEquals(0, world.writes);
+            operation.close();
+        }
+    }
+
+    private static final class ReplaySession implements io.github.lumi.minecraft.world.WorldStateApply.ApplySession {
+        private final java.util.List<String> events;
+        private final String name;
+        private final boolean mismatch;
+        private ReplaySession(java.util.List<String> events, String name, boolean mismatch) {
+            this.events = events; this.name = name; this.mismatch = mismatch;
+        }
+        @Override public boolean applyUntil(long deadline) { events.add(name + ".apply"); return true; }
+        @Override public io.github.lumi.minecraft.world.WorldStateApply.Verification verifyUntil(long deadline) {
+            events.add(name + ".verify");
+            return mismatch ? io.github.lumi.minecraft.world.WorldStateApply.Verification.MISMATCH
+                    : io.github.lumi.minecraft.world.WorldStateApply.Verification.VERIFIED;
+        }
+        @Override public boolean persistUntil(long deadline) { events.add(name + ".persist"); return true; }
+        @Override public boolean repairUntil(long deadline) { throw new AssertionError("Native executor cannot repair outside recovery"); }
+        @Override public void restartVerification() { }
+    }
+
     private static final UUID PLAYER = new UUID(0, 7);
     private static final UUID ENTITY = new UUID(0, 8);
     private static final BlockPosition POSITION = new BlockPosition(1, 2, 3);
