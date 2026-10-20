@@ -143,6 +143,7 @@ public record HistoryCommandPayload(
                 throw new IllegalArgumentException("Invalid Axiom history setting");
             io.github.lumi.domain.model.AxiomHistoryMode.valueOf(setting[1]);
         }
+        if (kind == Kind.AXIOM_UNDO || kind == Kind.AXIOM_REDO) UUID.fromString(argument);
         if ((kind == Kind.BRANCH_SWITCH || kind == Kind.BRANCH_CREATE
                 || kind == Kind.BRANCH_DELETE)
                 && argument.isBlank()) {
@@ -182,7 +183,7 @@ public record HistoryCommandPayload(
         ZONE_AMEND(37), RESTORE_AREA_PLAN(38), RESTORE_AREA_APPLY(39),
         ZONE_CELLS(40), ZONE_DELETE(41), ZONE_OVERLAY(42),
         SURVIVAL_STATUS(43), SURVIVAL_SETTINGS(44), RESTORE_PREWARM(45), ZONE_PENDING_PREVIEW(46), WORLD_ACTIONS_CLEAR(47),
-        AXIOM_HISTORY_SETTINGS(48);
+        AXIOM_HISTORY_SETTINGS(48), AXIOM_UNDO(49), AXIOM_REDO(50);
         private final int code;
         Kind(int code) { this.code = code; }
         private static Kind fromCode(int code) {

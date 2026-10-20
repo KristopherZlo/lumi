@@ -14,11 +14,13 @@ public record WorldActionView(long revision, List<Entry> undo, List<Entry> redo)
     }
 
     /** Undo is oldest first; Redo is next-to-apply first. */
-    public record Entry(UUID action, Kind kind, Optional<BlockPosition> origin) {
+    public record Entry(UUID action, Kind kind, Optional<BlockPosition> origin, List<UUID> axiomEntries) {
+        public Entry(UUID action, Kind kind, Optional<BlockPosition> origin) { this(action, kind, origin, List.of()); }
         public Entry {
             Objects.requireNonNull(action);
             Objects.requireNonNull(kind);
             Objects.requireNonNull(origin);
+            axiomEntries = List.copyOf(axiomEntries);
         }
     }
 

@@ -426,6 +426,17 @@ public final class LiveActionJournal {
         if (action.axiomEntry == null) { action.axiomEntry = entry; revision++; }
     }
 
+    /** Native controls select their explicit entry, never an inferred last edit. */
+    public synchronized Optional<Plan> prepareAxiom(UUID player, UUID entry, Direction direction) {
+        Objects.requireNonNull(entry, "entry");
+        Objects.requireNonNull(direction, "direction");
+        var retained = playerStacks.get(Objects.requireNonNull(player, "player"));
+        if (retained == null) return Optional.empty();
+        var cursor = direction == Direction.UNDO ? retained.undo : retained.redo;
+        return cursor.stream().filter(id -> entry.equals(requireAction(id).axiomEntry))
+                .reduce((older, newer) -> newer).flatMap(id -> prepareSelected(player, id, direction));
+    }
+
     /** Selects one retained group; ordinary overlap and eviction checks still apply. */
     public synchronized Optional<Plan> prepareSelected(UUID player, UUID actionId, Direction direction) {
         Objects.requireNonNull(direction, "direction");
@@ -529,7 +540,12 @@ public final class LiveActionJournal {
 
     private List<WorldActionView.Entry> view(Deque<UUID> cursor, boolean reverse) {
         var groups = new LinkedHashMap<UUID, MutableAction>();
-        cursor.forEach(id -> { var action = requireAction(id); groups.put(action.groupId, action); });
+        var links = new HashMap<UUID, Set<UUID>>();
+        cursor.forEach(id -> {
+            var action = requireAction(id);
+            groups.put(action.groupId, action);
+            if (action.axiomEntry != null) links.computeIfAbsent(action.groupId, ignored -> new LinkedHashSet<>()).add(action.axiomEntry);
+        });
         var values = new java.util.ArrayList<>(groups.values());
         if (reverse) Collections.reverse(values);
         return values.stream().map(action -> {
@@ -547,7 +563,7 @@ public final class LiveActionJournal {
                 var keys = action.checkpoint == null ? action.sections.keySet() : action.checkpoint.scope().sections();
                 origin = keys.stream().findFirst().map(key -> new BlockPosition(key.chunkX() << 4, key.sectionY() << 4, key.chunkZ() << 4));
             }
-            return new WorldActionView.Entry(action.id, kind, origin);
+            return new WorldActionView.Entry(action.id, kind, origin, List.copyOf(links.getOrDefault(action.groupId, Set.of())));
         }).toList();
     }
 

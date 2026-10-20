@@ -1139,6 +1139,19 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return operation;
     }
 
+    public synchronized DimensionMutation startAxiomAction(UUID player, UUID entry, LiveActionJournal.Direction direction,
+            Consumer<DimensionMutation> terminalObserver) {
+        try { requireActionIdle(); }
+        catch (IOException failed) { throw new java.io.UncheckedIOException(failed); }
+        var operation = new DeferredDimensionMutation(true, () -> {
+            var selected = liveActions.prepareAxiom(player, entry, direction)
+                    .orElseThrow(() -> new IllegalStateException("lumi.axiom.entry_unavailable"));
+            return createSessionAction(player, direction, Optional.of(selected.actionId()));
+        });
+        operations.enqueue(operation, OperationPriority.URGENT, terminalObserver);
+        return operation;
+    }
+
     public synchronized DimensionMutation startClearWorldActions(UUID player, Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireActionIdle();
         var operation = new DeferredDimensionMutation(true, () -> {
@@ -1165,8 +1178,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private DimensionMutation createSessionAction(
             UUID player,
             LiveActionJournal.Direction direction) throws IOException {
+        return createSessionAction(player, direction, Optional.empty());
+    }
+
+    private DimensionMutation createSessionAction(UUID player, LiveActionJournal.Direction direction, Optional<UUID> action) throws IOException {
         Optional<LiveActionJournal.Plan> selected =
-                direction == LiveActionJournal.Direction.UNDO
+                action.isPresent() ? liveActions.prepareSelected(player, action.orElseThrow(), direction) : direction == LiveActionJournal.Direction.UNDO
                         ? liveActions.prepareUndo(player)
                         : liveActions.prepareRedo(player);
         if (selected.flatMap(LiveActionJournal.Plan::checkpoint).isPresent()) {
@@ -1196,7 +1213,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     public boolean mayChangeBlocks(UUID action) {
                         return causalTicks.cancellationMayChangeBlocks(action);
                     }
-                }, this::publishLiveAction, this::createActionReplay);
+                }, this::publishLiveAction, this::createActionReplay, action);
     }
 
     private DimensionMutation createActionReplay(LiveActionJournal.Plan plan) throws IOException {
@@ -1220,17 +1237,17 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 return new LiveReplayOperation(plan, before, replay, publication, background,
                         () -> {
                             requireExpectedRef(expected);
-                            if (!selectedPlan(plan.player(), plan.direction()).equals(Optional.of(plan)) || !persistActionHistory()) {
+                            if (!liveActions.prepareSelected(plan.player(), plan.actionId(), plan.direction()).equals(Optional.of(plan)) || !persistActionHistory()) {
                                 throw new IOException("Action changed during native replay preparation");
                             }
-                            actionHistory.beginNativeReplay(operation, plan, recoveryPlan);
+                            actionHistory.beginNativeReplay(operation, plan, recoveryPlan, true);
                         }, () -> {
                             publicationHold.set(mutations.holdPublication(source.keySet()));
                             publication.publishSections(source);
                         },
                         () -> { var hold = publicationHold.getAndSet(null); if (hold != null) hold.release(); },
                         () -> {
-                            actionHistory.publishReplay(operation, new ActionReplayTarget(plan.player(), plan.actionId(), undo), !undo);
+                            actionHistory.publishReplay(operation, new ActionReplayTarget(plan.player(), plan.actionId(), undo, true), !undo);
                             LumiMod.LOGGER.info("Lumi {} {} completed: {} sections, no hidden Save/Restore",
                                     nativeAxiom ? "native Axiom" : "loaded block", undo ? "Undo" : "Redo", source.size());
                         }, () -> actionHistory.clearNativeReplay(operation),
@@ -1272,15 +1289,15 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             return new BackgroundPreparedMutation<>(CompletableFuture.supplyAsync(() -> {
                 try {
                     requireExpectedRef(expected);
-                    if (!selectedPlan(plan.player(), plan.direction()).equals(Optional.of(plan)) || !persistActionHistory()) {
+                    if (!liveActions.prepareSelected(plan.player(), plan.actionId(), plan.direction()).equals(Optional.of(plan)) || !persistActionHistory()) {
                         throw new IOException("Action changed during durable capture");
                     }
                     var replay = actionReplays.prepareSections(expected, sections, spawns, plan, author);
                     return RestoreOperation.startCheckpointAction(replay.restore(), worldApply,
                             new ActionReplayPublication(new PendingRestorePublication(mutations), actionHistory,
-                                    operationId, new ActionReplayTarget(plan.player(), plan.actionId(), undo), !undo, ignored -> { }),
+                                    operationId, new ActionReplayTarget(plan.player(), plan.actionId(), undo, true), !undo, ignored -> { }),
                             journals, operationId, restoreStateListener, OperationKind.ACTION_REPLAY,
-                            replay.returnPoint(), Optional.of(new ActionReplayTarget(plan.player(), plan.actionId(), undo)), ignored -> { });
+                            replay.returnPoint(), Optional.of(new ActionReplayTarget(plan.player(), plan.actionId(), undo, true)), ignored -> { });
                 } catch (IOException failed) { throw new CompletionException(failed); }
             }, background), () -> requireExpectedRef(expected), RestoreOperation::cancelBeforeApply, true);
         }
@@ -1293,7 +1310,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 CompletableFuture.supplyAsync(() -> {
                     try {
                         requireExpectedRef(expected);
-                        if (!selectedPlan(plan.player(), plan.direction()).equals(Optional.of(plan))) {
+                        if (!liveActions.prepareSelected(plan.player(), plan.actionId(), plan.direction()).equals(Optional.of(plan))) {
                             throw new IOException("Checkpoint action changed during preparation");
                         }
                         if (!persistActionHistory()) throw new IOException("Action changed during durable capture");
@@ -1329,10 +1346,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                                 value -> publishRestoreDiffProgress(progress, value));
                         return RestoreOperation.startCheckpointAction(
                                 prepared, worldApply, new ActionReplayPublication(world,
-                                        actionHistory, operationId, new ActionReplayTarget(plan.player(), plan.actionId(), undo), !undo, ignored -> { }),
+                                        actionHistory, operationId, new ActionReplayTarget(plan.player(), plan.actionId(), undo, true), !undo, ignored -> { }),
                                 journals, operationId, restoreStateListener,
                                 OperationKind.ACTION_REPLAY, replaySource,
-                                Optional.of(new ActionReplayTarget(plan.player(), plan.actionId(), undo)), progress);
+                                Optional.of(new ActionReplayTarget(plan.player(), plan.actionId(), undo, true)), progress);
                     } catch (IOException failed) {
                         throw new CompletionException(failed);
                     }

@@ -30,6 +30,7 @@ public final class LiveActionOperation implements DimensionMutation {
     private final PendingCancellation cancelPending;
     private final Consumer<LiveActionJournal.Plan> publication;
     private ReplayFactory replay;
+    private UUID selectedAction;
     private DimensionMutation replayOperation;
     private final List<WorldChange<?>> mismatches = new ArrayList<>();
     private List<WorldChange<?>> changes = List.of();
@@ -96,6 +97,13 @@ public final class LiveActionOperation implements DimensionMutation {
             Consumer<LiveActionJournal.Plan> publication, ReplayFactory replay) {
         this(journal, player, direction, world, entities, cancelPending, publication);
         this.replay = Objects.requireNonNull(replay, "replay");
+    }
+
+    public LiveActionOperation(LiveActionJournal journal, UUID player, LiveActionJournal.Direction direction,
+            LiveBlockWorldAccess world, LiveEntityWorldAccess entities, PendingCancellation cancelPending,
+            Consumer<LiveActionJournal.Plan> publication, ReplayFactory replay, Optional<UUID> action) {
+        this(journal, player, direction, world, entities, cancelPending, publication, replay);
+        selectedAction = Objects.requireNonNull(action, "action").orElse(null);
     }
 
     LiveActionOperation(
@@ -271,6 +279,7 @@ public final class LiveActionOperation implements DimensionMutation {
     }
 
     private Optional<LiveActionJournal.Plan> selectPlan() {
+        if (selectedAction != null) return journal.prepareSelected(player, selectedAction, direction);
         return direction == LiveActionJournal.Direction.UNDO
                 ? journal.prepareUndo(player) : journal.prepareRedo(player);
     }
@@ -408,7 +417,7 @@ public final class LiveActionOperation implements DimensionMutation {
 
     private void finishAction() {
         publication.accept(plan);
-        journal.complete(plan);
+        if (selectedAction == null) journal.complete(plan); else journal.completeSelected(plan);
         releaseRetainedActions();
         phase = Phase.SUCCEEDED;
     }

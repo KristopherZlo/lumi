@@ -797,6 +797,12 @@ public final class LumiServerNetworking {
                     player.getUUID(), LiveActionJournal.Direction.UNDO, terminal);
             case REDO -> runtime.startLiveAction(
                     player.getUUID(), LiveActionJournal.Direction.REDO, terminal);
+            case AXIOM_UNDO, AXIOM_REDO -> {
+                if (LumiMod.serverRuntime().axiomSettings(player).effective() != io.github.lumi.domain.model.AxiomHistoryMode.NATIVE_AXIOM)
+                    throw new IllegalStateException("lumi.axiom.mode_changed");
+                yield runtime.startAxiomAction(player.getUUID(), UUID.fromString(payload.argument()),
+                        payload.kind() == HistoryCommandPayload.Kind.AXIOM_UNDO ? LiveActionJournal.Direction.UNDO : LiveActionJournal.Direction.REDO, terminal);
+            }
             case WORLD_ACTIONS_CLEAR -> runtime.startClearWorldActions(player.getUUID(), terminal);
             case BRANCH_SWITCH -> runtime.startBranchSwitch(
                     expected, new BranchName(payload.argument()), player.getUUID(), terminal);

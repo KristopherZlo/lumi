@@ -269,6 +269,13 @@ public final class LumiClientNetworking {
         return send(HistoryCommandPayload.Kind.AXIOM_HISTORY_SETTINGS, settings.revision() + ":" + mode.name());
     }
 
+    public UUID replayAxiomEntry(UUID entry, boolean undo) {
+        if (history.worldActionRequest().isPresent()) return history.worldActionRequest().orElseThrow();
+        UUID request = send(undo ? HistoryCommandPayload.Kind.AXIOM_UNDO : HistoryCommandPayload.Kind.AXIOM_REDO, entry.toString());
+        history.beginWorldAction(request);
+        return request;
+    }
+
     public Optional<WorldActionViewPayload> worldActions() { return history.worldActions(); }
     public boolean worldActionPending() { return history.worldActionRequest().isPresent(); }
 

@@ -40,7 +40,11 @@ class LiveActionJournalTest {
         UUID newer = journal.begin(PLAYER_A);
         journal.record(newer, second, block("air"), block("stone"));
         journal.close(newer);
-        var undo = journal.prepareSelected(PLAYER_A, older, LiveActionJournal.Direction.UNDO).orElseThrow();
+        var beforeForeignSelection = journal.snapshotIndex();
+        assertTrue(journal.prepareAxiom(PLAYER_B, nativeEntry, LiveActionJournal.Direction.UNDO).isEmpty());
+        assertEquals(beforeForeignSelection, journal.snapshotIndex());
+        assertEquals(List.of(nativeEntry), journal.view(PLAYER_A).undo().getFirst().axiomEntries());
+        var undo = journal.prepareAxiom(PLAYER_A, nativeEntry, LiveActionJournal.Direction.UNDO).orElseThrow();
         var step = new io.github.lumi.domain.model.ActionReplayTarget(PLAYER_A, older, true, true);
         var repository = new WorldActionHistoryRepository(root);
         var version = new io.github.lumi.domain.model.WorldDataVersion(5000);
