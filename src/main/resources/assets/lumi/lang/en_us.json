@@ -1,5 +1,7 @@
 {
   "lumi.axiom.mode": "Axiom Undo/Redo",
+  "lumi.axiom.entry_unavailable": "This Axiom action is still synchronizing or is no longer available. Lumi history is retained.",
+  "lumi.axiom.mode_changed": "The Axiom history mode has changed. Reconnect before using its history.",
   "lumi.axiom.mode.native_axiom": "Native history",
   "lumi.axiom.mode.shared": "Shared with Lumi",
   "lumi.axiom.mode_help.native_axiom": "Axiom shortcuts undo Axiom edits. Lumi shortcuts undo all supported edits. An edit already undone is not applied twice.",

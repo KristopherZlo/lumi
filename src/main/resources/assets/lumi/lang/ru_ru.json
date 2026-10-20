@@ -1,5 +1,7 @@
 {
   "lumi.axiom.mode": "Отмена Axiom",
+  "lumi.axiom.entry_unavailable": "Это действие Axiom ещё синхронизируется или больше недоступно. История Lumi сохранена.",
+  "lumi.axiom.mode_changed": "Режим истории Axiom изменился. Переподключитесь перед её использованием.",
   "lumi.axiom.mode.native_axiom": "Родная история",
   "lumi.axiom.mode.shared": "Общая с Lumi",
   "lumi.axiom.mode_help.native_axiom": "Кнопки Axiom отменяют его действия. Кнопки Lumi отменяют все поддерживаемые изменения. Уже отменённое действие не применяется повторно.",

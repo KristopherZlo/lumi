@@ -141,10 +141,12 @@ final class LumiAxiomNativeHistoryScenario {
     private void extras(ClientGameTestContext context, TestSingleplayerContext world, LumiBehaviorReport report,
             LumiBehaviorOperations operations) throws IOException {
         java.util.UUID id = java.util.UUID.randomUUID();
+        var nativeEntry = new java.util.concurrent.atomic.AtomicReference<java.util.UUID>();
         var callbackIds = new java.util.ArrayList<>(List.of(id));
         world.getServer().runOnServer(server -> LumiAxiomGameTests.activateAxiom(server.getPlayerList().getPlayers().getFirst()));
         context.runOnClient(client -> {
             try (var ignored = io.github.lumi.client.integration.AxiomHistoryCaptureScope.open()) {
+                nativeEntry.set(io.github.lumi.client.integration.AxiomHistoryCaptureScope.current().identity().entry());
                 Dispatcher.push(new HistoryEntry<>(new BlockBuffer(),
                         new BlockBuffer(), origin, "Native entity fixture", 0,
                         HistoryEntry.MODIFIER_CAN_BE_UNDONE_INGAME,
@@ -157,6 +159,8 @@ final class LumiAxiomNativeHistoryScenario {
             }
         });
         awaitServer(context, () -> world.getServer().computeOnServer(server -> server.getPlayerList().getPlayers().getFirst().level().getEntity(id) != null));
+        context.waitFor(client -> LumiClient.networking().worldActions().orElseThrow().view().undo().stream()
+                .anyMatch(group -> group.axiomEntries().contains(nativeEntry.get())));
         operations.nativeHistoryStep("native_entity_undo", true);
         if (world.getServer().computeOnServer(server -> server.getPlayerList().getPlayers().getFirst().level().getEntity(id) != null))
             throw new AssertionError("Native entity Undo left the entity behind");
@@ -169,15 +173,20 @@ final class LumiAxiomNativeHistoryScenario {
                 .getNoiseBiome(origin.getX() >> 2, origin.getY() >> 2, origin.getZ() >> 2).unwrapKey().orElseThrow());
         var biome = before.equals(net.minecraft.world.level.biome.Biomes.DESERT)
                 ? net.minecraft.world.level.biome.Biomes.PLAINS : net.minecraft.world.level.biome.Biomes.DESERT;
-        context.runOnClient(client -> {
+        java.util.UUID biomeEntry = context.computeOnClient(client -> {
+          try (var ignored = io.github.lumi.client.integration.AxiomHistoryCaptureScope.open()) {
             var forwards = new com.moulberry.axiom.world_modification.BiomeBuffer();
             var backwards = new com.moulberry.axiom.world_modification.BiomeBuffer();
             forwards.set(origin.getX() >> 2, origin.getY() >> 2, origin.getZ() >> 2, biome);
             backwards.set(origin.getX() >> 2, origin.getY() >> 2, origin.getZ() >> 2, before);
             Dispatcher.push(new HistoryEntry<>(forwards, backwards, origin, "Native biome fixture", HistoryEntry.MODIFIER_CAN_BE_UNDONE_INGAME));
+            return io.github.lumi.client.integration.AxiomHistoryCaptureScope.current().identity().entry();
+          }
         });
         awaitServer(context, () -> world.getServer().computeOnServer(server -> server.getPlayerList().getPlayers().getFirst().level()
                 .getNoiseBiome(origin.getX() >> 2, origin.getY() >> 2, origin.getZ() >> 2).is(biome)));
+        context.waitFor(client -> LumiClient.networking().worldActions().orElseThrow().view().undo().stream()
+                .anyMatch(group -> group.axiomEntries().contains(biomeEntry)));
         operations.nativeHistoryStep("native_biome_undo", true);
         if (!world.getServer().computeOnServer(server -> server.getPlayerList().getPlayers().getFirst().level()
                 .getNoiseBiome(origin.getX() >> 2, origin.getY() >> 2, origin.getZ() >> 2).is(before)))

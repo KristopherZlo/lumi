@@ -118,6 +118,7 @@ tasks.named('runClientGameTest') {
         name.toString().startsWith('lumi.benchmark.')
                 || name == 'lumi.gametest.operationTimeoutTicks'
                 || name == 'lumi.gametest.firstMinuteOnly'
+                || name == 'lumi.gametest.nativeHistoryProbe'
                 || name == 'lumi.gametest.suite'
                 || name.toString().startsWith('lumi.gametest.restoreCrash')
                 || name.toString().startsWith('lumi.gametest.upgrade.')
