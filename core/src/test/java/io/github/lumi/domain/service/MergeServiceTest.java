@@ -37,6 +37,55 @@ import org.junit.jupiter.api.io.TempDir;
 
 class MergeServiceTest {
     @Test
+    void actionEntityCaptureUsesRestoreIdentityClosureBeforeProjection() throws Exception {
+        var objects = new WorldObjectRepository(repositoryRoot);
+        var commits = new CommitRepository(repositoryRoot);
+        var origins = new OriginStore(repositoryRoot);
+        var current = new io.github.lumi.domain.model.EntityChunkKey(-1, 0);
+        var old = new io.github.lumi.domain.model.EntityChunkKey(1, 0);
+        var neighborChunk = new io.github.lumi.domain.model.EntityChunkKey(2, 0);
+        var unrelated = new io.github.lumi.domain.model.EntityChunkKey(1000, 0);
+        UUID id = UUID.randomUUID();
+        UUID neighbor = UUID.randomUUID();
+        var before = entity(id, 1);
+        var after = entity(id, 2);
+        origins.register(old, objects.write(new EntityChunkBlob(List.of(before, entity(neighbor, 1)))));
+        origins.register(neighborChunk, objects.write(new EntityChunkBlob(List.of(entity(neighbor, 2)))));
+        origins.register(unrelated, objects.write(new EntityChunkBlob(List.of(entity(UUID.randomUUID(), 1)))));
+        var editor = new MerkleTreeEditor(objects);
+        var head = commits.write(commit(editor.update(Optional.empty(), Map.of(
+                current, objects.write(new EntityChunkBlob(List.of(after))))), List.of(), new UUID(0, 2)));
+        var service = new ActionReplayPreparation(objects, commits, origins, io.github.lumi.domain.model.WorldDataVersion.LEGACY_12111);
+        var scope = service.entityCaptureScope(head, java.util.Set.of(current), java.util.Set.of(id));
+        assertEquals(java.util.Set.of(current, old, neighborChunk), scope.keySet());
+        assertEquals(java.util.Set.of(id, neighbor), scope.get(old));
+        var journal = new LiveActionJournal();
+        var action = journal.begin(author().id());
+        journal.recordEntity(action, id, Optional.of(before), Optional.of(after));
+        journal.close(action);
+        var plan = journal.prepareUndo(author().id()).orElseThrow();
+        assertEquals(java.util.Set.of(current, old), ActionReplayPreparation.captureKeys(plan, Map.of(before, old, after, current)));
+        var empty = objects.write(new EntityChunkBlob(List.of()));
+        var preserved = new EntityChunkBlob(List.of(entity(neighbor, 3)));
+        var captured = commits.write(commit(editor.update(Optional.of(commits.read(head).tree()), Map.of(
+                old, empty, neighborChunk, objects.write(preserved))), List.of(head), new UUID(0, 2)));
+        var target = service.prepare(captured, plan, Map.of(before, old), author());
+        var active = new BranchRef(new BranchName("main"), head, 0);
+        var operation = new io.github.lumi.domain.model.OperationJournal(UUID.randomUUID(),
+                io.github.lumi.domain.model.OperationKind.ACTION_REPLAY, io.github.lumi.domain.model.OperationPhase.APPLYING,
+                new io.github.lumi.domain.model.OperationTarget(active.name(), head, 0, Optional.of(target), Optional.of(captured)));
+        var recovery = new RecoveryService(new RestoreService(objects, commits, origins));
+        for (var choice : RecoveryChoice.values()) {
+            try (var recovered = recovery.prepare(operation, choice)) {
+                var values = recovered.entities().values().stream().flatMap(blob -> blob.entities().stream()).toList();
+                assertEquals(List.of(choice == RecoveryChoice.RESUME_TARGET ? before : after), values);
+            }
+        }
+        var targetLeaves = new io.github.lumi.storage.repository.WorldObjectGraph(objects).scan(commits.read(target).tree()).leaves();
+        assertEquals(preserved, objects.readEntities(targetLeaves.get(neighborChunk)));
+    }
+
+    @Test
     void projectedSectionReplayPreservesDisjointNbtAcrossNineSections() throws Exception {
         var objects = new WorldObjectRepository(repositoryRoot);
         var service = new ActionReplayPreparation(objects, new CommitRepository(repositoryRoot), new OriginStore(repositoryRoot),

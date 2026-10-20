@@ -107,6 +107,27 @@ public final class ActionReplayPreparation {
         return keys;
     }
 
+    /** Seeds a frozen capture with owned sections and all recorded entity endpoints. */
+    public static java.util.Set<HistoryKey> captureKeys(LiveActionJournal.Plan plan, Map<EntityState, EntityChunkKey> locations) throws IOException {
+        var keys = new java.util.HashSet<HistoryKey>(sectionKeys(plan));
+        plan.biomes().keySet().forEach(position -> keys.add(position.section()));
+        for (var state : java.util.stream.Stream.concat(plan.expectedEntities().values().stream(), plan.replacementEntities().values().stream())
+                .flatMap(Optional::stream).toList()) {
+            var key = locations.get(state);
+            if (key == null) throw new IOException("Missing prepared action entity location: " + state.id());
+            keys.add(key);
+        }
+        return java.util.Set.copyOf(keys);
+    }
+
+    /** Metadata discovery uses the same identity closure as Restore, before live capture expands. */
+    public Map<EntityChunkKey, java.util.Set<UUID>> entityCaptureScope(CommitId before,
+            java.util.Set<EntityChunkKey> keys, java.util.Set<UUID> identities) throws IOException {
+        try (var reader = objects.beginReadSession()) {
+            return new EntityRestorePlanner(objects, reader, commits, origins).captureScope(before, keys, identities);
+        }
+    }
+
     private static Map<SectionKey, List<BlockPosition>> blockPositions(LiveActionJournal.Plan plan) {
         var positions = new HashMap<SectionKey, List<BlockPosition>>();
         plan.expected().keySet().forEach(position -> positions.computeIfAbsent(new SectionKey(Math.floorDiv(position.x(), 16),

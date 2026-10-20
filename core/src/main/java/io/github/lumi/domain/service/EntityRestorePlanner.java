@@ -56,6 +56,39 @@ final class EntityRestorePlanner {
         Snapshot targetState = snapshot(target);
         Set<EntityChunkKey> keys = new HashSet<>(changed);
         Set<UUID> identities = new HashSet<>();
+        expand(beforeState, targetState, keys, identities);
+
+        Map<UUID, Placement> beforeSelection = select(before, identities);
+        Map<UUID, Placement> targetSelection = select(target, identities);
+        Map<EntityChunkKey, EntityChunkBlob> beforeChunks = new HashMap<>();
+        Map<EntityChunkKey, EntityChunkBlob> targetChunks = new HashMap<>();
+        for (EntityChunkKey key : keys) {
+            EntityChunkBlob storedBefore = requireChunk(beforeState, key, before);
+            EntityChunkBlob beforeChunk =
+                    canonical(storedBefore, key, identities, beforeSelection);
+            EntityChunkBlob targetChunk = canonical(
+                    requireChunk(targetState, key, target), key, identities, targetSelection);
+            if (scope != null && !scope.includes(key)) {
+                throw new IOException("Entity Restore crosses zone boundary at " + key);
+            }
+            beforeChunks.put(key, beforeChunk);
+            targetChunks.put(key, targetChunk);
+        }
+        return new Plan(targetChunks, beforeChunks);
+    }
+
+    Map<EntityChunkKey, Set<UUID>> captureScope(CommitId before, Set<EntityChunkKey> seed, Set<UUID> selected) throws IOException {
+        Snapshot stored = snapshot(before);
+        var keys = new HashSet<>(seed);
+        var identities = new HashSet<>(selected);
+        expand(stored, stored, keys, identities);
+        var result = new HashMap<EntityChunkKey, Set<UUID>>();
+        for (var key : keys) result.put(key, stored.chunks.getOrDefault(key, EMPTY).entities().stream()
+                .map(EntityState::id).collect(java.util.stream.Collectors.toUnmodifiableSet()));
+        return Map.copyOf(result);
+    }
+
+    private static void expand(Snapshot beforeState, Snapshot targetState, Set<EntityChunkKey> keys, Set<UUID> identities) {
         int previousKeyCount;
         int previousIdentityCount;
         do {
@@ -76,23 +109,6 @@ final class EntityRestorePlanner {
         } while (keys.size() != previousKeyCount
                 || identities.size() != previousIdentityCount);
 
-        Map<UUID, Placement> beforeSelection = select(before, identities);
-        Map<UUID, Placement> targetSelection = select(target, identities);
-        Map<EntityChunkKey, EntityChunkBlob> beforeChunks = new HashMap<>();
-        Map<EntityChunkKey, EntityChunkBlob> targetChunks = new HashMap<>();
-        for (EntityChunkKey key : keys) {
-            EntityChunkBlob storedBefore = requireChunk(beforeState, key, before);
-            EntityChunkBlob beforeChunk =
-                    canonical(storedBefore, key, identities, beforeSelection);
-            EntityChunkBlob targetChunk = canonical(
-                    requireChunk(targetState, key, target), key, identities, targetSelection);
-            if (scope != null && !scope.includes(key)) {
-                throw new IOException("Entity Restore crosses zone boundary at " + key);
-            }
-            beforeChunks.put(key, beforeChunk);
-            targetChunks.put(key, targetChunk);
-        }
-        return new Plan(targetChunks, beforeChunks);
     }
 
     Map<UUID, EntityPlacement> locate(CommitId commit, Set<UUID> identities) throws IOException {
