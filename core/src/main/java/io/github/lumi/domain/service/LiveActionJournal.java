@@ -1022,18 +1022,18 @@ public final class LiveActionJournal {
         return actions.values().stream()
                 .filter(action -> action.player.equals(player) && action.closed
                         && action.available
-                        && !action.groupId.equals(excludedGroup))
-                .min(java.util.Comparator.comparingLong(action -> action.sequence))
-                .filter(action -> !activeGroups.contains(action.groupId));
+                        && !action.groupId.equals(excludedGroup)
+                        && !activeGroups.contains(action.groupId))
+                .min(java.util.Comparator.comparingLong(action -> action.sequence));
     }
 
     private Optional<MutableAction> oldestClosed(UUID excludedGroup) {
         Set<UUID> activeGroups = activeGroups();
         return actions.values().stream()
                 .filter(action -> action.closed && action.available
-                        && !action.groupId.equals(excludedGroup))
-                .min(java.util.Comparator.comparingLong(action -> action.sequence))
-                .filter(action -> !activeGroups.contains(action.groupId));
+                        && !action.groupId.equals(excludedGroup)
+                        && !activeGroups.contains(action.groupId))
+                .min(java.util.Comparator.comparingLong(action -> action.sequence));
     }
 
     private Set<UUID> activeGroups() {

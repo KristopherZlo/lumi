@@ -1131,9 +1131,42 @@ class LiveActionJournalTest {
         journal.recordEntity(first, ENTITY, Optional.of(entity(1)), Optional.empty());
         journal.release(first);
         assertEquals(Optional.of(PLAYER_A), journal.owner(first));
-        assertEquals(Optional.of(PLAYER_A), journal.owner(second));
+        assertEquals(Optional.empty(), journal.owner(second));
         journal.release(first);
         assertEquals(Optional.empty(), journal.owner(first));
+    }
+
+    @Test
+    void pinnedOldestDoesNotHideEligibleGroupsUnderCountPressure() {
+        var journal = new LiveActionJournal(new LiveActionJournal.Limits(2, 1_000, 4_000, 8_000));
+        UUID pinned = journal.begin(PLAYER_A);
+        journal.recordEntity(pinned, ENTITY, Optional.empty(), Optional.of(entity(1)));
+        journal.retain(pinned);
+        journal.close(pinned);
+        UUID middle = add(journal, 2);
+        UUID newest = add(journal, 3);
+        assertEquals(Optional.of(PLAYER_A), journal.owner(pinned));
+        assertEquals(Optional.empty(), journal.owner(middle));
+        assertEquals(newest, journal.prepareUndo(PLAYER_A).orElseThrow().actionId());
+        journal.release(pinned);
+    }
+
+    @Test
+    void pinnedOtherPlayerDoesNotBlockDimensionEviction() {
+        var journal = new LiveActionJournal(new LiveActionJournal.Limits(64, 1_000, 4_000, 1_000));
+        UUID pinned = journal.begin(PLAYER_A);
+        journal.recordEntity(pinned, ENTITY, Optional.empty(), Optional.of(entity(1)));
+        journal.retain(pinned);
+        journal.close(pinned);
+        UUID newest = null;
+        for (int i = 0; i < 10; i++) {
+            newest = journal.begin(PLAYER_B);
+            journal.record(newest, new BlockPosition(i, 0, 0), block("air"), block("stone"));
+            journal.close(newest);
+        }
+        assertEquals(Optional.of(PLAYER_A), journal.owner(pinned));
+        assertEquals(newest, journal.prepareUndo(PLAYER_B).orElseThrow().actionId());
+        journal.release(pinned);
     }
 
     @Test
