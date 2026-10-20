@@ -2,6 +2,7 @@ package io.github.lumi.mixin.client;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.moulberry.axiom.world_modification.Dispatcher;
 import com.moulberry.axiom.world_modification.HistoryBuffer;
 import com.moulberry.axiom.world_modification.HistoryEntry;
@@ -28,7 +29,12 @@ abstract class AxiomDispatcherBarrierMixin {
 
     @Inject(method = {"apply", "applyBlockBuffer", "applyBiomeBuffer", "push"}, at = @At("HEAD"), cancellable = true)
     private static void lumi$guardAdmission(CallbackInfo callback) {
-        if (AxiomClientWorkBarrier.isPaused()) callback.cancel();
+        if (AxiomClientWorkBarrier.isPaused() || !AxiomWorldHistory.INSTANCE.admissionReady()) callback.cancel();
+    }
+
+    @WrapMethod(method = "push")
+    private static void lumi$identifyNativeEntry(HistoryEntry<BlockOrBiomeBuffer> entry, Operation<Void> original) {
+        original.call(AxiomWorldHistory.INSTANCE.prepareNativePush(entry));
     }
 
     // Selection/placement cancellation has already run; stop before the world cursor moves.
@@ -56,17 +62,17 @@ abstract class AxiomDispatcherBarrierMixin {
 
     @WrapOperation(method = "applyPendingHistory", at = @At(value = "INVOKE", target = "Lcom/moulberry/axiom/world_modification/HistoryIO;loadHistory(Ljava/nio/file/Path;)Lcom/moulberry/axiom/world_modification/HistoryBuffer;"))
     private static HistoryBuffer<BlockOrBiomeBuffer> lumi$separateOldHistory(Path path, Operation<HistoryBuffer<BlockOrBiomeBuffer>> original) {
-        return AxiomWorldHistory.INSTANCE.managed() ? new HistoryBuffer<>() : original.call(path);
+        return AxiomWorldHistory.INSTANCE.shared() ? new HistoryBuffer<>() : original.call(path);
     }
 
     @WrapOperation(method = "push", at = @At(value = "INVOKE", target = "Lcom/moulberry/axiom/world_modification/HistoryBuffer;push(Lcom/moulberry/axiom/world_modification/HistoryEntry;)V"))
     private static void lumi$serverOwnsWorldCursor(HistoryBuffer<BlockOrBiomeBuffer> history, HistoryEntry<BlockOrBiomeBuffer> entry, Operation<Void> original) {
-        if (!AxiomWorldHistory.INSTANCE.managed()) original.call(history, entry);
+        if (!AxiomWorldHistory.INSTANCE.shared()) original.call(history, entry);
     }
 
     @WrapOperation(method = "push", at = @At(value = "INVOKE", target = "Lcom/moulberry/axiom/world_modification/HistoryIO;pushEntry(Ljava/nio/file/Path;Lcom/moulberry/axiom/world_modification/HistoryEntry;II)V"))
     private static void lumi$preserveNativeFiles(Path path, HistoryEntry<BlockOrBiomeBuffer> entry, int position, int size, Operation<Void> original) {
-        if (!AxiomWorldHistory.INSTANCE.managed()) original.call(path, entry, position, size);
+        if (!AxiomWorldHistory.INSTANCE.shared()) original.call(path, entry, position, size);
     }
 
     @WrapOperation(method = {"applyBlockBuffer", "applyBiomeBuffer"}, at = @At(value = "INVOKE",

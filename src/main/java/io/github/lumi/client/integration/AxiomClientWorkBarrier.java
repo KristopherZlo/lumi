@@ -118,7 +118,7 @@ public final class AxiomClientWorkBarrier {
         try {
             cancelPending();
             if (invalidateHistory) {
-                AxiomDispatcherPendingAccess.lumi$history().clear();
+                if (AxiomWorldHistory.INSTANCE.shared()) AxiomDispatcherPendingAccess.lumi$history().clear();
                 Dispatcher.clearActiveSelectionHistory();
             }
             if (Tool.sharedSingleThreadExecutor == null || singleExecutor == null) {

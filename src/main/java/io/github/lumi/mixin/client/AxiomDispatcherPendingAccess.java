@@ -23,4 +23,7 @@ public interface AxiomDispatcherPendingAccess {
     @Accessor("entityDataTime") static Long2LongOpenHashMap lumi$entityTimes() { throw new AssertionError(); }
     @Accessor("history") static HistoryBuffer<BlockOrBiomeBuffer> lumi$history() { throw new AssertionError(); }
     @Invoker("applyPendingHistory") static void lumi$applyPendingHistory() { throw new AssertionError(); }
+    @Invoker("getHistoryPath") static java.nio.file.Path lumi$historyPath() { throw new AssertionError(); }
+    @Invoker("undo") static void lumi$undo(boolean placement, boolean selection, boolean inGame) { throw new AssertionError(); }
+    @Invoker("redo") static void lumi$redo(boolean placement, boolean selection) { throw new AssertionError(); }
 }

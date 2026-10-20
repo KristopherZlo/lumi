@@ -8,13 +8,15 @@ import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.storage.repository.AxiomHistoryLinkRepository;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.lang.ref.WeakReference;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Collections;
+import java.util.WeakHashMap;
 import java.util.function.Supplier;
 import net.minecraft.network.FriendlyByteBuf;
 
@@ -24,12 +26,17 @@ public final class AxiomNativeHistoryFiles {
     private static final Map<HistoryEntry<?>, Binding> BINDINGS = new IdentityHashMap<>();
     private static final ThreadLocal<Save> SAVING = new ThreadLocal<>();
     private static final ThreadLocal<Load> LOADING = new ThreadLocal<>();
-    private static final Map<HistoryBuffer<?>, Map<HistoryEntry<?>, Binding>> LOADED = new ConcurrentHashMap<>();
+    private static final Map<HistoryBuffer<?>, Map<HistoryEntry<?>, Binding>> LOADED = Collections.synchronizedMap(new WeakHashMap<>());
+    private static WeakReference<HistoryBuffer<?>> retainedBuffer = new WeakReference<>(null);
     private AxiomNativeHistoryFiles() { }
 
     public static Binding binding(HistoryEntry<?> entry) { return BINDINGS.get(entry); }
     static void register(HistoryEntry<?> entry, Binding binding) { BINDINGS.put(entry, binding); }
     static void forget(HistoryEntry<?> entry) { BINDINGS.remove(entry); }
+    static void retain(HistoryBuffer<?> buffer, Map<HistoryEntry<?>, Binding> bindings) {
+        retainedBuffer = new WeakReference<>(buffer);
+        LOADED.put(buffer, bindings);
+    }
 
     public static void push(Path path, HistoryEntry<?> entry, int position, Binding binding, Runnable original) {
         if (binding == null) { original.run(); return; }
@@ -88,11 +95,14 @@ public final class AxiomNativeHistoryFiles {
     }
 
     static Map<HistoryEntry<?>, Binding> take(HistoryBuffer<?> buffer) {
+        var previous = retainedBuffer.get();
+        if (previous != null && previous != buffer) LOADED.remove(previous);
+        retainedBuffer.clear();
         var result = LOADED.remove(buffer);
         return result == null ? Map.of() : result;
     }
 
-    static void disconnect() { BINDINGS.clear(); LOADED.clear(); }
+    static void disconnect() { BINDINGS.clear(); LOADED.clear(); retainedBuffer.clear(); }
 
     private static ObjectId fingerprint(FriendlyByteBuf bytes, int start, int end) {
         try {

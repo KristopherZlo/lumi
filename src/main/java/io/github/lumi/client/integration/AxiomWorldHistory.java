@@ -22,6 +22,7 @@ public final class AxiomWorldHistory {
     public static final AxiomWorldHistory INSTANCE = new AxiomWorldHistory();
     private final IdentityHashMap<HistoryEntry<?>, UUID> rows = new IdentityHashMap<>();
     private final BlockOrBiomeBuffer empty = new MirrorBuffer();
+    private final AxiomNativeHistory nativeHistory = new AxiomNativeHistory();
     private HistoryBuffer<BlockOrBiomeBuffer> mirroredBuffer;
     private List<WorldActionView.Entry> mirroredUndo = List.of(), mirroredRedo = List.of();
     private UUID mirroredEpoch;
@@ -30,11 +31,33 @@ public final class AxiomWorldHistory {
 
     private AxiomWorldHistory() { }
 
-    public boolean managed() { return LumiClient.networking().worldActions().isPresent(); }
+    public boolean managed() {
+        return Minecraft.getInstance().getConnection() != null
+                && net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.canSend(io.github.lumi.network.HistoryCommandPayload.TYPE);
+    }
+
+    public boolean nativeMode() {
+        return managed() && LumiClient.history().axiomSettings()
+                .map(settings -> settings.effective() == io.github.lumi.domain.model.AxiomHistoryMode.NATIVE_AXIOM).orElse(false);
+    }
+
+    public boolean shared() { return managed() && LumiClient.history().axiomSettings().isPresent() && !nativeMode(); }
+
+    public boolean admissionReady() { return !managed() || ready(); }
+
+    public HistoryEntry<BlockOrBiomeBuffer> prepareNativePush(HistoryEntry<BlockOrBiomeBuffer> entry) {
+        return nativeMode() && ready() ? nativeHistory.push(entry, LumiClient.networking().worldActions().orElseThrow()) : entry;
+    }
+
+    public UUID nativeEntry(BlockOrBiomeBuffer buffer) { return nativeMode() ? nativeHistory.entry(buffer) : null; }
+
+    public HistoryBuffer<BlockOrBiomeBuffer> visibleHistory() {
+        return nativeMode() && ready() ? nativeHistory.projection(LumiClient.networking().worldActions().orElseThrow()) : AxiomDispatcherPendingAccess.lumi$history();
+    }
 
     private boolean ready() {
         var client = Minecraft.getInstance();
-        return client.level != null && client.player != null && LumiClient.networking().worldActions()
+        return client.level != null && client.player != null && LumiClient.history().axiomSettings().isPresent() && LumiClient.networking().worldActions()
                 .filter(value -> value.dimension().equals(client.level.dimension().identifier().toString())
                         && LumiClient.history().state().snapshot().filter(snapshot -> snapshot.dimensionId().equals(value.dimension())).isPresent()).isPresent();
     }
@@ -42,6 +65,10 @@ public final class AxiomWorldHistory {
     public boolean step(boolean undo) {
         if (!managed()) return false;
         if (ready() && !AxiomClientWorkBarrier.isPaused()) {
+            if (nativeMode()) {
+                if (LumiClient.networking().worldActionPending()) return true;
+                return nativeHistory.step(undo, LumiClient.networking().worldActions().orElseThrow());
+            }
             if (undo) LumiClient.networking().undo(); else LumiClient.networking().redo();
         }
         return true;
@@ -50,6 +77,7 @@ public final class AxiomWorldHistory {
     public boolean moveTo(int position) {
         if (!managed()) return false;
         if (!ready()) return true;
+        if (nativeMode()) return nativeHistory.moveTo(position, LumiClient.networking().worldActions().orElseThrow());
         var data = Dispatcher.getHistoryData(position);
         if (position != -1 && (data == null || !rows.containsKey(data.entry()))) return false;
         if (!AxiomClientWorkBarrier.isPaused() && !LumiClient.networking().worldActionPending()) {
@@ -63,13 +91,14 @@ public final class AxiomWorldHistory {
     public void accept(OperationEventPayload event) {
         if (event.state() != OperationEventPayload.State.ACCEPTED
                 && event.state() != OperationEventPayload.State.PROGRESS
-                && event.state() != OperationEventPayload.State.SUCCEEDED) navigating = false;
+                && event.state() != OperationEventPayload.State.SUCCEEDED) cancelNavigation();
     }
 
-    public void cancelNavigation() { navigating = false; }
+    public void cancelNavigation() { navigating = false; nativeHistory.cancelNavigation(); }
 
     public boolean clear() {
         if (!managed()) return false;
+        if (nativeMode()) { nativeHistory.clear(); return false; }
         if (ready() && !AxiomClientWorkBarrier.isPaused() && !LumiClient.networking().worldActionPending()) {
             navigating = false;
             LumiClient.networking().clearWorldActions();
@@ -80,6 +109,7 @@ public final class AxiomWorldHistory {
     public void tick() {
         if (!ready() || AxiomClientWorkBarrier.isPaused()) return;
         var payload = LumiClient.networking().worldActions().orElseThrow();
+        if (nativeMode()) { nativeHistory.tick(payload); return; }
         mirror(payload);
         if (!navigating || LumiClient.networking().worldActionPending()) return;
         var view = payload.view();
@@ -100,6 +130,7 @@ public final class AxiomWorldHistory {
     private void mirror(WorldActionViewPayload payload) {
         AxiomDispatcherPendingAccess.lumi$applyPendingHistory();
         var buffer = AxiomDispatcherPendingAccess.lumi$history();
+        AxiomNativeHistoryFiles.take(buffer); // A pending native load may have started before policy negotiation.
         var view = payload.view();
         if (mirroredEpoch != null && !mirroredEpoch.equals(payload.epoch())) navigating = false;
         if (navigating) {
@@ -132,6 +163,7 @@ public final class AxiomWorldHistory {
     }
 
     public void disconnect() {
+        nativeHistory.disconnect();
         if (mirroredBuffer != null) mirroredBuffer.clear();
         mirroredBuffer = null;
         mirroredEpoch = null;

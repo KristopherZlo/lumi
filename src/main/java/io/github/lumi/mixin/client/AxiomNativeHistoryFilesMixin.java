@@ -23,7 +23,7 @@ abstract class AxiomNativeHistoryFilesMixin {
                 () -> original.call(path, entry, position, size));
     }
 
-    @WrapOperation(method = "pushEntry", at = @At(value = "INVOKE", target = "Lcom/moulberry/axiom/world_modification/HistoryEntry;save(Lnet/minecraft/network/FriendlyByteBuf;)V"))
+    @WrapOperation(method = "pushEntry", at = @At(value = "INVOKE", target = "Lcom/moulberry/axiom/world_modification/HistoryEntry;save"))
     private static void lumi$fingerprint(HistoryEntry<?> entry, FriendlyByteBuf bytes, Operation<Void> original) {
         int start = bytes.writerIndex();
         original.call(entry, bytes);
@@ -35,7 +35,7 @@ abstract class AxiomNativeHistoryFilesMixin {
         return AxiomNativeHistoryFiles.load(path, () -> original.call(path));
     }
 
-    @WrapOperation(method = "loadHistory", at = @At(value = "INVOKE", target = "Lcom/moulberry/axiom/world_modification/HistoryEntry;load(Lnet/minecraft/network/FriendlyByteBuf;)Lcom/moulberry/axiom/world_modification/HistoryEntry;"))
+    @WrapOperation(method = "loadHistory", at = @At(value = "INVOKE", target = "Lcom/moulberry/axiom/world_modification/HistoryEntry;load"))
     private static HistoryEntry<BlockOrBiomeBuffer> lumi$verifyBytes(FriendlyByteBuf bytes, Operation<HistoryEntry<BlockOrBiomeBuffer>> original) {
         return AxiomNativeHistoryFiles.decoded(bytes, () -> original.call(bytes));
     }
