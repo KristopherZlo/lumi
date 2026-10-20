@@ -196,7 +196,7 @@ public final class LumiClient implements ClientModInitializer {
                                 NETWORKING.redo());
                     }
                     @Override public String toggleCompareOverlay() {
-                        return COMPARISONS.toggleVisibility()
+                        return PENDING_OVERLAY.togglePendingPreview().or(COMPARISONS::toggleVisibility)
                                 .map(visible -> visible
                                         ? "luma.status.compare_overlay_enabled"
                                         : "luma.status.compare_overlay_hidden")
@@ -264,7 +264,7 @@ public final class LumiClient implements ClientModInitializer {
                 () -> {
                     ZONE_PREVIEWS.clear();
                     NETWORKING.refreshSnapshot();
-                    showFeedback("luma.hotkeys.pending_preview_help");
+                    PENDING_OVERLAY.showPendingPreview();
                     client.setScreen(null);
                 },
                 NETWORKING::quickRollback,
@@ -646,6 +646,7 @@ public final class LumiClient implements ClientModInitializer {
 
     private static void startCompare(Runnable request) {
         Minecraft client = Minecraft.getInstance();
+        PENDING_OVERLAY.hidePendingPreview();
         client.setScreen(null);
         try {
             request.run();
@@ -708,7 +709,7 @@ public final class LumiClient implements ClientModInitializer {
                                         zone.versions().getFirst()).message()),
                 () -> {
                     NETWORKING.requestZonePendingPreview(zone);
-                    showFeedback("luma.hotkeys.pending_preview_help");
+                    PENDING_OVERLAY.showPendingPreview();
                 }, () -> NETWORKING.leaveZone(zone.id())));
     }
 

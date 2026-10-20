@@ -4,18 +4,22 @@ import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientCompareStore;
 import io.github.lumi.client.state.ClientZonePendingPreviewStore;
 import io.github.lumi.client.state.HighlightPreparationProgress;
+import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.Objects;
+import java.util.UUID;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-/** Renders changed blocks while the remappable Action key is held. */
+/** Renders held or GUI-pinned pending previews and saved-version comparisons. */
 public final class LumiPendingChangeOverlay {
     private final LumiShapeOutline shapes = new LumiShapeOutline();
     private static final VoxelShape BLOCK = Shapes.block();
@@ -27,6 +31,7 @@ public final class LumiPendingChangeOverlay {
     private final LumiCompareOverlayRenderer compareOverlay =
             new LumiCompareOverlayRenderer();
     private java.util.List<io.github.lumi.domain.model.BlockChange> announced = java.util.List.of();
+    private PreviewScope previewScope;
 
     public LumiPendingChangeOverlay(
             ClientHistoryStore history,
@@ -56,7 +61,10 @@ public final class LumiPendingChangeOverlay {
         *///?} else {
         WorldRenderEvents.END_EXTRACTION.register(context -> compareOverlay.setFrustum(context.frustum()));
         //?}
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> client.execute(compareOverlay::close));
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> client.execute(() -> {
+            compareOverlay.close();
+            hidePendingPreview();
+        }));
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> compareOverlay.close());
     }
 
@@ -65,7 +73,29 @@ public final class LumiPendingChangeOverlay {
                 ? HighlightPreparationProgress.NONE : compareOverlay.progress();
     }
 
+    public void showPendingPreview() {
+        var world = Minecraft.getInstance().level;
+        var snapshot = history.state().snapshot().orElse(null);
+        if (world == null || snapshot == null) return;
+        previewScope = new PreviewScope(world, snapshot.workspaceId(), snapshot.head(),
+                snapshot.branchName(), zonePreviews.hasScope());
+        refresh.show();
+        if (comparisons.highlightVisible()) comparisons.toggleVisibility();
+    }
+
+    public void hidePendingPreview() {
+        previewScope = null;
+        refresh.clear();
+    }
+
+    public java.util.Optional<Boolean> togglePendingPreview() {
+        return refresh.toggleVisibility();
+    }
+
     private void tick(Minecraft client) {
+        var snapshot = history.state().snapshot().orElse(null);
+        if (previewScope != null && !previewScope.matches(client.level, snapshot,
+                zonePreviews.currentZone(snapshot).isPresent())) hidePendingPreview();
         compareOverlay.retainInput(comparisonMatches(client) ? comparisons.blockChanges() : java.util.List.of());
         if (comparisons.blockChanges().isEmpty() || !comparisonMatches(client)) announced = java.util.List.of();
         if (zonePreviews.hasScope() && zonePreviews.currentZone(
@@ -83,7 +113,9 @@ public final class LumiPendingChangeOverlay {
                 ? java.util.List.<io.github.lumi.network.HistorySnapshotPayload.PendingBlock>of()
                 : zonePreviews.hasScope() ? zonePreviews.blocks(snapshot) : snapshot.pendingBlocks();
         boolean showPending = snapshot != null && client.screen == null
-                && actionDown(client) && !pendingBlocks.isEmpty();
+                && (actionDown(client) || refresh.visible() && previewScope != null
+                        && previewScope.world == client.level)
+                && !pendingBlocks.isEmpty();
         if (client.player == null || (!showPending
                 && comparison.isEmpty())) {
             return;
@@ -141,5 +173,13 @@ public final class LumiPendingChangeOverlay {
 
     private static boolean actionDown(Minecraft client) {
         return LumiHotkeys.actionModifierDown(client.options.keyMappings);
+    }
+
+    record PreviewScope(ClientLevel world, UUID workspace, CommitId head, String branch, boolean zoneScoped) {
+        boolean matches(ClientLevel currentWorld, HistorySnapshotPayload snapshot, boolean zoneAvailable) {
+            return world == currentWorld && snapshot != null && workspace.equals(snapshot.workspaceId())
+                    && head.equals(snapshot.head()) && branch.equals(snapshot.branchName())
+                    && (!zoneScoped || zoneAvailable);
+        }
     }
 }

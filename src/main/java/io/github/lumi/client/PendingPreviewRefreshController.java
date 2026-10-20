@@ -1,11 +1,14 @@
 package io.github.lumi.client;
 
 import java.util.Objects;
+import java.util.Optional;
 
-/** Requests one fresh pending preview on each eligible Alt key press. */
+/** Refreshes held previews and retains the visibility chosen from the GUI. */
 public final class PendingPreviewRefreshController {
     private final Runnable refresh;
     private boolean altWasDown;
+    private boolean pinned;
+    private boolean visible;
 
     public PendingPreviewRefreshController(Runnable refresh) {
         this.refresh = Objects.requireNonNull(refresh, "refresh");
@@ -16,5 +19,24 @@ public final class PendingPreviewRefreshController {
             refresh.run();
         }
         altWasDown = altDown && canRefresh;
+    }
+
+    public void show() {
+        pinned = visible = true;
+    }
+
+    public boolean visible() {
+        return visible;
+    }
+
+    public Optional<Boolean> toggleVisibility() {
+        if (!pinned) return Optional.empty();
+        visible = !visible;
+        if (visible) refresh.run();
+        return Optional.of(visible);
+    }
+
+    public void clear() {
+        pinned = visible = altWasDown = false;
     }
 }

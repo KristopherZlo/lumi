@@ -1060,7 +1060,7 @@
   "luma.hotkeys.redo": "Redo",
   "luma.hotkeys.redo_help": "With a wooden sword: redo selection changes. Otherwise: redo the latest world action.",
   "luma.hotkeys.pending_preview": "Preview changes",
-  "luma.hotkeys.pending_preview_help": "Hold to preview durable pending changes, or x-ray an active compare highlight.",
+  "luma.hotkeys.pending_preview_help": "Hold to highlight unsaved changes, or see an active comparison through walls.",
   "luma.hotkeys.quick_rollback": "Quick rollback",
   "luma.hotkeys.quick_rollback_help": "Roll unsaved work back to the active branch head.",
   "luma.hotkeys.action_modifier": "Action modifier",
