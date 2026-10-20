@@ -27,6 +27,37 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class LiveActionJournalTest {
+    @Test void lateBlastFollowsNewerSectionOwnershipBeforeTheThirdPlacement() {
+        var journal = new LiveActionJournal();
+        var key = new SectionKey(0, 0, 0);
+        var first = new BlockPosition(1, 0, 0);
+        var second = new BlockPosition(0, 0, 0);
+        var third = new BlockPosition(2, 0, 0);
+        UUID blast = journal.begin(PLAYER_A);
+        journal.record(blast, first, block("stone"), block("air"));
+        journal.close(blast);
+        var empty = new SectionBlob(java.util.Collections.nCopies(4096, "minecraft:air"), Map.of());
+        var states = new java.util.ArrayList<>(empty.blockStates());
+        states.set(0, "minecraft:tnt");
+        UUID placement = journal.begin(PLAYER_A);
+        journal.recordSection(placement, key, empty, new SectionBlob(states, Map.of()));
+        journal.close(placement);
+        UUID owner = journal.record(blast, second, block("tnt"), block("air"));
+        assertEquals(placement, owner, "A late blast must follow compact section ownership too");
+        journal.mergeGroups(blast, owner);
+        UUID next = journal.begin(PLAYER_A);
+        journal.record(next, third, block("air"), block("tnt"));
+        journal.close(next);
+        journal.mergeGroups(blast, next);
+        var undo = journal.prepareUndo(PLAYER_A).orElseThrow();
+        assertTrue(undo.sections().isEmpty(), "The placed-and-destroyed TNT has no remaining delta");
+        assertTrue(!undo.expected().containsKey(second));
+        assertEquals(block("air"), undo.expected().get(first));
+        assertEquals(block("tnt"), undo.expected().get(third));
+        assertEquals(block("stone"), undo.replacement().get(first));
+        assertEquals(block("air"), undo.replacement().get(third));
+    }
+
     @Test void compactSectionsKeepChangedCellOwnershipAndAbsorbLaterCausalWrites(
             @org.junit.jupiter.api.io.TempDir java.nio.file.Path root) throws Exception {
         var journal = new LiveActionJournal();

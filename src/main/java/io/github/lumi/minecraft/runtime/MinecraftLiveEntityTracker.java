@@ -149,6 +149,15 @@ public final class MinecraftLiveEntityTracker {
         });
     }
 
+    public void trackRecorded(UUID action, boolean applied,
+            Map<UUID, io.github.lumi.domain.model.WorldActionRecord.EntityDelta> changes) {
+        changes.forEach((entity, delta) -> {
+            Optional<EntityState> current = applied ? delta.after() : delta.before();
+            if (current.isPresent()) own(action, entity,
+                    new Owned(applied ? Endpoint.AFTER : Endpoint.BEFORE, delta.before()));
+        });
+    }
+
     public boolean owns(UUID action, UUID entity) {
         Map<UUID, Owned> entities = owned.get(Objects.requireNonNull(action, "action"));
         return entities != null && entities.containsKey(

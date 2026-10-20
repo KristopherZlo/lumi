@@ -131,14 +131,13 @@ public final class LiveActionJournal {
             discardUnowned(after);
             return causalAction.id;
         }
-        MutableAction action = effectiveAction(
-                causalAction, position, blockOwners);
+        MutableAction action = effectiveBlockAction(causalAction, position);
         var sectionKey = new SectionKey(position.x() >> 4, position.y() >> 4, position.z() >> 4);
         var section = action.sections.get(sectionKey);
         if (section != null) {
             int cell = ((position.y() & 15) << 8) | ((position.z() & 15) << 4) | (position.x() & 15);
             var combined = section.followedByBlock(cell, before, after);
-            recordSection(action.id, sectionKey, combined.before(), combined.after());
+            recordSection(action.id, sectionKey, section.after(), combined.after());
             discardUnowned(before); discardUnowned(after);
             return action.id;
         }
@@ -545,6 +544,10 @@ public final class LiveActionJournal {
         return new WorldActionRecord(expected, new WorldActionRecord.Payload(action.changes, action.entities, action.biomes, action.sections));
     }
 
+    public synchronized Map<UUID, EntityDelta> entityChanges(UUID actionId) {
+        return Map.copyOf(requireAction(actionId).entities);
+    }
+
     /** Startup only, off-thread. An interrupted producer is retained on disk but cannot be replayed. */
     public synchronized void restore(WorldActionIndex index, ActionSource source) throws IOException {
         if (!actions.isEmpty() || nextSequence != 0) throw new IllegalStateException("History was already opened");
@@ -805,6 +808,22 @@ public final class LiveActionJournal {
                 }
             }
         }
+    }
+
+    private MutableAction effectiveBlockAction(MutableAction causalAction, BlockPosition position) {
+        if (!causalAction.closed) return causalAction;
+        MutableAction latest = blockOwners.latest(position)
+                .map(owner -> requireAction(owner.actionId)).orElse(causalAction);
+        var key = new SectionKey(position.x() >> 4, position.y() >> 4, position.z() >> 4);
+        int cell = ((position.y() & 15) << 8) | ((position.z() & 15) << 4) | (position.x() & 15);
+        // Compact sections have no per-block ownership entries.
+        for (var candidate : actions.values()) {
+            if (!candidate.available || !candidate.applied || candidate.sequence <= latest.sequence) continue;
+            var section = candidate.sections.get(key);
+            if (section != null && section.changed(cell)) latest = candidate;
+        }
+        return latest.sequence > causalAction.sequence && latest.player.equals(causalAction.player)
+                ? latest : causalAction;
     }
 
     private <K> MutableAction effectiveAction(

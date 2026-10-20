@@ -348,6 +348,10 @@ public final class LumiTntGameTests {
                     helper.assertTrue(runtime.liveActions()
                                     .summary(secondAction.get()).delayedReferences() > 0,
                             "The newer action has no active carrier ownership");
+                    try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), player)) {
+                        helper.getLevel().setBlock(helper.absolutePos(firstTnt.above()),
+                                Blocks.TNT.defaultBlockState(), Block.UPDATE_ALL);
+                    }
                     runtime.startLiveAction(player, LiveActionJournal.Direction.UNDO,
                             operation -> terminal.set(operation.terminalState()));
                 })
@@ -696,6 +700,8 @@ public final class LumiTntGameTests {
     }
 
     private static void requireIdle(GameTestHelper helper, FabricDimensionRuntime runtime) {
+        // A sprinting GameTest server must leave wall time for asynchronous replay I/O.
+        if (runtime.operations().hasActiveOperation()) java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
         helper.assertFalse(runtime.operations().hasActiveOperation(),
                 "Lumi operation is still active");
     }

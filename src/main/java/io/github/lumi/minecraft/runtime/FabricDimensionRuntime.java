@@ -1189,7 +1189,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 liveEntityWorld, new LiveActionOperation.PendingCancellation() {
                     @Override
                     public boolean cancel(UUID action) {
-                        return cancelLiveAction(action);
+                        return cancelLiveAction(action, direction);
                     }
 
                     @Override
@@ -1395,14 +1395,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     private void trackActionRecord(io.github.lumi.domain.model.WorldActionRecord record) {
         var metadata = record.metadata();
-        var before = new java.util.HashMap<UUID, Optional<io.github.lumi.domain.model.EntityState>>();
-        var after = new java.util.HashMap<UUID, Optional<io.github.lumi.domain.model.EntityState>>();
-        for (var entry : record.payload().entities().entrySet()) {
-            var delta = entry.getValue();
-            before.put(entry.getKey(), delta.before()); after.put(entry.getKey(), delta.after());
-        }
-        liveEntities.trackApplied(metadata.id(), metadata.applied() ? LiveActionJournal.Direction.REDO : LiveActionJournal.Direction.UNDO,
-                metadata.applied() ? before : after, metadata.applied() ? after : before);
+        liveEntities.trackRecorded(metadata.id(), metadata.applied(), record.payload().entities());
     }
 
     private Runnable installActionHistory(io.github.lumi.storage.object.WorldActionIndexCodec.State state) throws IOException {
@@ -1495,7 +1488,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public MinecraftLiveEntityTracker liveEntities() { return liveEntities; }
     public MinecraftCausalTickTracker causalTicks() { return causalTicks; }
 
-    private boolean cancelLiveAction(UUID action) {
+    private boolean cancelLiveAction(UUID action, LiveActionJournal.Direction direction) {
+        // Undo can expose an older entity owner whose natural ticks must settle too.
+        liveEntities.trackRecorded(action, direction == LiveActionJournal.Direction.UNDO,
+                liveActions.entityChanges(action));
         boolean changed = causalTicks.cancel(
                 action, entity -> liveEntities.owns(action, entity));
         try {

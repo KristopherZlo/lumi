@@ -135,13 +135,14 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
             var hold = runtime.mutations().holdPublication(List.of(key));
             try {
                 var poi = level.getChunkSource().getPoiManager();
+                var chunk = new net.minecraft.world.level.ChunkPos(target.getX() >> 4, target.getZ() >> 4);
                 poi.remove(target.east());
                 poi.add(target.east(), net.minecraft.world.entity.ai.village.poi.PoiTypes.forState(Blocks.BARREL.defaultBlockState()).orElseThrow());
-                poi.flush(new net.minecraft.world.level.ChunkPos(target));
+                poi.flush(chunk);
                 poi.flushAll();
                 poi.tick(() -> true);
                 if (!((io.github.lumi.mixin.SectionStoragePersistenceAccessor) poi).lumi$dirtyChunks().contains(
-                        new net.minecraft.world.level.ChunkPos(target).toLong())) throw new AssertionError("Replay hold lost dirty POI data");
+                        chunk.toLong())) throw new AssertionError("Replay hold lost dirty POI data");
             } finally { hold.release(); }
         });
         operations.awaitDurability(tool + "_edited");

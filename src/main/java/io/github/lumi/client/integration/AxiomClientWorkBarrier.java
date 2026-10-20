@@ -161,6 +161,7 @@ public final class AxiomClientWorkBarrier {
     }
 
     private void cancelPending() {
+        com.moulberry.axiom.ContextMenuManager.getInstance().close();
         Placement.INSTANCE.stopPlacement();
         ToolManager.resetAll();
         AxiomDispatcherPendingAccess.lumi$dispatchTasks().clear();

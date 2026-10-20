@@ -274,13 +274,26 @@ final class LumiBehaviorOperations {
         long started = System.nanoTime();
         var firstVisible = new java.util.concurrent.atomic.AtomicLong();
         ClientAction action = nativeAxiom
-                ? () -> context.runOnClient(client -> com.moulberry.axiom.world_modification.Dispatcher.callAction(com.moulberry.axiom.UserAction.UNDO, null))
+                ? () -> {
+                    context.getInput().holdAlt();
+                    context.waitFor(client -> com.moulberry.axiom.ContextMenuManager.getInstance().isActive());
+                    context.runOnClient(client -> com.moulberry.axiom.world_modification.Dispatcher.callAction(com.moulberry.axiom.UserAction.UNDO, null));
+                }
                 : () -> ui.pressChord("key.lumi.undo");
-        var request = send(name, action, started);
-        awaitOperation(name, request, new AtomicReference<>(), started, () -> {
-            if (firstVisible.get() == 0 && context.computeOnClient(client -> client.level != null
-                    && client.level.getBlockState(position).equals(expected))) firstVisible.compareAndSet(0, System.nanoTime());
-        });
+        try {
+            var request = send(name, action, started);
+            awaitOperation(name, request, new AtomicReference<>(), started, () -> {
+                if (nativeAxiom && context.computeOnClient(client ->
+                        io.github.lumi.client.integration.AxiomClientWorkBarrier.isPaused()
+                                && com.moulberry.axiom.ContextMenuManager.getInstance().isActive())) {
+                    throw new AssertionError("Axiom's Alt menu remained open during Undo");
+                }
+                if (firstVisible.get() == 0 && context.computeOnClient(client -> client.level != null
+                        && client.level.getBlockState(position).equals(expected))) firstVisible.compareAndSet(0, System.nanoTime());
+            });
+        } finally {
+            if (nativeAxiom) context.getInput().releaseAlt();
+        }
         if (firstVisible.get() == 0) throw new AssertionError(name + " did not become visible before completion");
         report.event("visible", name, "succeeded", 0, (firstVisible.get() - started) / 1_000_000,
                 "upper bound to first client block update; durable completion measured separately");

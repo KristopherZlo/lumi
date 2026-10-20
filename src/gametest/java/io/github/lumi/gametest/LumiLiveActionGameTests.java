@@ -243,6 +243,25 @@ public final class LumiLiveActionGameTests {
                             runtime.liveActions(), player)) {
                         helper.getLevel().addFreshEntity(item);
                     }
+                    try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), player)) {
+                        var pending = runtime.liveEntities().begin(item).orElseThrow();
+                        item.setYRot(90);
+                        runtime.liveEntities().finish(pending);
+                    } catch (IOException failed) {
+                        throw new java.io.UncheckedIOException(failed);
+                    }
+                    runtime.startLiveAction(player, LiveActionJournal.Direction.UNDO,
+                            operation -> terminal.set(operation.terminalState()));
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> {
+                    helper.assertValueEqual(MutationTerminalState.SUCCEEDED, terminal.get(),
+                            "The newer edit of the same item must Undo first");
+                    helper.assertTrue(helper.getLevel().getEntity(itemId.get()) != null,
+                            "Undoing the newer edit removed the older action's item");
+                })
+                .thenIdle(5)
+                .thenExecute(() -> {
                     runtime.startLiveAction(player, LiveActionJournal.Direction.UNDO,
                             operation -> terminal.set(operation.terminalState()));
                 })
