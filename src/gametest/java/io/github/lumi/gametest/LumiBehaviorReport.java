@@ -112,6 +112,10 @@ final class LumiBehaviorReport implements AutoCloseable {
                 digest + " sections=" + sections + " entities=" + entities);
     }
 
+    void assertRuntimeMessage(String message) throws IOException {
+        if (!Files.readString(runtimeLog).contains(message)) throw new AssertionError("Missing runtime evidence: " + message);
+    }
+
     void assertNoRuntimeFailures() {
         try {
             long offset = Files.size(runtimeLog) < runtimeLogStart

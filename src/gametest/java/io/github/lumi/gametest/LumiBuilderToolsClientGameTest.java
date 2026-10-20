@@ -115,17 +115,28 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
             if (server.computeOnServer(minecraft -> {
                 var level = minecraft.getPlayerList().getPlayers().getFirst().level();
                 return level.getBlockState(target).is(Blocks.GOLD_BLOCK)
-                        && level.getBlockState(target.east()).is(Blocks.GOLD_BLOCK);
+                        && level.getBlockState(target.east()).is(tool.equals("axiom") ? Blocks.BARREL : Blocks.GOLD_BLOCK);
             })) break;
             if (tick >= 200) throw new AssertionError(tool + " client edit did not reach the server");
             context.waitTick();
         }
         operations.awaitDurability(tool + "_edited");
         var editedState = checks.snapshot(tool + "_edited", area);
+        var repository = server.computeOnServer(minecraft -> LumiMod.serverRuntime()
+                .find(minecraft.getPlayerList().getPlayers().getFirst().level()).orElseThrow().repository());
+        var commits = new io.github.lumi.storage.object.ObjectStore(repository.resolve("commits"));
+        var beforeReplay = tool.equals("axiom") ? commits.listIds() : java.util.Set.<io.github.lumi.domain.model.ObjectId>of();
         if (tool.equals("axiom")) operations.nativeHistoryStep("axiom_native_undo", true); else operations.undo(tool);
         checks.assertSnapshot(tool + "_undo", area, baseline.snapshot());
         operations.redo(tool);
         checks.assertSnapshot(tool + "_redo", area, editedState);
+        if (tool.equals("axiom")) {
+            var added = new java.util.HashSet<>(commits.listIds());
+            added.removeAll(beforeReplay);
+            if (!added.isEmpty()) throw new AssertionError("Native Axiom Undo/Redo created hidden world commits: " + added.size());
+            report.assertRuntimeMessage("Lumi native Axiom Undo completed:");
+            report.assertRuntimeMessage("Lumi native Axiom Redo completed:");
+        }
         var edited = operations.save(tool + "-after", area);
         if (tool.equals("axiom")) {
             operations.undo("axiom_after_save");
@@ -240,8 +251,14 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
 
         private static void apply(BlockPos position) {
             var buffer = new com.moulberry.axiom.world_modification.BlockBuffer();
-            for (int x = 0; x < 2; x++) buffer.set(position.getX() + x,
-                    position.getY(), position.getZ(), Blocks.GOLD_BLOCK.defaultBlockState());
+            buffer.set(position.getX(), position.getY(), position.getZ(), Blocks.GOLD_BLOCK.defaultBlockState());
+            buffer.set(position.getX() + 1, position.getY(), position.getZ(), Blocks.BARREL.defaultBlockState());
+            var nbt = new net.minecraft.nbt.CompoundTag();
+            nbt.putString("id", "minecraft:barrel");
+            nbt.putString("LootTable", "minecraft:chests/simple_dungeon");
+            nbt.putLong("LootTableSeed", 710);
+            buffer.putBlockEntity(position.getX() + 1, position.getY(), position.getZ(),
+                    com.moulberry.axiom.world_modification.CompressedBlockEntity.compress(nbt, new java.io.ByteArrayOutputStream()));
             com.moulberry.axiom.world_modification.Dispatcher.push(new com.moulberry.axiom.world_modification.HistoryEntry<>(
                     buffer, new com.moulberry.axiom.world_modification.BlockBuffer(), position, "Shared history fixture",
                     com.moulberry.axiom.world_modification.HistoryEntry.MODIFIER_CAN_BE_UNDONE_INGAME));
