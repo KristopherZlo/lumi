@@ -163,29 +163,35 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
                 color.getFormat().pixelSize());
         GpuBuffer buffer = RenderSystem.getDevice().createBuffer(
                 () -> "Lumi Preview Readback", 9, byteCount);
-        CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
+        int width = target.width;
+        int height = target.height;
+        int pixelSize = color.getFormat().pixelSize();
         CompletableFuture<NativeImage> future = new CompletableFuture<>();
-        encoder.copyTextureToBuffer(color, buffer, 0L, () -> {
-            try (GpuBuffer.MappedView mapped = encoder.mapBuffer(buffer, true, false)) {
-                NativeImage image = new NativeImage(target.width, target.height, false);
-                int pixelSize = color.getFormat().pixelSize();
-                for (int y = 0; y < target.height; y++) {
-                    for (int x = 0; x < target.width; x++) {
-                        int pixel = mapped.data().getInt(
-                                (x + y * target.width) * pixelSize);
-                        image.setPixelABGR(x, target.height - y - 1, pixel);
-                    }
-                }
-                future.complete(image);
-            } catch (Throwable failed) {
-                future.completeExceptionally(failed);
-            } finally {
-                buffer.close();
-            }
-        }, 0);
-        //? if >=26.3
-        /*encoder.submit();*/
+        future.whenComplete((image, failed) -> buffer.close());
+        try {
+            CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
+            encoder.copyTextureToBuffer(color, buffer, 0L, () -> {
+                try {
+                    NativeImage image = copyPixels(encoder, buffer, width, height, pixelSize);
+                    if (!future.complete(image)) image.close();
+                } catch (Throwable failed) { future.completeExceptionally(failed); }
+            }, 0);
+            //? if >=26.3
+            /*encoder.submit();*/
+        } catch (RuntimeException | Error failed) { future.completeExceptionally(failed); }
         return future;
+    }
+
+    private NativeImage copyPixels(CommandEncoder encoder, GpuBuffer buffer, int width, int height, int pixelSize) {
+        NativeImage image = new NativeImage(width, height, false);
+        try (GpuBuffer.MappedView mapped = encoder.mapBuffer(buffer, true, false)) {
+            for (int y = 0; y < height; y++) for (int x = 0; x < width; x++)
+                image.setPixelABGR(x, height - y - 1, mapped.data().getInt((x + y * width) * pixelSize));
+            return image;
+        } catch (RuntimeException | Error failed) {
+            image.close();
+            throw failed;
+        }
     }
 
     @Override

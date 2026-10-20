@@ -147,10 +147,15 @@ public final class ClientVersionPreviewStore {
             NativeImage image = loadedImage.orElseThrow();
             Identifier id = Identifier.fromNamespaceAndPath(
                     LumiMod.MOD_ID, "preview/" + sanitize(dimensionId) + "/" + commit.hex());
-            DynamicTexture texture = new DynamicTexture(
-                    () -> "lumi-preview-" + commit.hex(), image);
-            texture.upload();
-            Minecraft.getInstance().getTextureManager().register(id, texture);
+            DynamicTexture texture = null;
+            try {
+                texture = new DynamicTexture(() -> "lumi-preview-" + commit.hex(), image);
+                texture.upload();
+                Minecraft.getInstance().getTextureManager().register(id, texture);
+            } catch (RuntimeException | Error failed) {
+                if (texture == null) image.close(); else texture.close();
+                throw failed;
+            }
             CachedPreview loaded = new CachedPreview(
                     id, image.getWidth(), image.getHeight());
             textures.put(key, loaded);
