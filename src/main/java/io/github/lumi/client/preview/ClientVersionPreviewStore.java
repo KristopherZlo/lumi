@@ -44,6 +44,7 @@ public final class ClientVersionPreviewStore {
     private final Set<String> loading = new HashSet<>();
     private final Map<String, CompletableFuture<Optional<NativeImage>>> loads =
             new LinkedHashMap<>();
+    private long connectionRevision;
 
     public synchronized void beginLoading(String dimensionId, CommitId commit) {
         String key = key(dimensionId, commit);
@@ -61,7 +62,7 @@ public final class ClientVersionPreviewStore {
         return loading.contains(key(dimensionId, commit));
     }
 
-    public void save(String dimensionId, CommitId commit, NativeImage image) {
+    public synchronized void save(String dimensionId, CommitId commit, NativeImage image) {
         Optional<VersionPreviewRepository> repository = repository(dimensionId);
         if (repository.isEmpty()) {
             image.close();
@@ -69,30 +70,26 @@ public final class ClientVersionPreviewStore {
             return;
         }
         String key = key(dimensionId, commit);
+        long revision = connectionRevision;
         try {
             CompletableFuture.runAsync(() -> {
                 Path temporary = null;
+                boolean stored = false;
                 try (image) {
-                    if (!hasVisiblePixel(image)) {
-                        synchronized (this) {
-                            missing.add(key);
-                        }
-                        return;
-                    }
-                    temporary = Files.createTempFile("lumi-preview-", ".png");
-                    image.writeToFile(temporary);
-                    repository.orElseThrow().save(commit, Files.readAllBytes(temporary));
-                    synchronized (this) {
-                        missing.remove(key);
+                    if (hasVisiblePixel(image)) {
+                        temporary = Files.createTempFile("lumi-preview-", ".png");
+                        image.writeToFile(temporary);
+                        repository.orElseThrow().save(commit, Files.readAllBytes(temporary));
+                        stored = true;
                     }
                 } catch (Exception failed) {
-                    synchronized (this) {
-                        missing.add(key);
-                    }
                     LumiMod.LOGGER.warn("Failed to store preview for {}", commit.hex(), failed);
                 } finally {
                     synchronized (this) {
-                        loading.remove(key);
+                        if (revision == connectionRevision) {
+                            if (stored) missing.remove(key); else missing.add(key);
+                            loading.remove(key);
+                        }
                     }
                     try {
                         if (temporary != null) Files.deleteIfExists(temporary);
@@ -100,7 +97,7 @@ public final class ClientVersionPreviewStore {
                         LumiMod.LOGGER.warn("Failed to remove temporary Lumi preview", failed);
                     }
                 }
-                }, writer);
+            }, writer);
         } catch (RuntimeException rejected) {
             image.close();
             failLoading(dimensionId, commit);
@@ -169,6 +166,7 @@ public final class ClientVersionPreviewStore {
     }
 
     public synchronized void releaseAll() {
+        connectionRevision++;
         loads.values().forEach(load -> load.thenAccept(image ->
                 image.ifPresent(NativeImage::close)));
         loads.clear();
