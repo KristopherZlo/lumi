@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.Test;
 
 class LumiSettingsScreenTest {
@@ -70,5 +71,20 @@ class LumiSettingsScreenTest {
         assertEquals(42, LumiSettingRow.valueWidth(100, 10));
         assertEquals(76, LumiSettingRow.valueWidth(100, 80));
         assertEquals(0, LumiSettingRow.valueWidth(20, 10));
+        assertEquals(36, LumiSettingRow.toggleWidth(100));
+        assertEquals(6, LumiSettingRow.toggleWidth(30));
+        assertEquals(0, LumiSettingRow.toggleWidth(20));
+        assertEquals(0, LumiSettingRow.toggleWidth(29));
+        LumiMotion enabled = new LumiMotion(1);
+        assertEquals(1, enabled.toward(1));
+        assertEquals(1, enabled.toward(0));
+    }
+
+    @Test
+    void switchNarrationIncludesTheCurrentState() {
+        var row = LumiSettingRow.toggle(0, 0, 100, Component.literal("Setting"),
+                Component.empty(), true, new LumiMotion(1), ignored -> { });
+        assertEquals("Setting: " + Component.translatable("options.on").getString(),
+                row.getMessage().getString());
     }
 }

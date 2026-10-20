@@ -143,10 +143,12 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
             boolean selected = version.equals(
                     left ? leftSelection : rightSelection);
             boolean compact = compactCards();
+            int buttonWidth = compact ? Math.max(1, contentWidth - 12)
+                    : selectionButtonWidth(contentWidth);
             addButton(
-                    compact ? x + 6 : x + contentWidth - 58,
+                    x + contentWidth - 6 - buttonWidth,
                     compact ? rowY + 22 : rowY + 12,
-                    compact ? Math.max(1, contentWidth - 12) : 50,
+                    buttonWidth,
                     Component.translatable(selected
                             ? "luma.compare.selected_save"
                             : "luma.compare.select_save"),
@@ -277,7 +279,7 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
                 previewWidth, previewHeight);
         int textX = x + previewWidth + 11;
         int textWidth = Math.max(0,
-                width - previewWidth - (compact ? 16 : 80));
+                width - previewWidth - (compact ? 16 : selectionButtonWidth(width) + 23));
         graphics.drawString(font,
                 font.plainSubstrByWidth(VersionText.name(version), textWidth),
                 textX, y + 6, LumiTheme.TEXT, false);
@@ -336,6 +338,18 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
 
     private int columnWidth() {
         return columnWidth(layout.width());
+    }
+
+    private int selectionButtonWidth(int contentWidth) {
+        int labelWidth = Math.max(
+                font.width(Component.translatable("luma.compare.select_save")),
+                font.width(Component.translatable("luma.compare.selected_save")));
+        return selectionButtonWidth(contentWidth, labelWidth);
+    }
+
+    static int selectionButtonWidth(int contentWidth, int labelWidth) {
+        return LumiButton.fittedWidth(Math.max(0, contentWidth - 12),
+                Math.max(38, labelWidth));
     }
 
     static int columnWidth(int layoutWidth) {

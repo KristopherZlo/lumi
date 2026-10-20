@@ -44,6 +44,9 @@ class LumiComparePickerScreenTest {
         assertEquals(205, LumiComparePickerScreen.columnWidth(484));
         assertEquals(108, LumiComparePickerScreen.columnWidth(271));
         assertEquals(55, LumiComparePickerScreen.columnWidth(164));
+        assertEquals(62, LumiComparePickerScreen.selectionButtonWidth(205, 50));
+        assertEquals(92, LumiComparePickerScreen.selectionButtonWidth(205, 80));
+        assertEquals(43, LumiComparePickerScreen.selectionButtonWidth(55, 80));
     }
 
     @Test

@@ -16,6 +16,11 @@ final class LumiMotion {
         this(System::nanoTime);
     }
 
+    LumiMotion(float initialValue) {
+        this();
+        fromValue = targetValue = initialValue;
+    }
+
     LumiMotion(LongSupplier nanoTime) {
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
     }

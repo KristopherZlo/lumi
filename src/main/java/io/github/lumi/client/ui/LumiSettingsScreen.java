@@ -10,7 +10,9 @@ import io.github.lumi.domain.model.HudDisplayMode;
 import io.github.lumi.domain.model.WorkspaceSettings;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.telemetry.TelemetryService;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
@@ -53,6 +55,7 @@ public final class LumiSettingsScreen extends LumiPageScreen {
     private LumiDropdown<HudDisplayMode> hudModeDropdown;
     private boolean survivalRequested;
     private long survivalRevision = -1;
+    private final Map<Integer, LumiMotion> toggleMotions = new HashMap<>();
 
     public LumiSettingsScreen(
             Screen parent,
@@ -234,7 +237,9 @@ public final class LumiSettingsScreen extends LumiPageScreen {
                 x, settingY(index), width,
                 Component.translatable(labelKey),
                 Component.translatable(descriptionKey),
-                selected, ignored -> action.run()));
+                selected, toggleMotions.computeIfAbsent(index,
+                        ignored -> new LumiMotion(selected ? 1 : 0)),
+                ignored -> action.run()));
     }
 
     private void addActionSetting(
