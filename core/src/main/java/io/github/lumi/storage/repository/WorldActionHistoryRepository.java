@@ -62,6 +62,28 @@ public final class WorldActionHistoryRepository {
         }
     }
 
+    /** Small write-ahead intent; immutable action payloads already contain both native endpoints. */
+    public Optional<WorldActionIndexCodec.State> readNativeReplay() throws IOException {
+        return readState(root.resolve("native-replay.bin.gz"));
+    }
+
+    public void writeNativeReplay(WorldActionIndexCodec.State state) throws IOException {
+        if (state.publication().isEmpty()) throw new IllegalArgumentException("Native replay needs an operation marker");
+        try (var publication = beginPublication()) {
+            if (readNativeReplay().isPresent()) throw new IOException("A native replay is already pending");
+            writeCompressed(root.resolve("native-replay.bin.gz"), output -> indexes.encode(state, output));
+        }
+    }
+
+    public void clearNativeReplay(UUID operation) throws IOException {
+        var pending = readNativeReplay();
+        if (pending.isEmpty()) return;
+        if (!pending.orElseThrow().publication().orElseThrow().operation().equals(operation)) {
+            throw new IOException("Native replay belongs to another operation");
+        }
+        Files.delete(root.resolve("native-replay.bin.gz"));
+    }
+
     /** History pointer candidates owned by the existing world-operation journal. */
     public void stageCheckpoint(UUID operation, WorldActionIndexCodec.State before,
             WorldActionIndexCodec.State after) throws IOException {
@@ -95,6 +117,7 @@ public final class WorldActionHistoryRepository {
 
     private java.util.List<WorldActionIndexCodec.State> stagedRoots() throws IOException {
         var states = new java.util.ArrayList<WorldActionIndexCodec.State>();
+        readNativeReplay().ifPresent(states::add);
         Path directory = root.resolve("staged");
         if (Files.isDirectory(directory)) try (var files = Files.newDirectoryStream(directory, "*.bin.gz")) {
             for (Path file : files) states.add(readState(file).orElseThrow());

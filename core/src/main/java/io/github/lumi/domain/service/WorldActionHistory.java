@@ -105,6 +105,40 @@ public final class WorldActionHistory {
         persisted = next;
     }
 
+    public synchronized void beginNativeReplay(UUID operation, LiveActionJournal.Plan plan) throws IOException {
+        if (persisted == null) throw new IOException("The selected action has not been stored");
+        boolean undo = plan.direction() == LiveActionJournal.Direction.UNDO;
+        var step = new ActionReplayTarget(plan.player(), plan.actionId(), undo);
+        // Validate the durable cursor before making an intent reachable.
+        persisted.index().move(step, !undo);
+        repository.writeNativeReplay(new WorldActionIndexCodec.State(epoch, version, persisted.workspace(),
+                persisted.branch(), persisted.index(), persisted.payloads(),
+                Optional.of(new WorldActionIndexCodec.Publication(operation, step, !undo))));
+    }
+
+    public synchronized Optional<WorldActionIndexCodec.State> pendingNativeReplay() throws IOException {
+        var intent = repository.readNativeReplay();
+        if (intent.isPresent() && persisted != null && persisted.publication().equals(intent.orElseThrow().publication())) {
+            repository.clearNativeReplay(intent.orElseThrow().publication().orElseThrow().operation());
+            return Optional.empty();
+        }
+        return intent;
+    }
+
+    public synchronized LiveActionJournal.Plan nativeReplayPlan(WorldActionIndexCodec.State intent) throws IOException {
+        if (!intent.epoch().equals(epoch) || !intent.dataVersion().equals(version)) throw new IOException("Native replay context changed");
+        var journal = new LiveActionJournal();
+        journal.restore(intent.index(), metadata -> readRecord(intent, metadata));
+        var marker = intent.publication().orElseThrow();
+        var step = marker.step();
+        var plan = (step.undo() ? journal.prepareUndo(step.actor()) : journal.prepareRedo(step.actor()))
+                .orElseThrow(() -> new IOException("Native replay action is missing"));
+        if (!plan.actionId().equals(step.action())) throw new IOException("Native replay cursor changed");
+        return plan;
+    }
+
+    public synchronized void clearNativeReplay(UUID operation) throws IOException { repository.clearNativeReplay(operation); }
+
     public synchronized ActionReplayTarget prepareCheckpoint(UUID operation, UUID actor, WorldActionCheckpoint checkpoint,
             UUID workspace, BranchName branch) throws IOException {
         if (persisted == null) throw new IOException("History must be captured before preparing a replacement action");

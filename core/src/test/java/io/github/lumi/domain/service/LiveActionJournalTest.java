@@ -16,6 +16,8 @@ import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorldActionScope;
 import io.github.lumi.domain.model.WorldActionCheckpoint;
 import io.github.lumi.domain.model.WorldActionIndex;
+import io.github.lumi.domain.model.WorldDataVersion;
+import io.github.lumi.storage.repository.WorldActionHistoryRepository;
 import io.github.lumi.domain.model.ObjectId;
 import java.util.List;
 import java.util.Map;
@@ -174,6 +176,41 @@ class LiveActionJournalTest {
         new WorldActionHistory(repository, version).restore(afterClear, workspace, branch);
         assertTrue(afterClear.prepareUndo(PLAYER_A).isEmpty());
         assertEquals(foreign, afterClear.prepareUndo(PLAYER_B).orElseThrow().actionId());
+    }
+
+    @Test void nativeReplayIntentRetainsExactStepAndSurvivesInterruptedPublication(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path root) throws Exception {
+        var journal = new LiveActionJournal();
+        UUID action = add(journal, 1);
+        var version = new WorldDataVersion(1);
+        var workspace = UUID.randomUUID();
+        var branch = new BranchName("main");
+        var repository = new WorldActionHistoryRepository(root);
+        var history = new WorldActionHistory(repository, version);
+        assertTrue(history.flush(workspace, branch, journal.snapshotIndex(), journal::snapshotAction, () -> true));
+        var plan = journal.prepareUndo(PLAYER_A).orElseThrow();
+        UUID operation = UUID.randomUUID();
+        history.beginNativeReplay(operation, plan);
+        var reopened = new WorldActionHistory(repository, version);
+        var intent = reopened.pendingNativeReplay().orElseThrow();
+        assertEquals(plan, reopened.nativeReplayPlan(intent));
+        assertThrows(java.io.IOException.class, () -> reopened.beginNativeReplay(UUID.randomUUID(), plan));
+        assertThrows(java.io.IOException.class, () -> reopened.clearNativeReplay(UUID.randomUUID()));
+        repository.removeUnreferencedPayloads();
+        assertEquals(plan, reopened.nativeReplayPlan(intent));
+        assertEquals(action, repository.readIndex().orElseThrow().index().players().get(PLAYER_A).undo().getLast());
+        reopened.publishReplay(operation, intent.publication().orElseThrow().step(), false);
+        // A crash after the durable cursor, before intent deletion, must not replay the step twice.
+        assertTrue(new WorldActionHistory(repository, version).pendingNativeReplay().isEmpty());
+        var restored = new LiveActionJournal();
+        new WorldActionHistory(repository, version).restore(restored, workspace, branch);
+        assertEquals(action, restored.prepareRedo(PLAYER_A).orElseThrow().actionId());
+        var redo = restored.prepareRedo(PLAYER_A).orElseThrow();
+        reopened.beginNativeReplay(operation, redo);
+        assertEquals(redo, reopened.nativeReplayPlan(reopened.pendingNativeReplay().orElseThrow()));
+        reopened.clearNativeReplay(operation);
+        reopened.clearNativeReplay(operation);
+        assertTrue(reopened.pendingNativeReplay().isEmpty());
     }
 
     @Test void reopensUndoRedoAndRefusesAnInterruptedProducer() throws Exception {
