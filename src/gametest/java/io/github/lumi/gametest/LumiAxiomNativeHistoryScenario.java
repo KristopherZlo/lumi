@@ -114,6 +114,7 @@ final class LumiAxiomNativeHistoryScenario {
         assertBlock(context, world, origin, Blocks.GOLD_BLOCK);
         if (context.computeOnClient(client -> LumiClient.networking().worldActions().orElseThrow().view().undo().size())
                 != undoCount + 1) throw new AssertionError("Reopen created an inverse action");
+        nativeRegressions(context, world, operations);
         extras(context, world, report, operations);
         var before = context.computeOnClient(client -> LumiClient.networking().worldActions().orElseThrow().view());
         context.runOnClient(client -> Dispatcher.clear());
@@ -194,6 +195,54 @@ final class LumiAxiomNativeHistoryScenario {
         operations.redo("native_biome_via_lumi");
         operations.nativeHistoryStep("native_biome_final_undo", true);
         report.event("gate", "axiom_native_entities_biomes", "succeeded", 0, 0, "native gesture identity; UUID; callback retained; both controls");
+    }
+
+    private void nativeRegressions(ClientGameTestContext context, TestSingleplayerContext world, LumiBehaviorOperations operations) throws IOException {
+        var growth = origin.north(2);
+        world.getServer().runOnServer(server -> server.getPlayerList().getPlayers().getFirst().level().setBlockAndUpdate(growth, Blocks.DIRT.defaultBlockState()));
+        var growthEntry = context.computeOnClient(client -> {
+            var forwards = new BlockBuffer(); var backwards = new BlockBuffer();
+            forwards.set(growth.getX(), growth.getY(), growth.getZ(), Blocks.GOLD_BLOCK.defaultBlockState());
+            backwards.set(growth.getX(), growth.getY(), growth.getZ(), Blocks.DIRT.defaultBlockState());
+            var entry = new HistoryEntry<com.moulberry.axiom.world_modification.BlockOrBiomeBuffer>(forwards, backwards, growth, "Native natural growth fixture", HistoryEntry.MODIFIER_CAN_BE_UNDONE_INGAME);
+            Dispatcher.push(entry);
+            return io.github.lumi.client.integration.AxiomNativeHistoryFiles.binding(entry).entry();
+        });
+        assertBlock(context, world, growth, Blocks.GOLD_BLOCK);
+        awaitPublished(context, growthEntry);
+        operations.nativeHistoryStep("native_growth_undo", true);
+        world.getServer().runOnServer(server -> server.getPlayerList().getPlayers().getFirst().level().setBlockAndUpdate(growth, Blocks.GRASS_BLOCK.defaultBlockState()));
+        operations.redo("native_growth_via_lumi");
+        assertBlock(context, world, growth, Blocks.GOLD_BLOCK);
+        operations.nativeHistoryStep("native_growth_final_undo", true);
+        var positions = java.util.stream.IntStream.range(0, 66).mapToObj(index ->
+                new BlockPos(origin.getX() + 48 + (index % 3) * 16, 128 + (index / 9) * 16, origin.getZ() + (index / 3 % 3) * 16)).toList();
+        world.getServer().runOnServer(server -> {
+            var level = server.getPlayerList().getPlayers().getFirst().level();
+            for (var pos : positions) level.setBlockAndUpdate(pos, Blocks.AIR.defaultBlockState());
+        });
+        var largeEntry = context.computeOnClient(client -> {
+            var forwards = new BlockBuffer(); var backwards = new BlockBuffer();
+            for (var pos : positions) {
+                forwards.set(pos.getX(), pos.getY(), pos.getZ(), Blocks.GOLD_BLOCK.defaultBlockState());
+                backwards.set(pos.getX(), pos.getY(), pos.getZ(), Blocks.AIR.defaultBlockState());
+            }
+            var entry = new HistoryEntry<com.moulberry.axiom.world_modification.BlockOrBiomeBuffer>(forwards, backwards, positions.getFirst(), "Native 66 sections", HistoryEntry.MODIFIER_CAN_BE_UNDONE_INGAME);
+            Dispatcher.push(entry);
+            return io.github.lumi.client.integration.AxiomNativeHistoryFiles.binding(entry).entry();
+        });
+        assertBlock(context, world, positions.getLast(), Blocks.GOLD_BLOCK);
+        awaitPublished(context, largeEntry);
+        operations.nativeHistoryStep("native_large_undo", true);
+        for (var pos : positions) assertBlock(context, world, pos, Blocks.AIR);
+        operations.nativeHistoryStep("native_large_redo", false);
+        for (var pos : positions) assertBlock(context, world, pos, Blocks.GOLD_BLOCK);
+        operations.nativeHistoryStep("native_large_final_undo", true);
+    }
+
+    private static void awaitPublished(ClientGameTestContext context, java.util.UUID entry) {
+        context.waitFor(client -> LumiClient.networking().worldActions().orElseThrow().view().undo().stream()
+                .anyMatch(group -> group.axiomEntries().contains(entry)));
     }
 
     void sharedReopened(ClientGameTestContext context, TestSingleplayerContext world, LumiBehaviorReport report) throws IOException {

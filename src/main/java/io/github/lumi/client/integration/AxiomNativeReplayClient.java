@@ -20,6 +20,9 @@ public final class AxiomNativeReplayClient {
 
     public static void run(Token token, Runnable work) {
         if (token == null) { work.run(); return; }
+        var client = Minecraft.getInstance();
+        if (token.generation != AxiomClientWorkBarrier.generation() || client.level == null
+                || !token.dimension.equals(client.level.dimension().identifier().toString())) { token.fail(); return; }
         var previous = CURRENT.get();
         CURRENT.set(token);
         try { work.run(); }

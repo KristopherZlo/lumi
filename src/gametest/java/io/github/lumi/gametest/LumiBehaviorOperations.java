@@ -301,19 +301,39 @@ final class LumiBehaviorOperations {
 
     void nativeHistoryStep(String name, boolean undo) throws IOException {
         nativeHistoryAction(name, () -> com.moulberry.axiom.world_modification.Dispatcher.callAction(
-                undo ? com.moulberry.axiom.UserAction.UNDO : com.moulberry.axiom.UserAction.REDO, null));
+                undo ? com.moulberry.axiom.UserAction.UNDO : com.moulberry.axiom.UserAction.REDO, null), true);
     }
 
     void clearNativeHistory() throws IOException {
-        nativeHistoryAction("axiom_clear_history", com.moulberry.axiom.world_modification.Dispatcher::clear);
+        nativeHistoryAction("axiom_clear_history", com.moulberry.axiom.world_modification.Dispatcher::clear, false);
     }
 
-    private void nativeHistoryAction(String name, Runnable action) throws IOException {
-        runOperation(name, () -> {
+    private void nativeHistoryAction(String name, Runnable action, boolean step) throws IOException {
+        awaitHistoryReady();
+        boolean nativeMode = step && context.computeOnClient(client -> io.github.lumi.client.integration.AxiomWorldHistory.INSTANCE.nativeMode());
+        long started = System.nanoTime();
+        var seen = new java.util.concurrent.atomic.AtomicBoolean();
+        var request = send(name, () -> {
             context.waitFor(client -> !io.github.lumi.client.integration.AxiomClientWorkBarrier.isPaused()
                     && !LumiClient.networking().worldActionPending());
-            context.runOnClient(client -> action.run());
+            context.runOnClient(client -> {
+                if (nativeMode) io.github.lumi.mixin.client.AxiomDispatcherPendingAccess.lumi$tracers().clear();
+                action.run();
+            });
+        }, started);
+        awaitOperation(name, request, new AtomicReference<>(), started, () -> {
+            if (nativeMode && context.computeOnClient(client -> {
+                var event = LumiClient.history().state().events().get(request);
+                return event != null && event.progress().map(progress -> progress.phase().startsWith("Restore:")
+                        || progress.phase().startsWith("Save:") || progress.phase().equals("Preparing world state")).orElse(false);
+            })) throw new AssertionError(name + " entered Lumi world replay preparation");
+            if (nativeMode && !seen.get() && context.computeOnClient(client ->
+                    !io.github.lumi.mixin.client.AxiomDispatcherPendingAccess.lumi$tracers().isEmpty())) {
+                seen.set(true);
+                report.event("native_executor", name, "succeeded", 0, elapsedMillis(started), "original Axiom UndoRedoTracer observed");
+            }
         });
+        if (nativeMode && !seen.get()) throw new AssertionError(name + " bypassed the original native Axiom history executor");
     }
 
     void nativeHistoryJump(String name, int stepsBack) throws IOException {

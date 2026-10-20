@@ -40,6 +40,9 @@ final class AxiomNativeHistory {
     private UUID target;
     private boolean navigating;
     private boolean localReplay;
+    private NativeCall nativeCall;
+    private boolean invocationStarted;
+    private final Set<UUID> executed = new HashSet<>();
 
     HistoryEntry<BlockOrBiomeBuffer> push(HistoryEntry<BlockOrBiomeBuffer> entry, WorldActionViewPayload payload) {
         adopt();
@@ -60,6 +63,7 @@ final class AxiomNativeHistory {
     }
 
     AxiomNativeHistoryFiles.Binding entry(BlockOrBiomeBuffer buffer) { return buffers.remove(buffer); }
+    boolean executing() { return localReplay; }
 
     HistoryBuffer<BlockOrBiomeBuffer> projection(WorldActionViewPayload payload) {
         adopt();
@@ -79,10 +83,12 @@ final class AxiomNativeHistory {
         return display;
     }
 
-    boolean step(boolean undo, WorldActionViewPayload payload) {
+    boolean step(boolean undo, WorldActionViewPayload payload, boolean placement, boolean selection, boolean inGame) {
         if (localReplay) return false;
         var projected = projection(payload);
         int position = projected.getPosition() + (undo ? 0 : 1);
+        if (inGame) while (position >= 0 && position < projected.getSize()
+                && !projected.getHistoryEntry(position).hasModifier(HistoryEntry.MODIFIER_CAN_BE_UNDONE_INGAME)) position += undo ? -1 : 1;
         if (position < 0 || position >= projected.getSize()) return true;
         var entry = projected.getHistoryEntry(position);
         UUID id = controls.get(entry);
@@ -95,8 +101,53 @@ final class AxiomNativeHistory {
             revision = -1;
             return false; // Axiom alone owns this client-only tool callback.
         }
-        LumiClient.networking().replayAxiomEntry(id, undo);
+        submit(row, undo, placement, selection, inGame, false);
         return true;
+    }
+
+    boolean lumiStep(boolean undo, WorldActionViewPayload payload) {
+        projection(payload);
+        var groups = undo ? payload.view().undo() : payload.view().redo();
+        if (groups.isEmpty()) return false;
+        var group = undo ? groups.getLast() : groups.getFirst();
+        if (group.axiomEntries().size() != 1) return false;
+        var row = byId.get(group.axiomEntries().iterator().next());
+        if (row == null || !row.binding.epoch().equals(payload.epoch())) return false;
+        submit(row, undo, false, false, false, true);
+        return true;
+    }
+
+    private void submit(Row row, boolean undo, boolean placement, boolean selection, boolean inGame, boolean latest) {
+        if (latest) com.moulberry.axiom.ContextMenuManager.getInstance().close();
+        var request = LumiClient.networking().replayAxiomEntry(row.binding.entry(), undo, latest);
+        nativeCall = new NativeCall(request, row, undo, placement, selection, inGame);
+        invocationStarted = false;
+    }
+
+    void execute(io.github.lumi.network.AxiomNativeReplayPayload payload) {
+        var call = nativeCall;
+        if (call == null || invocationStarted || !call.request.equals(payload.request()) || payload.state() != io.github.lumi.network.AxiomNativeReplayPayload.State.READY) return;
+        invocationStarted = true;
+        actual.unsafeSetPosition(call.undo ? call.row.binding.position() : call.row.binding.position() - 1);
+        executed.add(call.row.binding.entry());
+        try { AxiomNativeReplayClient.execute(call.request, payload.dimension(), () -> {
+            localReplay = true;
+            try {
+                if (call.undo) AxiomDispatcherPendingAccess.lumi$undo(call.placement, call.selection, call.inGame);
+                else AxiomDispatcherPendingAccess.lumi$redo(call.placement, call.inGame);
+            } finally { localReplay = false; }
+        }); } catch (RuntimeException failed) {
+            io.github.lumi.LumiMod.LOGGER.error("Original Axiom history executor failed; the server will recover the operation", failed);
+        }
+    }
+
+    void accept(io.github.lumi.network.OperationEventPayload event) {
+        if (nativeCall == null || !nativeCall.request.equals(event.requestId())) return;
+        if (event.state() == io.github.lumi.network.OperationEventPayload.State.ACCEPTED
+                || event.state() == io.github.lumi.network.OperationEventPayload.State.PROGRESS) return;
+        if (event.state() != io.github.lumi.network.OperationEventPayload.State.SUCCEEDED) executed.remove(nativeCall.row.binding.entry());
+        nativeCall = null;
+        rawRevision = -1;
     }
 
     boolean moveTo(int position, WorldActionViewPayload payload) {
@@ -108,6 +159,7 @@ final class AxiomNativeHistory {
     }
 
     void tick(WorldActionViewPayload payload) {
+        if (nativeCall != null) return;
         projection(payload);
         if (rawRevision != payload.view().revision()) {
             syncLocalTools(payload);
@@ -122,7 +174,7 @@ final class AxiomNativeHistory {
         int current = display.getPosition();
         if (wanted == -2 || wanted == current) { navigating = false; return; }
         boolean undo = wanted < current;
-        if (!step(undo, payload)) {
+        if (!step(undo, payload, false, false, false)) {
             localReplay = true;
             try {
                 if (undo) AxiomDispatcherPendingAccess.lumi$undo(false, false, false);
@@ -137,6 +189,7 @@ final class AxiomNativeHistory {
         rows.clear(); byId.clear(); buffers.clear(); pending.clear(); controls.clear(); confirmed.clear(); display.clear();
         AxiomNativeHistoryFiles.disconnect();
         actual = null; revision = -1; rawRevision = -1; navigating = false;
+        nativeCall = null; executed.clear();
     }
 
     void disconnect() {
@@ -215,6 +268,7 @@ final class AxiomNativeHistory {
             var before = confirmed.get(id);
             var row = byId.get(id);
             if (before == null || before.equals(applied) || row == null) return;
+            if (executed.remove(id)) return; // The original Dispatcher already ran this callback.
             var callback = row.entry.additionalUndoOperation();
             // Entity callbacks mutate the world and may consume their lists; the server already replayed those.
             if (!applied && (callback instanceof ModellingAdditionalUndoOperation || callback instanceof CreatePathAdditionalUndoOperation))
@@ -239,4 +293,5 @@ final class AxiomNativeHistory {
     }
 
     private record Row(HistoryEntry<BlockOrBiomeBuffer> entry, AxiomNativeHistoryFiles.Binding binding) { }
+    private record NativeCall(UUID request, Row row, boolean undo, boolean placement, boolean selection, boolean inGame) { }
 }

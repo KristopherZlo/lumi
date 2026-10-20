@@ -58,9 +58,10 @@ public final class AxiomHistoryCaptureScope implements AutoCloseable {
         String dimension = level.dimension().identifier().toString();
         var identity = Optional.ofNullable(token).map(Token::identity);
         UUID dispatch = UUID.randomUUID();
-        ClientPlayNetworking.send(new AxiomDispatchPayload(dispatch, dimension, false, identity, true));
+        var replay = Optional.ofNullable(AxiomNativeReplayClient.current()).map(AxiomNativeReplayClient.Token::request);
+        ClientPlayNetworking.send(new AxiomDispatchPayload(dispatch, dimension, false, identity, true, replay));
         try { original.run(); }
-        finally { ClientPlayNetworking.send(new AxiomDispatchPayload(dispatch, dimension, true, identity, true)); }
+        finally { ClientPlayNetworking.send(new AxiomDispatchPayload(dispatch, dimension, true, identity, true, replay)); }
     }
     @Override public void close() { if (previous == null) CURRENT.remove(); else CURRENT.set(previous); }
 }

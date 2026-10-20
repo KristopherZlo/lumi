@@ -113,6 +113,9 @@ public final class LumiClientNetworking {
     }
 
     public void register() {
+        if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom"))
+            ClientPlayNetworking.registerGlobalReceiver(io.github.lumi.network.AxiomNativeReplayPayload.TYPE,
+                    (payload, context) -> context.client().execute(() -> io.github.lumi.client.integration.AxiomWorldHistory.INSTANCE.executeNative(payload)));
         ClientPlayNetworking.registerGlobalReceiver(AxiomHistorySettingsPayload.TYPE,
                 (payload, context) -> context.client().execute(() -> history.accept(payload)));
         if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom")) {
@@ -269,9 +272,11 @@ public final class LumiClientNetworking {
         return send(HistoryCommandPayload.Kind.AXIOM_HISTORY_SETTINGS, settings.revision() + ":" + mode.name());
     }
 
-    public UUID replayAxiomEntry(UUID entry, boolean undo) {
+    public UUID replayAxiomEntry(UUID entry, boolean undo, boolean latest) {
         if (history.worldActionRequest().isPresent()) return history.worldActionRequest().orElseThrow();
-        UUID request = send(undo ? HistoryCommandPayload.Kind.AXIOM_UNDO : HistoryCommandPayload.Kind.AXIOM_REDO, entry.toString());
+        var kind = latest ? (undo ? HistoryCommandPayload.Kind.AXIOM_LUMI_UNDO : HistoryCommandPayload.Kind.AXIOM_LUMI_REDO)
+                : (undo ? HistoryCommandPayload.Kind.AXIOM_UNDO : HistoryCommandPayload.Kind.AXIOM_REDO);
+        UUID request = send(kind, entry.toString());
         history.beginWorldAction(request);
         return request;
     }
@@ -282,6 +287,10 @@ public final class LumiClientNetworking {
     private UUID sendWorldAction(HistoryCommandPayload.Kind kind) {
         if (history.worldActions().isEmpty()) return send(kind, "");
         if (history.worldActionRequest().isPresent()) return history.worldActionRequest().orElseThrow();
+        if ((kind == HistoryCommandPayload.Kind.UNDO || kind == HistoryCommandPayload.Kind.REDO)
+                && net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom")
+                && io.github.lumi.client.integration.AxiomWorldHistory.INSTANCE.lumiStep(kind == HistoryCommandPayload.Kind.UNDO))
+            return history.worldActionRequest().orElseThrow();
         UUID request = send(kind, "");
         history.beginWorldAction(request);
         return request;

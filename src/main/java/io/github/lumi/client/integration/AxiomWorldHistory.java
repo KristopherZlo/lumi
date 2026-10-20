@@ -43,7 +43,8 @@ public final class AxiomWorldHistory {
 
     public boolean shared() { return managed() && LumiClient.history().axiomSettings().isPresent() && !nativeMode(); }
 
-    public boolean admissionReady() { return (!managed() || ready()) && AxiomHistoryCaptureScope.validCurrent(); }
+    public boolean admissionReady() { return (!managed() || ready()
+            && (!LumiClient.networking().worldActionPending() || AxiomNativeReplayClient.current() != null)) && AxiomHistoryCaptureScope.validCurrent(); }
 
     public HistoryEntry<BlockOrBiomeBuffer> prepareNativePush(HistoryEntry<BlockOrBiomeBuffer> entry) {
         return nativeMode() && ready() && AxiomHistoryCaptureScope.validCurrent() ? nativeHistory.push(entry, LumiClient.networking().worldActions().orElseThrow()) : entry;
@@ -62,12 +63,13 @@ public final class AxiomWorldHistory {
                         && LumiClient.history().state().snapshot().filter(snapshot -> snapshot.dimensionId().equals(value.dimension())).isPresent()).isPresent();
     }
 
-    public boolean step(boolean undo) {
+    public boolean step(boolean undo, boolean placement, boolean selection, boolean inGame) {
         if (!managed()) return false;
         if (ready() && !AxiomClientWorkBarrier.isPaused()) {
             if (nativeMode()) {
+                if (nativeHistory.executing()) return false;
                 if (LumiClient.networking().worldActionPending()) return true;
-                return nativeHistory.step(undo, LumiClient.networking().worldActions().orElseThrow());
+                return nativeHistory.step(undo, LumiClient.networking().worldActions().orElseThrow(), placement, selection, inGame);
             }
             if (undo) LumiClient.networking().undo(); else LumiClient.networking().redo();
         }
@@ -89,15 +91,26 @@ public final class AxiomWorldHistory {
     }
 
     public void accept(OperationEventPayload event) {
+        nativeHistory.accept(event);
         if (event.state() != OperationEventPayload.State.ACCEPTED
                 && event.state() != OperationEventPayload.State.PROGRESS
                 && event.state() != OperationEventPayload.State.SUCCEEDED) cancelNavigation();
+    }
+
+    public void executeNative(io.github.lumi.network.AxiomNativeReplayPayload payload) {
+        if (nativeMode() && ready() && !AxiomClientWorkBarrier.isPaused()) nativeHistory.execute(payload);
+    }
+
+    public boolean lumiStep(boolean undo) {
+        return nativeMode() && ready() && !AxiomClientWorkBarrier.isPaused()
+                && nativeHistory.lumiStep(undo, LumiClient.networking().worldActions().orElseThrow());
     }
 
     public void cancelNavigation() { navigating = false; nativeHistory.cancelNavigation(); }
 
     public boolean clear() {
         if (!managed()) return false;
+        if (LumiClient.networking().worldActionPending()) return true;
         if (nativeMode()) { nativeHistory.clear(); return false; }
         if (ready() && !AxiomClientWorkBarrier.isPaused() && !LumiClient.networking().worldActionPending()) {
             navigating = false;

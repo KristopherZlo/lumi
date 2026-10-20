@@ -3,6 +3,7 @@ package io.github.lumi.mixin.client;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.moulberry.axiom.world_modification.Dispatcher;
 import com.moulberry.axiom.world_modification.HistoryBuffer;
 import com.moulberry.axiom.world_modification.HistoryEntry;
@@ -47,27 +48,67 @@ abstract class AxiomDispatcherBarrierMixin {
     @WrapMethod(method = "requestChunkData")
     private static void lumi$chunkCallbackScope(LongSet blocks, LongSet entities, boolean accurate, ChunkDataConsumer callback, Operation<Void> original) {
         var token = AxiomHistoryCaptureScope.capture();
-        original.call(blocks, entities, accurate, (ChunkDataConsumer) (nbt, states) ->
-                AxiomHistoryCaptureScope.run(token, () -> callback.accept(nbt, states)));
+        var replay = io.github.lumi.client.integration.AxiomNativeReplayClient.current();
+        if (replay != null) replay.retain();
+        original.call(blocks, entities, accurate, (ChunkDataConsumer) (nbt, states) -> {
+            try { io.github.lumi.client.integration.AxiomNativeReplayClient.run(replay, () -> AxiomHistoryCaptureScope.run(token, () -> callback.accept(nbt, states))); }
+            finally { if (replay != null) replay.release(); }
+        });
     }
 
     @WrapMethod(method = "requestEntityData")
     private static void lumi$entityCallbackScope(java.util.List<java.util.UUID> entities, EntityDataConsumer callback, Operation<Void> original) {
         var token = AxiomHistoryCaptureScope.capture();
-        original.call(entities, (EntityDataConsumer) data -> AxiomHistoryCaptureScope.run(token, () -> callback.accept(data)));
+        var replay = io.github.lumi.client.integration.AxiomNativeReplayClient.current();
+        if (replay != null) replay.retain();
+        original.call(entities, (EntityDataConsumer) data -> {
+            try { io.github.lumi.client.integration.AxiomNativeReplayClient.run(replay, () -> AxiomHistoryCaptureScope.run(token, () -> callback.accept(data))); }
+            finally { if (replay != null) replay.release(); }
+        });
     }
 
     // Selection/placement cancellation has already run; stop before the world cursor moves.
     @Inject(method = "undo(ZZZ)V", at = @At(value = "FIELD", ordinal = 0,
             target = "Lcom/moulberry/axiom/world_modification/Dispatcher;history:Lcom/moulberry/axiom/world_modification/HistoryBuffer;"), cancellable = true)
-    private static void lumi$guardWorldHistory(CallbackInfo callback) {
-        if (AxiomClientWorkBarrier.isPaused() || AxiomWorldHistory.INSTANCE.step(true)) callback.cancel();
+    private static void lumi$guardWorldHistory(boolean placement, boolean selection, boolean inGame, CallbackInfo callback) {
+        if (AxiomClientWorkBarrier.isPaused() || AxiomWorldHistory.INSTANCE.step(true, placement, selection, inGame)) callback.cancel();
     }
 
     @Inject(method = "redo(ZZ)V", at = @At(value = "FIELD", ordinal = 0,
             target = "Lcom/moulberry/axiom/world_modification/Dispatcher;history:Lcom/moulberry/axiom/world_modification/HistoryBuffer;"), cancellable = true)
-    private static void lumi$sharedRedo(CallbackInfo callback) {
-        if (AxiomClientWorkBarrier.isPaused() || AxiomWorldHistory.INSTANCE.step(false)) callback.cancel();
+    private static void lumi$sharedRedo(boolean placement, boolean inGame, CallbackInfo callback) {
+        if (AxiomClientWorkBarrier.isPaused() || AxiomWorldHistory.INSTANCE.step(false, placement, false, inGame)) callback.cancel();
+    }
+
+    // Admission already selected a world entry; do not consume a newly changed local selection.
+    @WrapOperation(method = "undo(ZZZ)V", at = @At(value = "INVOKE", ordinal = 0,
+            target = "Lcom/moulberry/axiom/world_modification/HistoryBuffer;undo(I)Lcom/moulberry/axiom/world_modification/HistoryEntry;"))
+    private static HistoryEntry<?> lumi$worldUndo(HistoryBuffer<?> history, int mask, Operation<HistoryEntry<?>> original) {
+        return io.github.lumi.client.integration.AxiomNativeReplayClient.current() != null ? null : original.call(history, mask);
+    }
+
+    @WrapOperation(method = "redo(ZZ)V", at = @At(value = "INVOKE", ordinal = 0,
+            target = "Lcom/moulberry/axiom/world_modification/HistoryBuffer;redo(I)Lcom/moulberry/axiom/world_modification/HistoryEntry;"))
+    private static HistoryEntry<?> lumi$worldRedo(HistoryBuffer<?> history, int mask, Operation<HistoryEntry<?>> original) {
+        return io.github.lumi.client.integration.AxiomNativeReplayClient.current() != null ? null : original.call(history, mask);
+    }
+
+    @ModifyExpressionValue(method = {"undo(ZZZ)V", "redo(ZZ)V"}, at = @At(value = "INVOKE", ordinal = 0,
+            target = "Lcom/moulberry/axiom/clipboard/Placement;isPlacing()Z"))
+    private static boolean lumi$admittedWorldReplay(boolean placing) {
+        return placing && io.github.lumi.client.integration.AxiomNativeReplayClient.current() == null;
+    }
+
+    @WrapOperation(method = "undo(ZZZ)V", at = @At(value = "INVOKE",
+            target = "Lcom/moulberry/axiom/world_modification/undo/AdditionalUndoOperation;perform()V"))
+    private static void lumi$preserveNativeCallback(com.moulberry.axiom.world_modification.undo.AdditionalUndoOperation callback, Operation<Void> original) {
+        if (io.github.lumi.client.integration.AxiomNativeReplayClient.current() != null) {
+            if (callback instanceof com.moulberry.axiom.world_modification.undo.DeleteEntityAdditionalUndoOperation delete)
+                callback = new com.moulberry.axiom.world_modification.undo.DeleteEntityAdditionalUndoOperation(new java.util.ArrayList<>(delete.entitiesToDelete()));
+            else if (callback instanceof com.moulberry.axiom.world_modification.undo.MoveEntityAdditionalUndoOperation move)
+                callback = new com.moulberry.axiom.world_modification.undo.MoveEntityAdditionalUndoOperation(new java.util.ArrayList<>(move.entitiesToMove()));
+        }
+        original.call(callback);
     }
 
     @Inject(method = "setHistoryPosition", at = @At("HEAD"), cancellable = true)
@@ -113,15 +154,18 @@ abstract class AxiomDispatcherBarrierMixin {
             Operation<CompletableFuture<Void>> original, BlockOrBiomeBuffer buffer) {
         var client = Minecraft.getInstance();
         var entry = AxiomWorldHistory.INSTANCE.nativeEntry(buffer);
+        var replay = io.github.lumi.client.integration.AxiomNativeReplayClient.current();
+        if (replay != null) replay.retain();
         var runtime = LumiMod.serverRuntime().find(server.getLevel(client.level.dimension())).orElseThrow();
         long generation = runtime.freeze().replacementGeneration();
         long clientGeneration = AxiomClientWorkBarrier.generation();
         var actor = client.player == null ? null : client.player.getUUID();
-        return original.call(server, (Runnable) () -> {
+        var future = original.call(server, (Runnable) () -> {
             var player = actor == null ? null : server.getPlayerList().getPlayer(actor);
             if (runtime.freeze().replacementGeneration() == generation
                     && AxiomClientWorkBarrier.generation() == clientGeneration
                     && player != null && player.level() == runtime.level()) {
+                if (replay != null) { runtime.runNativeReplayRequest(player, replay.request(), task); return; }
                 try (var ignored = io.github.lumi.minecraft.runtime.DirectLiveActionContext.open(runtime.liveActions(), actor)) {
                     if (entry == null) task.run();
                     else if (entry.epoch().equals(runtime.worldActionEpoch())) {
@@ -133,5 +177,7 @@ abstract class AxiomDispatcherBarrierMixin {
                 }
             }
         });
+        if (replay != null) future.whenComplete((ignored, failure) -> { if (failure != null) replay.fail(); replay.release(); });
+        return future;
     }
 }
