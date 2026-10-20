@@ -73,6 +73,59 @@ class HistoryGenerationConversionServiceTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
+    void nativeReplayMustFinishBeforeConversion(boolean completed) throws Exception {
+        var ref = fixture(root).main();
+        replayIntent(root, ref, completed ? "completed" : "pending");
+        var conversion = new HistoryGenerationConversionService(root);
+        assertEquals(HistoryGeneration.LEGACY,
+                conversion.convert(WorldDataVersion.LEGACY_12111, adapter(), ignored -> { }));
+        if (completed) {
+            assertEquals(new WorldDataVersion(4786),
+                    conversion.convert(new WorldDataVersion(4786), adapter(), ignored -> { }).dataVersion());
+        } else {
+            assertThrows(IOException.class, () -> conversion.convert(new WorldDataVersion(4786), adapter(), ignored -> { }));
+            assertFalse(java.nio.file.Files.exists(root.resolve("generations")));
+        }
+        assertTrue(java.nio.file.Files.exists(root.resolve("operations/native-action.bin.gz")));
+    }
+
+    static void replayIntent(Path root, BranchRef ref, String variant) throws IOException {
+        var version = WorldDataVersion.LEGACY_12111;
+        var repository = new WorldActionHistoryRepository(root, version);
+        UUID actor = new UUID(0, 1), action = new UUID(0, 7), epoch = new UUID(0, 8), workspace = new UUID(0, 2);
+        var metadata = new WorldActionRecord.Metadata(action, actor, 1, action, 1, true, true, false, Optional.empty());
+        var payload = repository.writePayload(new WorldActionRecord(metadata, new WorldActionRecord.Payload(Map.of(), Map.of())), version);
+        var index = new WorldActionIndex(1, 1, 0, List.of(metadata), Map.of(actor, new WorldActionIndex.Stacks(List.of(action), List.of())));
+        var step = new ActionReplayTarget(actor, action, true, true);
+        var marker = new io.github.lumi.storage.object.WorldActionIndexCodec.Publication(new UUID(0, 9), step, false);
+        var intent = new io.github.lumi.storage.object.WorldActionIndexCodec.State(epoch,
+                variant.equals("version") ? new WorldDataVersion(4786) : version,
+                workspace, ref.name(), index, Map.of(action, payload), Optional.of(marker));
+        repository.writeNativeReplay(intent);
+        if (variant.equals("corrupt")) {
+            java.nio.file.Files.write(root.resolve("operations/native-action.bin.gz"), new byte[] {1, 2, 3});
+        }
+        if (variant.equals("missing-index")) return;
+        var publication = switch (variant) {
+            case "actor" -> new io.github.lumi.storage.object.WorldActionIndexCodec.Publication(marker.operation(),
+                    new ActionReplayTarget(new UUID(0, 3), action, true, true), false);
+            case "direction" -> new io.github.lumi.storage.object.WorldActionIndexCodec.Publication(marker.operation(),
+                    new ActionReplayTarget(actor, action, false, true), false);
+            case "selective" -> new io.github.lumi.storage.object.WorldActionIndexCodec.Publication(marker.operation(),
+                    new ActionReplayTarget(actor, action, true, false), false);
+            case "applied" -> new io.github.lumi.storage.object.WorldActionIndexCodec.Publication(marker.operation(), step, true);
+            default -> marker;
+        };
+        repository.writeIndex(new io.github.lumi.storage.object.WorldActionIndexCodec.State(
+                variant.equals("epoch") ? UUID.randomUUID() : epoch, version,
+                variant.equals("workspace") ? UUID.randomUUID() : workspace,
+                variant.equals("branch") ? new BranchName("other") : ref.name(),
+                variant.equals("pending") ? index : index.move(step, publication.applied()), Map.of(action, payload),
+                variant.equals("pending") ? Optional.empty() : Optional.of(publication)));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
     void changedSourceAfterInterruptionStartsANewGenerationWithCurrentMetadata(boolean changeRefs) throws Exception {
         Fixture fixture = fixture(root);
         var id = fixture.main().commit();

@@ -57,7 +57,7 @@ public final class WorldActionHistoryRepository {
     }
 
     private Optional<WorldActionIndexCodec.State> readState(Path file) throws IOException {
-        if (!Files.exists(file)) return Optional.empty();
+        if (Files.notExists(file)) return Optional.empty();
         try (var input = compressedInput(file, MAX_INDEX_BYTES)) {
             byte[] content = input.readNBytes(MAX_INDEX_BYTES + 1);
             if (content.length > MAX_INDEX_BYTES) throw new IOException("Action index exceeds its byte limit");
@@ -68,6 +68,15 @@ public final class WorldActionHistoryRepository {
     /** Small write-ahead intent; immutable action payloads already contain both native endpoints. */
     public Optional<WorldActionIndexCodec.State> readNativeReplay() throws IOException {
         return readState(nativeReplayFile);
+    }
+
+    public boolean hasUnfinishedReplay(WorldDataVersion version) throws IOException {
+        var intent = readNativeReplay();
+        if (intent.isEmpty()) return false;
+        if (!intent.orElseThrow().dataVersion().equals(version)) {
+            throw new IOException("Action replay intent has a different source data version");
+        }
+        return readIndex().filter(state -> state.confirmsReplay(intent.orElseThrow())).isEmpty();
     }
 
     public void writeNativeReplay(WorldActionIndexCodec.State state) throws IOException {

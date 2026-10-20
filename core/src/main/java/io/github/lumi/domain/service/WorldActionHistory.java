@@ -159,7 +159,7 @@ public final class WorldActionHistory {
 
     public synchronized Optional<WorldActionIndexCodec.State> pendingNativeReplay() throws IOException {
         var intent = repository.readNativeReplay();
-        if (intent.isPresent() && persisted != null && persisted.publication().equals(intent.orElseThrow().publication())) {
+        if (intent.isPresent() && persisted != null && persisted.confirmsReplay(intent.orElseThrow())) {
             repository.clearNativeReplay(intent.orElseThrow().publication().orElseThrow().operation());
             return Optional.empty();
         }

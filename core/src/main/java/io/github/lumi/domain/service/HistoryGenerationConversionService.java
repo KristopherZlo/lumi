@@ -18,6 +18,7 @@ import io.github.lumi.storage.repository.OperationJournalRepository;
 import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.TombstoneRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
+import io.github.lumi.storage.repository.WorldActionHistoryRepository;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
@@ -41,6 +42,7 @@ public final class HistoryGenerationConversionService {
         Objects.requireNonNull(progress, "progress");
         HistoryGeneration original = generations.active();
         WorldDataCompatibility.requireForward(original.dataVersion(), targetVersion);
+        if (!original.dataVersion().equals(targetVersion)) requireRecovered(original);
         if (generations.pending().filter(pending -> pending.target().equals(original)).isPresent()) {
             generations.finishConversion(original);
         }
@@ -48,9 +50,6 @@ public final class HistoryGenerationConversionService {
             return original;
         }
         Path source = generations.directory(original);
-        if (new OperationJournalRepository(source).read().isPresent()) {
-            throw new IOException("Resolve interrupted world operations with the original game before upgrading history");
-        }
         var snapshots = new HistorySourceSnapshot();
         ObjectId sourceSnapshot = snapshots.capture(source);
         String recipe = Objects.requireNonNull(adapter.recipeId(), "conversion recipe");
@@ -105,6 +104,15 @@ public final class HistoryGenerationConversionService {
         generations.finishConversion(prepared);
         progress.accept(new Progress(Phase.COMPLETED, 0));
         return prepared;
+    }
+
+    void requireRecovered(HistoryGeneration source) throws IOException {
+        Path directory = generations.directory(source);
+        if (new OperationJournalRepository(directory).read().isPresent()
+                || new WorldActionHistoryRepository(directory, source.dataVersion()).hasUnfinishedReplay(source.dataVersion())) {
+            throw new IOException("Resolve interrupted Lumi operations in the original Minecraft version (data version "
+                    + source.dataVersion().value() + ") before upgrading: " + directory);
+        }
     }
 
     private void verifyRoots(Path source, Path target, HistoryConversionMap mapping) throws IOException {

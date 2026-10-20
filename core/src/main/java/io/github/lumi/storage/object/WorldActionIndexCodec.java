@@ -48,6 +48,16 @@ public final class WorldActionIndexCodec {
             if (!payloads.keySet().equals(required)) throw new IllegalArgumentException("Missing or extra action payload identities");
             if (new HashSet<>(payloads.values()).size() != payloads.size()) throw new IllegalArgumentException("Action payload identity reused across actions");
         }
+
+        public boolean confirmsReplay(State intent) {
+            return intent.publication().isPresent() && publication.equals(intent.publication())
+                    && epoch.equals(intent.epoch()) && dataVersion.equals(intent.dataVersion())
+                    && workspace.equals(intent.workspace()) && branch.equals(intent.branch())
+                    && index.actions().stream().anyMatch(action -> action.closed()
+                            && action.id().equals(intent.publication().orElseThrow().step().action())
+                            && action.actor().equals(intent.publication().orElseThrow().step().actor())
+                            && action.applied() == intent.publication().orElseThrow().applied());
+        }
     }
 
     public record Publication(UUID operation, ActionReplayTarget step, boolean applied) {

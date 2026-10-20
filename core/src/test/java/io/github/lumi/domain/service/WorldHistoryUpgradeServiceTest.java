@@ -13,6 +13,8 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class WorldHistoryUpgradeServiceTest {
     @TempDir Path world;
@@ -90,6 +92,26 @@ class WorldHistoryUpgradeServiceTest {
                 .upgrade(() -> fail("Interrupted operation created a backup"), ignored -> { }));
         assertFalse(Files.exists(first.resolve("generations")));
         assertFalse(Files.exists(second.resolve("generations")));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"pending", "completed", "missing-index", "corrupt", "epoch", "workspace", "branch", "version", "actor", "direction", "selective", "applied"})
+    void nativeIntentIsCheckedInEveryDimensionBeforeBackup(String variant) throws Exception {
+        var layout = new DimensionRepositoryLayout(world);
+        var first = layout.resolve("minecraft:overworld");
+        var second = layout.resolve("minecraft:the_nether");
+        HistoryGenerationConversionServiceTest.fixture(first);
+        var ref = HistoryGenerationConversionServiceTest.fixture(second).main();
+        HistoryGenerationConversionServiceTest.replayIntent(second, ref, variant);
+        var upgrade = service(layout, Set.of(WorldDataVersion.LEGACY_12111));
+        if (variant.equals("completed")) {
+            assertEquals(2, upgrade.upgrade(() -> { }, ignored -> { }));
+        } else {
+            assertThrows(IOException.class, () -> upgrade.upgrade(() -> fail("Unfinished replay started a backup"), ignored -> { }));
+            assertFalse(Files.exists(first.resolve("generations")));
+            assertFalse(Files.exists(second.resolve("generations")));
+        }
+        assertTrue(Files.exists(second.resolve("operations/native-action.bin.gz")));
     }
 
     private WorldHistoryUpgradeService service(DimensionRepositoryLayout layout, Set<WorldDataVersion> permitted) {

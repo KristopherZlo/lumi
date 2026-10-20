@@ -3,7 +3,6 @@ package io.github.lumi.domain.service;
 import io.github.lumi.domain.model.WorldDataVersion;
 import io.github.lumi.storage.repository.DimensionRepositoryLayout;
 import io.github.lumi.storage.repository.HistoryGenerationRepository;
-import io.github.lumi.storage.repository.OperationJournalRepository;
 import java.io.IOException;
 import java.util.Objects;
 import java.util.Set;
@@ -38,9 +37,7 @@ public final class WorldHistoryUpgradeService {
                 throw new IOException("History upgrade route is not enabled: " + source.dataVersion().value()
                         + " -> " + target.value());
             }
-            if (new OperationJournalRepository(generations.directory(source)).read().isPresent()) {
-                throw new IOException("Resolve interrupted Lumi operations in the original game before upgrading");
-            }
+            new HistoryGenerationConversionService(repository).requireRecovered(source);
             conversions++;
         }
         if (conversions > 0) backup.create();
