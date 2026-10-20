@@ -102,7 +102,7 @@ public record WorldActionIndex(
 
     /** Projects one whole group; publication can retry without moving the cursor twice. */
     public WorldActionIndex move(ActionReplayTarget step, boolean applied) {
-        return move(step, applied, false);
+        return move(step, applied, step.selective());
     }
 
     /** Moves an explicitly admitted group without undoing newer, disjoint groups. */
@@ -120,17 +120,18 @@ public record WorldActionIndex(
         var target = new ArrayList<>(applied ? stacks.undo() : stacks.redo());
         var group = actions.stream().filter(action -> action.group().equals(selected.group())).toList();
         var ids = group.stream().map(WorldActionRecord.Metadata::id).toList();
+        int first = selective ? source.indexOf(ids.getFirst()) : source.size() - ids.size();
         if (!selected.closed()
-                || !source.stream().filter(ids::contains).toList().equals(ids)
-                || (!selective && (source.isEmpty() || !source.getLast().equals(step.action()) || source.size() < ids.size()
-                    || !source.subList(source.size() - ids.size(), source.size()).equals(ids)))) {
+                || first < 0 || first + ids.size() > source.size()
+                || !source.subList(first, first + ids.size()).equals(ids)
+                || (!selective && !source.getLast().equals(step.action()))) {
             throw new IllegalStateException("Selected action cursor changed before publication");
         }
-        source.removeIf(ids::contains);
+        source.subList(first, first + ids.size()).clear();
         target.addAll(ids);
         var replacement = actions.stream().map(action -> action.group().equals(selected.group())
                 ? new WorldActionRecord.Metadata(action.id(), action.actor(), action.sequence(), action.group(),
-                        action.revision(), applied, action.closed(), action.pending(), action.checkpoint()) : action).toList();
+                        action.revision(), applied, action.closed(), action.pending(), action.checkpoint(), action.axiomEntry()) : action).toList();
         var cursors = new HashMap<>(players);
         cursors.put(step.actor(), applied ? new Stacks(target, source) : new Stacks(source, target));
         return new WorldActionIndex(Math.addExact(revision, 1), nextSequence, unsafeBeforeSequence, replacement, cursors);

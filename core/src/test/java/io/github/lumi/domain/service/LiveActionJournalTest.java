@@ -27,26 +27,39 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class LiveActionJournalTest {
-    @Test void selectedUndoKeepsNewerDisjointEditsAndSurvivesReopen() throws Exception {
+    @Test void selectedUndoKeepsNewerDisjointEditsAndSurvivesReopen(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path root) throws Exception {
         var journal = new LiveActionJournal();
         var first = new BlockPosition(0, 0, 0);
         var second = new BlockPosition(1, 0, 0);
         UUID older = journal.begin(PLAYER_A);
+        UUID nativeEntry = UUID.randomUUID();
+        journal.linkAxiom(older, nativeEntry);
         journal.record(older, first, block("stone"), block("gold_block"));
         journal.close(older);
         UUID newer = journal.begin(PLAYER_A);
         journal.record(newer, second, block("air"), block("stone"));
         journal.close(newer);
         var undo = journal.prepareSelected(PLAYER_A, older, LiveActionJournal.Direction.UNDO).orElseThrow();
-        var step = new io.github.lumi.domain.model.ActionReplayTarget(PLAYER_A, older, true);
+        var step = new io.github.lumi.domain.model.ActionReplayTarget(PLAYER_A, older, true, true);
+        var repository = new WorldActionHistoryRepository(root);
+        var version = new io.github.lumi.domain.model.WorldDataVersion(5000);
+        var history = new WorldActionHistory(repository, version);
+        UUID workspace = UUID.randomUUID(), operation = UUID.randomUUID();
+        assertTrue(history.flush(workspace, new BranchName("main"), journal.snapshotIndex(), journal::snapshotAction, () -> true));
+        history.beginNativeReplay(operation, undo, undo, true);
+        assertEquals(undo, history.nativeReplayPlan(history.pendingNativeReplay().orElseThrow()));
         var durable = journal.snapshotIndex().moveSelected(step, false);
         journal.completeSelected(undo);
+        history.publishReplay(operation, step, false);
+        history.publishReplay(operation, step, false);
         assertEquals(durable.players(), journal.snapshotIndex().players());
         assertEquals(newer, journal.prepareUndo(PLAYER_A).orElseThrow().actionId());
         assertTrue(journal.prepareSelected(PLAYER_A, older, LiveActionJournal.Direction.UNDO).isEmpty());
         assertEquals(durable, durable.moveSelected(step, false));
         var reopened = new LiveActionJournal();
-        reopened.restore(journal.snapshotIndex(), journal::snapshotAction);
+        new WorldActionHistory(new WorldActionHistoryRepository(root), version).restore(reopened, workspace, new BranchName("main"));
+        assertEquals(Optional.of(nativeEntry), reopened.snapshotIndex().actions().getFirst().axiomEntry());
         reopened.completeSelected(reopened.prepareSelected(PLAYER_A, older, LiveActionJournal.Direction.REDO).orElseThrow());
         assertEquals(older, reopened.prepareUndo(PLAYER_A).orElseThrow().actionId());
         UUID overlap = reopened.begin(PLAYER_B);

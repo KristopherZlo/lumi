@@ -113,13 +113,13 @@ class WorldActionPayloadCodecTest {
                 new io.github.lumi.domain.model.WorldActionContext(new UUID(0, 200), new BranchName("main")),
                 new io.github.lumi.domain.model.WorldActionContext(new UUID(0, 201), new BranchName("next"))));
         var second = new WorldActionRecord.Metadata(new UUID(0, 3), new UUID(0, 2), 2, new UUID(0, 3),
-                1, false, true, false, Optional.of(checkpoint));
+                1, false, true, false, Optional.of(checkpoint), Optional.of(new UUID(0, 900)));
         var index = new WorldActionIndex(7, 2, 0, List.of(metadata(1), second),
                 Map.of(new UUID(0, 2), new WorldActionIndex.Stacks(List.of(new UUID(0, 1)), List.of(second.id()))));
         var state = new WorldActionIndexCodec.State(new UUID(0, 100), new WorldDataVersion(5000),
                 new UUID(0, 200), new BranchName("main"), index, Map.of(new UUID(0, 1), new UUID(0, 300)),
                 Optional.of(new WorldActionIndexCodec.Publication(new UUID(0, 400),
-                        new ActionReplayTarget(second.actor(), second.id(), true), true)));
+                        new ActionReplayTarget(second.actor(), second.id(), true, true), true)));
         var bytes = new ByteArrayOutputStream();
         var codec = new WorldActionIndexCodec();
         codec.encode(state, new DataOutputStream(bytes));

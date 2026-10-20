@@ -26,7 +26,8 @@ import java.util.UUID;
 
 /** Small history root: cursors, checkpoint roots and immutable delta-file identities. */
 public final class WorldActionIndexCodec {
-    private static final int MAGIC = 0x4C414932;
+    private static final int MAGIC = 0x4C414933;
+    private static final int CONTEXT_MAGIC = 0x4C414932;
     private static final int PREVIOUS_MAGIC = 0x4C414931;
     private static final int MAX_ACTIONS = 16_384;
     private static final int MAX_SECTIONS = 32_768;
@@ -85,6 +86,8 @@ public final class WorldActionIndexCodec {
             CanonicalBytes.writeUuid(output, action.group());
             output.writeLong(action.revision());
             output.writeByte((action.applied() ? 1 : 0) | (action.closed() ? 2 : 0) | (action.pending() ? 4 : 0));
+            output.writeBoolean(action.axiomEntry().isPresent());
+            if (action.axiomEntry().isPresent()) CanonicalBytes.writeUuid(output, action.axiomEntry().orElseThrow());
             output.writeBoolean(action.checkpoint().isPresent());
             if (action.checkpoint().isPresent()) writeCheckpoint(output, action.checkpoint().orElseThrow());
             else CanonicalBytes.writeUuid(output, state.payloads().get(action.id()));
@@ -101,14 +104,14 @@ public final class WorldActionIndexCodec {
             CanonicalBytes.writeUuid(output, publication.operation());
             CanonicalBytes.writeUuid(output, publication.step().actor());
             CanonicalBytes.writeUuid(output, publication.step().action());
-            output.writeBoolean(publication.step().undo());
+            output.writeByte((publication.step().undo() ? 1 : 0) | (publication.step().selective() ? 2 : 0));
             output.writeBoolean(publication.applied());
         }
     }
 
     public State decode(DataInputStream input) throws IOException {
         int magic = input.readInt();
-        if (magic != MAGIC && magic != PREVIOUS_MAGIC) throw new IOException("Not a Lumi action index");
+        if (magic != MAGIC && magic != CONTEXT_MAGIC && magic != PREVIOUS_MAGIC) throw new IOException("Not a Lumi action index");
         try {
             UUID epoch = CanonicalBytes.readUuid(input);
             var version = new WorldDataVersion(input.readInt());
@@ -126,11 +129,12 @@ public final class WorldActionIndexCodec {
                 long contentRevision = input.readLong();
                 int flags = input.readUnsignedByte();
                 if ((flags & ~7) != 0) throw new IOException("Invalid action index flags");
+                Optional<UUID> axiomEntry = magic == MAGIC && flag(input) ? Optional.of(CanonicalBytes.readUuid(input)) : Optional.empty();
                 Optional<WorldActionCheckpoint> checkpoint = Optional.empty();
-                if (flag(input)) checkpoint = Optional.of(readCheckpoint(input, scopeBudget, magic == MAGIC));
+                if (flag(input)) checkpoint = Optional.of(readCheckpoint(input, scopeBudget, magic != PREVIOUS_MAGIC));
                 else payloads.put(id, CanonicalBytes.readUuid(input));
                 actions.add(new WorldActionRecord.Metadata(id, actor, order, group, contentRevision,
-                        (flags & 1) != 0, (flags & 2) != 0, (flags & 4) != 0, checkpoint));
+                        (flags & 1) != 0, (flags & 2) != 0, (flags & 4) != 0, checkpoint, axiomEntry));
             }
             int players = count(input, MAX_ACTIONS), remaining = actions.size();
             var stacks = new HashMap<UUID, WorldActionIndex.Stacks>();
@@ -144,13 +148,20 @@ public final class WorldActionIndexCodec {
             }
             Optional<Publication> publication = Optional.empty();
             if (flag(input)) publication = Optional.of(new Publication(CanonicalBytes.readUuid(input),
-                    new ActionReplayTarget(CanonicalBytes.readUuid(input), CanonicalBytes.readUuid(input), flag(input)), flag(input)));
+                    readReplayTarget(input), flag(input)));
             if (input.read() != -1) throw new IOException("Trailing action index bytes");
             return new State(epoch, version, workspace, branch,
                     new WorldActionIndex(revision, sequence, unsafe, actions, stacks), payloads, publication);
         } catch (IllegalArgumentException invalid) {
             throw new IOException("Invalid action index", invalid);
         }
+    }
+
+    private static ActionReplayTarget readReplayTarget(DataInputStream input) throws IOException {
+        UUID actor = CanonicalBytes.readUuid(input), action = CanonicalBytes.readUuid(input);
+        int flags = input.readUnsignedByte();
+        if (flags > 3) throw new IOException("Invalid action replay flags");
+        return new ActionReplayTarget(actor, action, (flags & 1) != 0, (flags & 2) != 0);
     }
 
     private void writeCheckpoint(DataOutputStream output, WorldActionCheckpoint checkpoint) throws IOException {

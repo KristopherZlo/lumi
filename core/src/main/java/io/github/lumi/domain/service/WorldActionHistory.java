@@ -126,11 +126,15 @@ public final class WorldActionHistory {
     }
 
     public synchronized void beginNativeReplay(UUID operation, LiveActionJournal.Plan plan, LiveActionJournal.Plan recovery) throws IOException {
+        beginNativeReplay(operation, plan, recovery, false);
+    }
+
+    public synchronized void beginNativeReplay(UUID operation, LiveActionJournal.Plan plan, LiveActionJournal.Plan recovery, boolean selective) throws IOException {
         if (!plan.player().equals(recovery.player()) || !plan.actionIds().equals(recovery.actionIds()) || plan.direction() != recovery.direction())
             throw new IllegalArgumentException("Recovery belongs to another action");
         if (persisted == null) throw new IOException("The selected action has not been stored");
         boolean undo = plan.direction() == LiveActionJournal.Direction.UNDO;
-        var step = new ActionReplayTarget(plan.player(), plan.actionId(), undo);
+        var step = new ActionReplayTarget(plan.player(), plan.actionId(), undo, selective);
         // Validate the durable cursor before making an intent reachable.
         persisted.index().move(step, !undo);
         pendingNativeReplay(); // Collect an already-published intent left by interrupted cleanup.

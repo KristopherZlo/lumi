@@ -57,10 +57,11 @@ class OperationJournalRepositoryTest {
 
     @Test
     void retainsSelectedActionAndDirectionAcrossReopenAndPhaseAdvances() throws IOException {
-        for (boolean undo : new boolean[] {true, false}) {
-            Path root = repositoryRoot.resolve(undo ? "undo" : "redo");
+        for (int flags = 0; flags < 4; flags++) {
+            boolean undo = (flags & 1) != 0;
+            Path root = repositoryRoot.resolve("replay-" + flags);
             var repository = new OperationJournalRepository(root);
-            var action = new ActionReplayTarget(new UUID(0, 1), new UUID(0, 2), undo);
+            var action = new ActionReplayTarget(new UUID(0, 1), new UUID(0, 2), undo, (flags & 2) != 0);
             var journal = repository.create(new OperationJournal(UUID.randomUUID(),
                     OperationKind.ACTION_REPLAY, OperationPhase.PREPARED, target())
                     .withActionReplay(action));
@@ -84,7 +85,7 @@ class OperationJournalRepositoryTest {
         byte[] flag = valid.clone();
         flag[flag.length - 34] = 2;
         byte[] direction = valid.clone();
-        direction[direction.length - 1] = 2;
+        direction[direction.length - 1] = 4;
         byte[] wrongKind = valid.clone();
         wrongKind[20] = (byte) OperationKind.SAVE.code();
         for (byte[] invalid : new byte[][] {flag, direction, wrongKind,

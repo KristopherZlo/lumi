@@ -131,7 +131,7 @@ public final class OperationJournalRepository {
                 var action = journal.actionReplay().orElseThrow();
                 writeUuid(output, action.actor());
                 writeUuid(output, action.action());
-                output.writeBoolean(action.undo());
+                output.writeByte((action.undo() ? 1 : 0) | (action.selective() ? 2 : 0));
             }
         }
         return bytes.toByteArray();
@@ -197,8 +197,8 @@ public final class OperationJournalRepository {
                     UUID actor = readUuid(input);
                     UUID action = readUuid(input);
                     int undo = input.readUnsignedByte();
-                    if (undo > 1) throw new IOException("Invalid action replay direction");
-                    actionReplay = Optional.of(new ActionReplayTarget(actor, action, undo == 1));
+                    if (undo > 3) throw new IOException("Invalid action replay direction");
+                    actionReplay = Optional.of(new ActionReplayTarget(actor, action, (undo & 1) != 0, (undo & 2) != 0));
                 }
             }
             OperationTarget target = new OperationTarget(

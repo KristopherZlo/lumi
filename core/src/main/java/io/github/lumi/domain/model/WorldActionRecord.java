@@ -19,12 +19,17 @@ public record WorldActionRecord(Metadata metadata, Payload payload) {
 
     public record Metadata(
             UUID id, UUID actor, long sequence, UUID group, long revision,
-            boolean applied, boolean closed, boolean pending, Optional<WorldActionCheckpoint> checkpoint) {
+            boolean applied, boolean closed, boolean pending, Optional<WorldActionCheckpoint> checkpoint, Optional<UUID> axiomEntry) {
+        public Metadata(UUID id, UUID actor, long sequence, UUID group, long revision,
+                boolean applied, boolean closed, boolean pending, Optional<WorldActionCheckpoint> checkpoint) {
+            this(id, actor, sequence, group, revision, applied, closed, pending, checkpoint, Optional.empty());
+        }
         public Metadata {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(actor, "actor");
             Objects.requireNonNull(group, "group");
             Objects.requireNonNull(checkpoint, "checkpoint");
+            Objects.requireNonNull(axiomEntry, "axiomEntry");
             if (sequence < 1 || revision < 0) throw new IllegalArgumentException("Invalid action order/revision");
         }
     }

@@ -417,6 +417,15 @@ public final class LiveActionJournal {
         return prepare(player, Direction.REDO, stacks(player).redo);
     }
 
+    /** One native entry may own several explicitly grouped dispatches. */
+    public synchronized void linkAxiom(UUID actionId, UUID entry) {
+        MutableAction action = requireAction(actionId);
+        Objects.requireNonNull(entry, "entry");
+        if (action.axiomEntry != null && !entry.equals(action.axiomEntry))
+            throw new IllegalStateException("Action already belongs to another native entry");
+        if (action.axiomEntry == null) { action.axiomEntry = entry; revision++; }
+    }
+
     /** Selects one retained group; ordinary overlap and eviction checks still apply. */
     public synchronized Optional<Plan> prepareSelected(UUID player, UUID actionId, Direction direction) {
         Objects.requireNonNull(direction, "direction");
@@ -549,7 +558,7 @@ public final class LiveActionJournal {
                 .map(action -> new WorldActionRecord.Metadata(
                         action.id, action.player, action.sequence, action.groupId, action.revision,
                         action.applied, action.closed, !action.closed || action.delayedReferences > 0
-                                || pendingChanges.contains(action.id), Optional.ofNullable(action.checkpoint)))
+                                || pendingChanges.contains(action.id), Optional.ofNullable(action.checkpoint), Optional.ofNullable(action.axiomEntry)))
                 .toList();
         var players = new HashMap<UUID, WorldActionIndex.Stacks>();
         playerStacks.forEach((player, stacks) -> players.put(player,
@@ -603,6 +612,7 @@ public final class LiveActionJournal {
             else if (existing.revision != metadata.revision()) throw new IOException("Action changed while installing a prepared history root");
             var action = requireAction(metadata.id());
             action.groupId = metadata.group();
+            action.axiomEntry = metadata.axiomEntry().orElse(null);
             action.closed = metadata.closed();
             setApplied(action, metadata.applied());
         }
@@ -627,6 +637,7 @@ public final class LiveActionJournal {
         if (!record.metadata().equals(metadata)) throw new IOException("Restored action identity mismatch");
         var action = new MutableAction(metadata.id(), metadata.actor(), metadata.sequence());
         action.groupId = metadata.group();
+        action.axiomEntry = metadata.axiomEntry().orElse(null);
         action.revision = metadata.revision();
         action.applied = metadata.applied();
         action.closed = metadata.closed();
@@ -1234,6 +1245,7 @@ public final class LiveActionJournal {
         private final UUID player;
         private final long sequence;
         private UUID groupId;
+        private UUID axiomEntry;
         private final Map<BlockPosition, BlockDelta> changes = new LinkedHashMap<>();
         private final Map<UUID, EntityDelta> entities = new LinkedHashMap<>();
         private final Map<BiomePosition, BiomeDelta> biomes = new LinkedHashMap<>();
