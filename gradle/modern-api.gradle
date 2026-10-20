@@ -29,6 +29,7 @@ stonecutter.replacements {
         replace('ServerWorldEvents', 'ServerLevelEvents')
         replace('net.fabricmc.fabric.api.client.keybinding.v1.', 'net.fabricmc.fabric.api.client.keymapping.v1.')
         replace('KeyBindingHelper', 'KeyMappingHelper')
+        replace('ClientCommandManager', 'ClientCommands')
         replace('net.fabricmc.fabric.api.client.rendering.v1.world.', 'net.fabricmc.fabric.api.client.rendering.v1.level.')
         replace('WorldRenderContext', 'LevelRenderContext')
         replace('WorldRenderEvents', 'LevelRenderEvents')

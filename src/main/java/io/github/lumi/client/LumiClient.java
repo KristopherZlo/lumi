@@ -226,6 +226,7 @@ public final class LumiClient implements ClientModInitializer {
                 NETWORKING::editActiveZone).register();
         new LumiSelectionOverlay(SELECTION).register();
         new LumiSelectionHud(SELECTION).register();
+        LumiEffectPreview.register();
         ZONE_OVERLAY.register();
         new LumiOperationHud(
                 HISTORY, PENDING_STATISTICS, NOTIFICATIONS,
