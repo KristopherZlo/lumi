@@ -78,6 +78,11 @@ public final class AxiomBufferReplay implements WorldStateApply.ApplySession {
         return !remaining.hasNext();
     }
 
+    public boolean canApplyBeforeIntent() {
+        // POI has its own storage. Only terrain/NBT writes are covered by the chunk-publication hold.
+        return target.sections().values().stream().allMatch(section -> section.preparedDelta().poiIndexes().length == 0);
+    }
+
     @Override public WorldStateApply.Verification verifyUntil(long deadline) throws IOException { return verification.verifyUntil(deadline); }
     @Override public boolean persistUntil(long deadline) throws IOException { return verification.persistUntil(deadline); }
     @Override public boolean repairUntil(long deadline) throws IOException { throw new IOException("Native replay repair requires its recovery journal"); }

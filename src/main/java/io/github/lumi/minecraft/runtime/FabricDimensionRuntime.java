@@ -1206,6 +1206,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         boolean undo = plan.direction() == LiveActionJournal.Direction.UNDO;
         var source = plan.expectedSections();
         var publication = new PendingRestorePublication(mutations);
+        var publicationHold = new AtomicReference<io.github.lumi.minecraft.world.DimensionFreeze.Lease>();
         return new BackgroundPreparedMutation<>(CompletableFuture.supplyAsync(() -> {
             try {
                 var before = worldApply.beginLoadedVerification(worldApply.prepare(new WorldStateApply.State(source, Map.of())));
@@ -1218,14 +1219,16 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                             }
                             actionHistory.beginNativeReplay(operation, plan);
                         }, () -> {
+                            publicationHold.set(mutations.holdPublication(source.keySet()));
                             publication.publishSections(source);
                             source.keySet().forEach(mutations::markBuilderMutation);
                         },
+                        () -> { var hold = publicationHold.getAndSet(null); if (hold != null) hold.release(); },
                         () -> {
                             actionHistory.publishReplay(operation, new ActionReplayTarget(plan.player(), plan.actionId(), undo), !undo);
                             LumiMod.LOGGER.info("Lumi native Axiom {} completed: {} sections, no hidden Save/Restore", undo ? "Undo" : "Redo", source.size());
                         }, () -> actionHistory.clearNativeReplay(operation),
-                        this::createPortableActionReplay, ignored -> createNativeRecovery(expected));
+                        this::createPortableActionReplay, ignored -> createNativeRecovery(expected), nativeReplay.canApplyBeforeIntent());
             } catch (IOException failed) { throw new CompletionException(failed); }
         }, background), () -> requireExpectedRef(expected), value -> { value.cancel(); value.close(); }, true);
     }

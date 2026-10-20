@@ -32,6 +32,25 @@ class MutationDurabilityTrackerTest {
     @TempDir
     Path repositoryRoot;
 
+    @Test void replayHoldKeepsChunksUnpublishableAfterOrdinaryDurabilityFinishes() throws Exception {
+        var background = new ManualExecutor();
+        var tracker = MutationDurabilityTracker.open(new WorldObjectRepository(repositoryRoot),
+                new OriginStore(repositoryRoot), new WorkingIndexRepository(repositoryRoot), background);
+        var key = new SectionKey(0, 0, 0);
+        var hold = tracker.holdPublication(List.of(key, new SectionKey(0, 1, 0)));
+        var nested = tracker.holdPublication(List.of(key));
+        tracker.registerSectionMutation(key, MutationDurabilityTrackerTest::airSection);
+        while (background.size() > 0) background.runNext();
+        assertTrue(tracker.isDurable(tracker.snapshot()));
+        assertFalse(tracker.canPublishChunk(0, 0));
+        assertTrue(tracker.canPublishChunk(1, 0));
+        hold.release();
+        hold.release();
+        assertFalse(tracker.canPublishChunk(0, 0));
+        nested.release();
+        assertTrue(tracker.canPublishChunk(0, 0));
+    }
+
     @Test
     void shutdownFlushesDelayedIndexAndOriginsAfterTheExecutorStopsAcceptingTasks() throws Exception {
         var background = new ManualExecutor();

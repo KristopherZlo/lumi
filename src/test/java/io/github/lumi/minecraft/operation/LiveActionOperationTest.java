@@ -68,13 +68,13 @@ class LiveActionOperationTest {
                     world, LiveEntityWorldAccess.UNSUPPORTED, ignored -> false, ignored -> events.add("complete"),
                     plan -> new AxiomReplayOperation(plan, source, nativeReplay, origins, Runnable::run,
                             () -> { events.add("intent"); if (mode == 3) throw new IOException("intent failure"); },
-                            () -> events.add("origins"), () -> events.add("cursor"), () -> events.add("discard"),
+                            () -> events.add("origins"), () -> events.add("release"), () -> events.add("cursor"), () -> events.add("discard"),
                             ignored -> { events.add("portable"); return new NoChangeMutation("portable test"); },
                             ignored -> {
                                 events.add("recovery");
                                 if (mode == 4) return new NoChangeMutation("recovered test");
                                 throw new IOException("recovery unavailable");
-                            }));
+                            }, true));
             operation.advance(Long.MAX_VALUE);
             if (mode == 1) {
                 assertTrue(!operation.isTerminal());
@@ -94,6 +94,35 @@ class LiveActionOperationTest {
             assertEquals(mode == 3, events.contains("discard"));
             assertEquals(mode == 1 || mode == 2 || mode == 4, events.contains("native.apply"));
             assertEquals(0, world.writes);
+            operation.close();
+        }
+    }
+
+    @Test void nativeBlocksCanApplyWhileTheIntentIsPendingButCannotPublishOrComplete() throws Exception {
+        for (boolean early : new boolean[] {false, true}) {
+            var events = new ArrayList<String>();
+            var jobs = new java.util.ArrayDeque<Runnable>();
+            var plan = action(block("stone"), block("gold_block")).prepareUndo(PLAYER).orElseThrow();
+            var operation = new AxiomReplayOperation(plan, new ReplaySession(events, "source", false),
+                    new ReplaySession(events, "native", false), ignored -> { }, jobs::add,
+                    () -> events.add("intent"), () -> events.add("hold"), () -> events.add("release"),
+                    () -> events.add("cursor"), () -> { },
+                    ignored -> { throw new AssertionError("unexpected fallback"); },
+                    ignored -> { throw new AssertionError("unexpected recovery"); }, early);
+            operation.advance(Long.MAX_VALUE);
+            assertEquals(early, events.contains("native.apply"));
+            assertTrue(events.contains("hold"));
+            assertTrue(!events.contains("release"));
+            assertTrue(!events.contains("native.persist"));
+            assertTrue(!operation.isTerminal());
+            jobs.removeFirst().run();
+            operation.advance(Long.MAX_VALUE);
+            assertTrue(events.contains("release"));
+            assertTrue(events.contains("native.persist"));
+            assertTrue(!operation.isTerminal());
+            jobs.removeFirst().run();
+            operation.advance(Long.MAX_VALUE);
+            assertEquals(MutationTerminalState.SUCCEEDED, operation.terminalState());
             operation.close();
         }
     }

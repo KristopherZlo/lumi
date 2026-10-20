@@ -59,7 +59,8 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
 
     /** Native Axiom execution shares verification/persistence, without constructing a Restore. */
     public AxiomBufferReplay prepareAxiomReplay(io.github.lumi.domain.service.LiveActionJournal.Plan plan) throws IOException {
-        return new AxiomBufferReplay(plan, preparation.prepare(new State(plan.replacementSections(), java.util.Map.of())), world, level, freeze);
+        return new AxiomBufferReplay(plan, preparation.prepare(new State(plan.replacementSections(), java.util.Map.of()),
+                new State(plan.expectedSections(), java.util.Map.of()), ignored -> { }), world, level, freeze);
     }
 
     public ApplySession beginLoadedVerification(PreparedState target) {

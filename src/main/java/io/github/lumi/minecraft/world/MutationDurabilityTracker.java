@@ -196,6 +196,25 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
         return !blockedChunks.containsKey(new ChunkCoordinate(chunkX, chunkZ));
     }
 
+    /** Keeps speculative live replay in memory until its write-ahead intent is durable. */
+    public synchronized DimensionFreeze.Lease holdPublication(Collection<SectionKey> sections) {
+        var chunks = sections.stream().map(MutationDurabilityTracker::chunk).collect(java.util.stream.Collectors.toSet());
+        for (var coordinate : chunks) {
+            if (!blockedChunks.containsKey(coordinate)) chunkRetention.retain(coordinate.x(), coordinate.z());
+            blockedChunks.merge(coordinate, 1, Integer::sum);
+        }
+        return new DimensionFreeze.Lease() {
+            private boolean released;
+            @Override public void release() {
+                synchronized (MutationDurabilityTracker.this) {
+                    if (released) return;
+                    released = true;
+                    chunks.forEach(MutationDurabilityTracker.this::releaseChunkPublication);
+                }
+            }
+        };
+    }
+
     public synchronized boolean canPublish(HistoryKey key) {
         if (publicationRequirements.containsKey(key)) requestIndexDurability();
         return !publicationRequirements.containsKey(Objects.requireNonNull(key, "key"));
@@ -728,7 +747,10 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
             return;
         }
         publicationRequirements.remove(key);
-        ChunkCoordinate coordinate = chunk(key);
+        releaseChunkPublication(chunk(key));
+    }
+
+    private void releaseChunkPublication(ChunkCoordinate coordinate) {
         int count = Objects.requireNonNull(
                 blockedChunks.get(coordinate), "blocked chunk count");
         if (count == 1) {

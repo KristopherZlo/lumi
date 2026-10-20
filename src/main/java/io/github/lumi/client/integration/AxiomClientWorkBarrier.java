@@ -125,6 +125,7 @@ public final class AxiomClientWorkBarrier {
                 throw new IllegalStateException("Native Axiom worker is not tracked");
             }
             LumiMod.LOGGER.debug("Axiom work cancellation requested; transient cursor reset={}", invalidateHistory);
+            if (workersQuiescent()) finish(State.READY);
         } catch (RuntimeException failure) {
             LumiMod.LOGGER.error("Cannot quiesce pending Axiom work", failure);
             finish(State.REFUSED);
@@ -137,10 +138,7 @@ public final class AxiomClientWorkBarrier {
             finish(State.REFUSED);
             return;
         }
-        if (singleExecutor == null || !singleExecutor.isQuiescent()
-                || !Tool.sharedPoolThreadExecutor.isQuiescent()
-                || Tool.sharedPoolThreadExecutor.getQueuedTaskCount() != 0
-                || Tool.sharedPoolThreadExecutor.getQueuedSubmissionCount() != 0) {
+        if (!workersQuiescent()) {
             quietTicks = 0;
             return;
         }
@@ -153,6 +151,13 @@ public final class AxiomClientWorkBarrier {
             LumiMod.LOGGER.error("Cannot finalize Axiom quiescence", failure);
             finish(State.REFUSED);
         }
+    }
+
+    private boolean workersQuiescent() {
+        return singleExecutor != null && singleExecutor.isQuiescent()
+                && Tool.sharedPoolThreadExecutor.isQuiescent()
+                && Tool.sharedPoolThreadExecutor.getQueuedTaskCount() == 0
+                && Tool.sharedPoolThreadExecutor.getQueuedSubmissionCount() == 0;
     }
 
     private void cancelPending() {
