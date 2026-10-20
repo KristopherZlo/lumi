@@ -48,6 +48,7 @@
     "client.AxiomToolExecutorMixin",
     "client.AxiomDispatchCompletionMixin",
     "client.AxiomDispatcherPendingAccess",
+    "client.AxiomNativeHistoryFilesMixin",
     "client.AxiomModellingResetMixin",
     "client.AxiomContextMenuMixin",
     "client.AxiomClientTickBarrierMixin",
