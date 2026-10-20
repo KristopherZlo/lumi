@@ -1146,12 +1146,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private io.github.lumi.minecraft.operation.AxiomNativeReplayOperation nativeReplay;
 
     public synchronized DimensionMutation startAxiomAction(UUID player, UUID entry, UUID request, LiveActionJournal.Direction direction,
-            Consumer<DimensionMutation> terminalObserver) {
+            boolean latest, Consumer<DimensionMutation> terminalObserver) {
         try { requireActionIdle(); }
         catch (IOException failed) { throw new java.io.UncheckedIOException(failed); }
         var operation = new DeferredDimensionMutation(true, () -> {
             var selected = liveActions.prepareAxiom(player, entry, direction)
                     .orElseThrow(() -> new IllegalStateException("lumi.axiom.entry_unavailable"));
+            if (latest && !selectedPlan(player, direction).equals(Optional.of(selected)))
+                throw new IllegalStateException("History changed; refresh and try again");
             return createNativeReplay(selected, request);
         });
         operations.enqueue(operation, OperationPriority.URGENT, outcome -> { nativeReplay = null; terminalObserver.accept(outcome); });
@@ -1168,13 +1170,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         plan.biomes().keySet().forEach(pos -> keys.put(pos.section(), 0L));
         for (var state : Stream.concat(plan.expectedEntities().values().stream(), plan.replacementEntities().values().stream()).flatMap(Optional::stream).toList())
             keys.put(liveEntityWorld.chunk(state), 0L);
-        var scope = new WorkingIndexSnapshot(keys);
         var reader = new io.github.lumi.minecraft.world.WorldStateReader() {
             @Override public SectionBlob read(SectionKey key) throws IOException {
                 level.getChunk(key.chunkX(), key.chunkZ());
                 var section = worldReader.read(key);
                 var biomes = new HashMap<Integer, String>();
-                plan.biomes().keySet().stream().filter(pos -> pos.section().equals(key)).forEach(pos ->
+                nativeReplay.biomes().stream().filter(pos -> pos.section().equals(key)).forEach(pos ->
                         biomes.put(pos.localIndex(), level.getNoiseBiome(pos.x(), pos.y(), pos.z()).unwrapKey().orElseThrow().identifier().toString()));
                 return biomes.isEmpty() ? section : section.withActionBiomes(biomes);
             }
@@ -1184,8 +1185,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var holdKeys = keys.keySet().stream().map(key -> key instanceof SectionKey section ? section
                 : new SectionKey(((EntityChunkKey) key).chunkX(), level.getMinSectionY(), ((EntityChunkKey) key).chunkZ())).toList();
         var hold = mutations.holdPublication(holdKeys);
-        nativeReplay = new io.github.lumi.minecraft.operation.AxiomNativeReplayOperation(actor, request, freeze,
-                () -> new BatchedWorldStateCapture(reader).begin(scope), hold, before -> {
+        nativeReplay = new io.github.lumi.minecraft.operation.AxiomNativeReplayOperation(actor, request, plan, keys, freeze,
+                () -> new BatchedWorldStateCapture(reader).begin(new WorkingIndexSnapshot(keys)), hold, before -> {
             before.sections().forEach((key, value) -> { mutations.registerSectionMutation(key, () -> value); mutations.markBuilderMutation(key); });
             before.entities().forEach((key, value) -> mutations.registerEntityMutation(key, () -> value));
         }, () -> {
@@ -1229,6 +1230,41 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
     public void runNativeReplayRequest(net.minecraft.server.level.ServerPlayer player, UUID request, Runnable nativeApply) {
         if (nativeReplay != null) nativeReplay.runRequest(player, request, nativeApply);
+    }
+
+    public boolean nativeReplayApplying() { return nativeReplay != null && nativeReplay.applying(); }
+
+    public void nativeReplayBlocks(io.github.lumi.domain.model.WorldActionScope footprint) {
+        if (nativeReplay == null || !nativeReplay.applying()) return;
+        liveActions.requireNativeFootprint(nativeReplay.plan(), footprint, java.util.Set.of());
+        for (var key : footprint.sections()) if (!nativeReplay.includes(key)) {
+            try {
+                level.getChunk(key.chunkX(), key.chunkZ());
+                var section = worldReader.read(key);
+                nativeReplay.include(key, section, mutations.holdPublication(java.util.List.of(key)));
+                mutations.registerSectionMutation(key, () -> section); mutations.markBuilderMutation(key);
+            } catch (IOException failed) { throw new java.io.UncheckedIOException(failed); }
+        }
+    }
+
+    public void nativeReplayBiomes(java.util.Set<io.github.lumi.domain.model.BiomePosition> positions) {
+        if (nativeReplay == null || !nativeReplay.applying()) return;
+        liveActions.requireNativeFootprint(nativeReplay.plan(), io.github.lumi.domain.model.WorldActionScope.empty(), positions);
+        for (var pos : positions) {
+            var key = pos.section();
+            try {
+                level.getChunk(key.chunkX(), key.chunkZ());
+                var source = nativeReplay.source(key);
+                var hold = source == null ? mutations.holdPublication(java.util.List.of(key)) : null;
+                if (source == null) source = worldReader.read(key);
+                var biomes = new HashMap<>(source.actionBiomes());
+                biomes.putIfAbsent(pos.localIndex(), level.getNoiseBiome(pos.x(), pos.y(), pos.z()).unwrapKey().orElseThrow().identifier().toString());
+                nativeReplay.biomes().add(pos);
+                nativeReplay.include(key, source.withActionBiomes(biomes), hold);
+                var captured = source;
+                mutations.registerSectionMutation(key, () -> captured);
+            } catch (IOException failed) { throw new java.io.UncheckedIOException(failed); }
+        }
     }
 
     public synchronized DimensionMutation startClearWorldActions(UUID player, Consumer<DimensionMutation> terminalObserver) throws IOException {

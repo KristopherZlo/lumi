@@ -17,6 +17,8 @@ import net.minecraft.server.level.ServerPlayer;
 public final class AxiomNativeReplayOperation implements DimensionMutation {
     private final ServerPlayer actor;
     private final UUID request;
+    private final io.github.lumi.domain.service.LiveActionJournal.Plan plan;
+    private final java.util.Map<io.github.lumi.domain.model.HistoryKey, Long> keys;
     private final DimensionFreezeState freeze;
     private final WorldStateCapture.CaptureSession capture;
     private final java.util.function.Supplier<WorldStateCapture.CaptureSession> recapture;
@@ -26,18 +28,24 @@ public final class AxiomNativeReplayOperation implements DimensionMutation {
     private final Runnable settle;
     private final net.minecraft.server.level.ServerLevel level;
     private final Set<UUID> dispatches = new HashSet<>();
+    private final java.util.List<DimensionFreeze.Lease> extraHolds = new java.util.ArrayList<>();
+    private final Set<io.github.lumi.domain.model.BiomePosition> biomes;
     private CapturedWorldState before;
     private WorldStateCapture.CaptureSession after;
     private DimensionMutation delegate;
     private Throwable failure;
     private boolean sent, accepting, touched, released;
+    private boolean applying;
     private long deadline;
 
-    public AxiomNativeReplayOperation(ServerPlayer actor, UUID request, DimensionFreezeState freeze,
+    public AxiomNativeReplayOperation(ServerPlayer actor, UUID request, io.github.lumi.domain.service.LiveActionJournal.Plan plan,
+            java.util.Map<io.github.lumi.domain.model.HistoryKey, Long> keys, DimensionFreezeState freeze,
             java.util.function.Supplier<WorldStateCapture.CaptureSession> capture,
             DimensionFreeze.Lease publicationHold, java.util.function.Consumer<CapturedWorldState> captured,
             Runnable settle, Completion completion) {
         this.actor = actor; this.request = request; this.freeze = freeze;
+        this.plan = plan; this.keys = keys;
+        this.biomes = new HashSet<>(plan.biomes().keySet());
         this.level = actor.level(); this.captured = captured; this.settle = settle;
         this.recapture = capture; this.capture = capture.get();
         this.publicationHold = publicationHold; this.completion = completion;
@@ -62,10 +70,27 @@ public final class AxiomNativeReplayOperation implements DimensionMutation {
         if (player != actor || !this.request.equals(request)) return false;
         if (!accepting || sent || player.level() != level) return true;
         touched = true;
+        applying = true;
         try { freeze.runAuthorizedEntityAddition(nativeApply); }
         catch (RuntimeException | Error failed) { failure = failed; sent = true; accepting = false; }
+        finally { applying = false; }
         deadline = System.nanoTime() + 30_000_000_000L;
         return true;
+    }
+
+    public boolean applying() { return applying; }
+    public io.github.lumi.domain.service.LiveActionJournal.Plan plan() { return plan; }
+    public boolean includes(io.github.lumi.domain.model.SectionKey key) { return before.sections().containsKey(key); }
+    public io.github.lumi.domain.model.SectionBlob source(io.github.lumi.domain.model.SectionKey key) { return before.sections().get(key); }
+    public Set<io.github.lumi.domain.model.BiomePosition> biomes() { return biomes; }
+    public void include(io.github.lumi.domain.model.SectionKey key, io.github.lumi.domain.model.SectionBlob section, DimensionFreeze.Lease hold) {
+        if (hold != null) extraHolds.add(hold);
+        if (!includes(key) && before.sections().size() >= 4096) throw new IllegalStateException("Native replay exceeded its section capture limit");
+        keys.put(key, 0L);
+        var sections = new java.util.HashMap<>(before.sections()); sections.put(key, section);
+        before = new CapturedWorldState(sections, before.entities(), new io.github.lumi.domain.model.WorkingIndexSnapshot(keys),
+                new io.github.lumi.domain.model.CommitStatistics(sections.size(), before.entities().size(),
+                        (long) sections.size() * io.github.lumi.domain.model.SectionBlob.BLOCK_COUNT, before.statistics().entities()));
     }
 
     public void accept(ServerPlayer player, AxiomNativeReplayPayload payload) {
@@ -107,7 +132,7 @@ public final class AxiomNativeReplayOperation implements DimensionMutation {
     }
 
     private void releasePublication() {
-        if (!released) { publicationHold.release(); released = true; }
+        if (!released) { publicationHold.release(); extraHolds.forEach(DimensionFreeze.Lease::release); released = true; }
     }
 
     @Override public boolean isTerminal() { return delegate != null && delegate.isTerminal(); }

@@ -63,6 +63,9 @@ class LiveActionJournalTest {
         assertEquals(beforeForeignSelection, journal.snapshotIndex());
         assertEquals(List.of(nativeEntry), journal.view(PLAYER_A).undo().getFirst().axiomEntries());
         var undo = journal.prepareAxiom(PLAYER_A, nativeEntry, LiveActionJournal.Direction.UNDO).orElseThrow();
+        journal.requireNativeFootprint(undo, WorldActionScope.fromMasks(Map.of(new SectionKey(0, 0, 0), new long[] {1}), java.util.Set.of()), java.util.Set.of());
+        assertThrows(IllegalStateException.class, () -> journal.requireNativeFootprint(undo,
+                WorldActionScope.fromMasks(Map.of(new SectionKey(0, 0, 0), new long[] {3}), java.util.Set.of()), java.util.Set.of()));
         var step = new io.github.lumi.domain.model.ActionReplayTarget(PLAYER_A, older, true, true);
         var repository = new WorldActionHistoryRepository(root);
         var version = new io.github.lumi.domain.model.WorldDataVersion(5000);

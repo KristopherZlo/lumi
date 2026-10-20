@@ -31,6 +31,15 @@ abstract class AxiomSetBufferMixin {
         var runtime = LumiMod.serverRuntime().find(level)
                 .orElseThrow(() -> new IllegalStateException("Lumi dimension runtime is not loaded"));
         if (runtime.freeze().isAuthorizedMutation()) {
+            if (runtime.nativeReplayApplying()) {
+                var masks = new java.util.HashMap<SectionKey, java.util.BitSet>();
+                buffer.forEach((x, y, z, state) -> {
+                    if (state != BlockBuffer.EMPTY_STATE) masks.computeIfAbsent(new SectionKey(x >> 4, y >> 4, z >> 4),
+                            ignored -> new java.util.BitSet()).set((y & 15) << 8 | (z & 15) << 4 | (x & 15));
+                });
+                var words = new java.util.HashMap<SectionKey, long[]>(); masks.forEach((key, cells) -> words.put(key, cells.toLongArray()));
+                runtime.nativeReplayBlocks(io.github.lumi.domain.model.WorldActionScope.fromMasks(words, java.util.Set.of()));
+            }
             original.call(buffer, level, changedRegion, player);
             return;
         }

@@ -451,6 +451,19 @@ public final class LiveActionJournal {
                 .reduce((older, newer) -> newer).flatMap(id -> prepareSelected(player, id, direction));
     }
 
+    /** Native buffers also write cells that happened to be unchanged in the original edit. */
+    public synchronized void requireNativeFootprint(Plan plan, WorldActionScope blocks, Set<BiomePosition> biomes) {
+        long sequence = plan.actionIds().stream().map(this::requireAction).mapToLong(action -> action.sequence).min().orElseThrow();
+        UUID group = requireAction(plan.actionId()).groupId;
+        for (var action : actions.values()) {
+            if (!action.available || !action.applied || action.sequence <= sequence || action.groupId.equals(group)) continue;
+            if (blocks.intersects(action.changes.keySet(), action.entities.keySet())
+                    || action.sectionScopes.values().stream().anyMatch(blocks::intersects)
+                    || action.checkpoint != null && blocks.intersects(action.checkpoint.scope())
+                    || biomes.stream().anyMatch(action.biomes::containsKey)) throw new OverlapConflict();
+        }
+    }
+
     /** Selects one retained group; ordinary overlap and eviction checks still apply. */
     public synchronized Optional<Plan> prepareSelected(UUID player, UUID actionId, Direction direction) {
         Objects.requireNonNull(direction, "direction");

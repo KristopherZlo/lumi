@@ -15,7 +15,7 @@ abstract class AxiomBiomeBufferMixin {
     private static void lumi$guardBiomes(BiomeBuffer buffer, ServerLevel level, Operation<Void> original) {
         var runtime = LumiMod.serverRuntime().find(level)
                 .orElseThrow(() -> new IllegalStateException("Lumi dimension runtime is not loaded"));
-        if (runtime.freeze().isAuthorizedMutation()) { original.call(buffer, level); return; }
+        if (runtime.freeze().isAuthorizedMutation()) { io.github.lumi.minecraft.runtime.AxiomBiomeCapture.nativeReplay(buffer, runtime); original.call(buffer, level); return; }
         if (!runtime.freeze().isMutationAllowed()) return;
         var actor = io.github.lumi.minecraft.runtime.AxiomBufferDispatchContext.actor().orElseThrow();
         io.github.lumi.minecraft.runtime.AxiomBiomeCapture.run(buffer, runtime, actor.getUUID(), () -> original.call(buffer, level));

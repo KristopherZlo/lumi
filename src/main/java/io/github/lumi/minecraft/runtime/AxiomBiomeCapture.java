@@ -14,6 +14,13 @@ import net.minecraft.server.level.ServerLevel;
 public final class AxiomBiomeCapture {
     private AxiomBiomeCapture() { }
 
+    public static void nativeReplay(BiomeBuffer buffer, FabricDimensionRuntime runtime) {
+        if (!runtime.nativeReplayApplying()) return;
+        var positions = new java.util.HashSet<BiomePosition>();
+        buffer.forEachEntry((x, y, z, biome) -> positions.add(new BiomePosition(x, y, z)));
+        runtime.nativeReplayBiomes(positions);
+    }
+
     public static void run(BiomeBuffer buffer, FabricDimensionRuntime runtime, UUID actor, Runnable apply) {
         if (!runtime.freeze().isMutationAllowed()) return;
         if (AxiomBufferDispatchContext.actor().filter(player -> AxiomBufferDispatchContext.current(player)
