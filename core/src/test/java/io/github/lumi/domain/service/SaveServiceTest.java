@@ -386,6 +386,35 @@ class SaveServiceTest {
         }
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"unqualified", "matching", "different"})
+    void cleanZoneReturnPointKeepsItsTargetIdentity(String source) throws IOException {
+        var objects = new WorldObjectRepository(repositoryRoot);
+        var commits = new CommitRepository(repositoryRoot);
+        var refs = new BranchRefRepository(repositoryRoot);
+        var tree = objects.write(new DimensionTree(Map.of()));
+        var workspace = UUID.fromString("20000000-0000-0000-0000-000000000002");
+        var zone = new UUID(0, 8);
+        var sourceZone = source.equals("unqualified") ? Optional.<UUID>empty()
+                : Optional.of(source.equals("matching") ? zone : new UUID(0, 9));
+        var head = commits.write(new Commit(tree, List.of(), author(), "Current", Instant.EPOCH,
+                workspace, sourceZone, sourceZone.isPresent() ? CommitKind.ZONE : CommitKind.MANUAL,
+                new CommitStatistics(0, 0, 0, 0)));
+        var ref = refs.create(new BranchName("main"), head);
+        var saves = new SaveService(objects, new MerkleTreeEditor(objects), commits, refs,
+                new OperationJournalRepository(repositoryRoot), new VersionTagRepository(repositoryRoot));
+        var checkpoint = saves.checkpoint(new SaveRequest(ref, author(), "Zone return", Instant.EPOCH,
+                workspace, Optional.of(zone), CommitKind.HIDDEN_RETURN),
+                new CapturedWorldState(Map.of(), Map.of(), WorkingIndexSnapshot.empty(), new CommitStatistics(0, 0, 0, 0)),
+                new BranchName("hidden/session-undo/zone"));
+        assertEquals(Optional.of(zone), commits.read(checkpoint.commitId()).zoneId());
+        assertEquals(source.equals("matching"), head.equals(checkpoint.commitId()));
+        assertEquals(ref, refs.read(ref.name()).orElseThrow());
+        var area = new io.github.lumi.domain.model.Zone(zone, workspace, "Zone", 0, java.util.Set.of(), java.util.Set.of());
+        var restores = new RestoreService(objects, commits, new io.github.lumi.storage.repository.OriginStore(repositoryRoot));
+        assertEquals(checkpoint.commitId(), restores.prepareZone(ref, head, checkpoint.commitId(), area).targetCommit());
+    }
+
     private static Commit commit(io.github.lumi.domain.model.ObjectId tree,
             List<io.github.lumi.domain.model.CommitId> parents, String message) {
         return new Commit(tree, parents, author(), message, Instant.EPOCH,

@@ -130,7 +130,8 @@ public final class SaveService implements SavePublisher {
         if (!current.workspaceId().equals(request.workspaceId())) {
             throw new IOException("Save workspace does not match the source branch");
         }
-        if (!current.playerSpawns().equals(captured.playerSpawns())) {
+        if (!current.playerSpawns().equals(captured.playerSpawns())
+                || request.zoneId().isPresent() && !current.zoneId().equals(request.zoneId())) {
             return Optional.empty();
         }
         return Optional.of(request.expectedRef().commit());

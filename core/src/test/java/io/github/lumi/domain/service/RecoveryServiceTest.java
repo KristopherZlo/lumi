@@ -81,6 +81,7 @@ class RecoveryServiceTest {
                         Optional.of(new ZoneRestoreTarget(workspace, zoneId, 0))));
 
         assertEquals(target, service.prepare(journal, RecoveryChoice.RESUME_TARGET).targetCommit());
+        assertEquals(checkpoint, service.prepare(journal, RecoveryChoice.RETURN_CHECKPOINT).targetCommit());
         repository.replace(zone, new Zone(
                 zoneId, workspace, "Changed", 0, java.util.Set.of(), java.util.Set.of(), 1));
         assertThrows(IOException.class,
