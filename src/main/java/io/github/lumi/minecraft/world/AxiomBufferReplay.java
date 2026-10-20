@@ -65,21 +65,20 @@ public final class AxiomBufferReplay implements WorldStateApply.ApplySession {
             var key = remaining.next();
             if (level.getChunkSource().getChunkNow(key.chunkX(), key.chunkZ()) == null)
                 throw new IOException("Axiom replay chunk unloaded: " + key);
+            var decoded = target.sections().get(key);
+            var delta = decoded.preparedDelta();
+            var existing = world.blockEntityIndexes(key);
             freeze.runAuthorized(() -> AxiomServerboundSetBuffer.applyBlockBufferServer(
                     buffers.get(key), level, new ChunkedBooleanRegion(), null));
             // Pass already-decoded NBT through the common adapter instead of decompressing on the tick.
-            var decoded = target.sections().get(key);
-            var existing = world.blockEntityIndexes(key);
             for (int cell : existing) if (!decoded.blockEntities().containsKey(cell)) world.removeBlockEntity(key, cell);
             for (var entry : decoded.blockEntities().entrySet()) world.loadBlockEntity(key, entry.getKey(), entry.getValue());
-            if (!existing.isEmpty() || !decoded.blockEntities().isEmpty())
-                world.finishChunk(ChunkCoordinate.from(key), List.of(), true);
+            boolean nbtChanged = delta.blockEntitiesChanged();
+            world.finishChunk(ChunkCoordinate.from(key), List.of(new SectionApplyResult(key,
+                    delta.changedCells(), delta.changedCount(), nbtChanged, delta.lightColumns())), nbtChanged);
         }
         return !remaining.hasNext();
     }
-
-
-
     @Override public WorldStateApply.Verification verifyUntil(long deadline) throws IOException { return verification.verifyUntil(deadline); }
     @Override public boolean persistUntil(long deadline) throws IOException { return verification.persistUntil(deadline); }
     @Override public boolean repairUntil(long deadline) throws IOException { throw new IOException("Native replay repair requires its recovery journal"); }
