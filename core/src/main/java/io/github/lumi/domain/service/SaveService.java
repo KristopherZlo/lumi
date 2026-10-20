@@ -30,7 +30,6 @@ public final class SaveService implements SavePublisher {
     private final MerkleTreeEditor trees;
     private final CommitRepository commits;
     private final BranchRefRepository refs;
-    private final RetentionService retention;
     private final OperationJournalRepository journals;
     private final VersionTagRepository tags;
 
@@ -45,7 +44,6 @@ public final class SaveService implements SavePublisher {
         this.trees = Objects.requireNonNull(trees, "trees");
         this.commits = Objects.requireNonNull(commits, "commits");
         this.refs = Objects.requireNonNull(refs, "refs");
-        retention = new RetentionService(commits, refs);
         this.journals = Objects.requireNonNull(journals, "journals");
         this.tags = Objects.requireNonNull(tags, "tags");
     }
@@ -164,7 +162,6 @@ public final class SaveService implements SavePublisher {
         }
         requireCurrent(request);
         var branch = refs.create(hiddenRef, commitId);
-        retention.pruneAfterPublication(16, branch);
         return new SaveResult(commitId, branch, captured.generations());
     }
 

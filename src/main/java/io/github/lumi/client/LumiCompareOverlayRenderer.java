@@ -6,7 +6,6 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.BlockChange;
 import io.github.lumi.client.state.HighlightPreparationProgress;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.ArrayList;
@@ -25,7 +24,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.DynamicUniforms;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.rendertype.LayeringTransform;
-import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -276,27 +274,6 @@ final class LumiCompareOverlayRenderer implements AutoCloseable {
 
     private static double distanceSquared(double x, double y, double z) {
         return x * x + y * y + z * z;
-    }
-
-    static int exposedFaceCount(List<BlockChange> changes) {
-        Set<Long> occupied = positions(changes);
-        int count = 0;
-        for (BlockChange change : changes) {
-            for (Direction side : Direction.values()) {
-                if (!occupied.contains(BlockPos.asLong(
-                        change.x() + side.getStepX(),
-                        change.y() + side.getStepY(),
-                        change.z() + side.getStepZ()))) count++;
-            }
-        }
-        return count;
-    }
-
-    private static Set<Long> positions(List<BlockChange> changes) {
-        Set<Long> occupied = new HashSet<>();
-        changes.forEach(change -> occupied.add(
-                BlockPos.asLong(change.x(), change.y(), change.z())));
-        return occupied;
     }
 
     static void renderSolidBox(
