@@ -1299,8 +1299,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     private DimensionMutation createActionReplay(LiveActionJournal.Plan plan) throws IOException {
         boolean nativeAxiom = axiomBarrier != null && AxiomBufferReplay.supports(plan, level);
-        var captured = nativeAxiom ? null : captureSectionReplay(plan);
-        if (!nativeAxiom && captured == null) return createPortableActionReplay(plan);
+        var captured = captureSectionReplay(plan, nativeAxiom);
+        if (captured == null) return createPortableActionReplay(plan);
         var expected = activeRef();
         UUID operation = UUID.randomUUID();
         boolean undo = plan.direction() == LiveActionJournal.Direction.UNDO;
@@ -1308,13 +1308,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var publicationHold = new AtomicReference<io.github.lumi.minecraft.world.DimensionFreeze.Lease>();
         return new BackgroundPreparedMutation<>(CompletableFuture.supplyAsync(() -> {
             try {
-                var recoveryPlan = nativeAxiom ? plan : actionReplays.sectionPlan(captured, plan);
+                var recoveryPlan = actionReplays.sectionPlan(captured, plan);
                 var source = recoveryPlan.expectedSections();
                 var states = nativeAxiom ? null : worldApply.prepareBoth(
                         new WorldStateApply.State(recoveryPlan.replacementSections(), Map.of()),
                         new WorldStateApply.State(source, Map.of()), ignored -> { }, ignored -> { });
                 var before = worldApply.beginLoaded(nativeAxiom ? worldApply.prepare(new WorldStateApply.State(source, Map.of())) : states.returnPoint());
-                var replay = nativeAxiom ? worldApply.prepareAxiomReplay(plan) : worldApply.beginLoaded(states.target());
+                var replay = nativeAxiom ? worldApply.prepareAxiomReplay(recoveryPlan) : worldApply.beginLoaded(states.target());
                 return new LiveReplayOperation(plan, before, replay, publication, background,
                         () -> {
                             requireExpectedRef(expected);
@@ -1439,20 +1439,25 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     private Map<SectionKey, io.github.lumi.domain.model.SectionBlob> captureSectionReplay(LiveActionJournal.Plan plan) throws IOException {
-        // ponytail: bound eager capture to eight loaded, NBT-free sections and 256 scalar blocks.
+        return captureSectionReplay(plan, false);
+    }
+
+    private Map<SectionKey, io.github.lumi.domain.model.SectionBlob> captureSectionReplay(
+            LiveActionJournal.Plan plan, boolean nativeAxiom) throws IOException {
+        // Keep the existing Axiom bound; scalar replay captures only eight NBT-free sections.
         if (plan.checkpoint().isPresent() || !plan.expectedEntities().isEmpty() || !plan.biomes().isEmpty()
-                || plan.expected().size() > 256 || plan.sections().values().stream().anyMatch(delta -> !delta.before().blockEntities().isEmpty()
+                || !nativeAxiom && (plan.expected().size() > 256 || plan.sections().values().stream().anyMatch(delta -> !delta.before().blockEntities().isEmpty()
                         || !delta.after().blockEntities().isEmpty())
                 || plan.expected().values().stream().anyMatch(block -> block.blockEntity().isPresent())
-                || plan.replacement().values().stream().anyMatch(block -> block.blockEntity().isPresent())) return null;
+                || plan.replacement().values().stream().anyMatch(block -> block.blockEntity().isPresent()))) return null;
         var keys = new java.util.HashSet<>(plan.sections().keySet());
         plan.expected().keySet().forEach(position -> keys.add(new SectionKey(
                 Math.floorDiv(position.x(), 16), Math.floorDiv(position.y(), 16), Math.floorDiv(position.z(), 16))));
-        if (keys.isEmpty() || keys.size() > MinecraftWorldStateApply.EAGER_SECTION_LIMIT) return null;
+        if (keys.isEmpty() || keys.size() > (nativeAxiom ? AxiomBufferReplay.EAGER_SECTION_LIMIT : MinecraftWorldStateApply.EAGER_SECTION_LIMIT)) return null;
         var captured = new java.util.LinkedHashMap<SectionKey, io.github.lumi.domain.model.SectionBlob>();
         for (var key : keys) {
             var chunk = level.getChunkSource().getChunkNow(key.chunkX(), key.chunkZ());
-            if (chunk == null || chunk.getBlockEntities().keySet().stream().anyMatch(position -> position.getY() >> 4 == key.sectionY())) return null;
+            if (chunk == null || !nativeAxiom && chunk.getBlockEntities().keySet().stream().anyMatch(position -> position.getY() >> 4 == key.sectionY())) return null;
             captured.put(key, worldReader.read(key));
         }
         return Map.copyOf(captured);

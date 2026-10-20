@@ -36,6 +36,37 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class MergeServiceTest {
+    @Test
+    void projectedSectionReplayPreservesDisjointNbtAcrossNineSections() throws Exception {
+        var objects = new WorldObjectRepository(repositoryRoot);
+        var service = new ActionReplayPreparation(objects, new CommitRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                io.github.lumi.domain.model.WorldDataVersion.LEGACY_12111);
+        var journal = new LiveActionJournal();
+        var action = journal.begin(author().id());
+        var before = section("minecraft:stone", "minecraft:air");
+        var after = section("minecraft:gold_block", "minecraft:air");
+        var bystander = new CanonicalNbt(new byte[] {1, 2, 3});
+        var observed = new SectionBlob(section("minecraft:gold_block", "minecraft:barrel").blockStates(), Map.of(1, bystander));
+        var current = new java.util.HashMap<io.github.lumi.domain.model.SectionKey, SectionBlob>();
+        for (int i = -9; i < 0; i++) {
+            var key = new io.github.lumi.domain.model.SectionKey(i, 0, -1);
+            journal.recordSection(action, key, before, after);
+            current.put(key, observed);
+        }
+        journal.close(action);
+        var undo = journal.prepareUndo(author().id()).orElseThrow();
+        var projected = service.sectionPlan(current, undo);
+        assertEquals(current, projected.expectedSections());
+        projected.replacementSections().values().forEach(value -> {
+            assertEquals(section("minecraft:stone", "minecraft:barrel").blockStates(), value.blockStates());
+            assertEquals(Map.of(1, bystander), value.blockEntities());
+        });
+        assertEquals(Map.of(), undo.sections().values().iterator().next().after().blockEntities());
+        journal.complete(undo);
+        var redo = service.sectionPlan(projected.replacementSections(), journal.prepareRedo(author().id()).orElseThrow());
+        assertEquals(current, redo.replacementSections());
+    }
+
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
     void projectsLiveActionEndpointsOntoTheCapturedWorldWithoutMovingSavedRefs(boolean compact) throws Exception {
@@ -88,7 +119,7 @@ class MergeServiceTest {
                     io.github.lumi.domain.model.WorldDataVersion.LEGACY_12111);
             history.flush(workspace, saved.name(), journal.snapshotIndex(), journal::snapshotAction, () -> true);
             var operationId = UUID.randomUUID();
-            history.beginNativeReplay(operationId, plan, compact ? plan : service.sectionPlan(Map.of(key, observed), plan));
+            history.beginNativeReplay(operationId, plan, service.sectionPlan(Map.of(key, observed), plan));
             new io.github.lumi.storage.repository.WorldActionHistoryRepository(repositoryRoot).removeUnreferencedPayloads();
             var journals = new io.github.lumi.storage.repository.OperationJournalRepository(repositoryRoot);
             var nativeRecovery = new NativeActionRecovery(history, service, journals);
@@ -97,8 +128,8 @@ class MergeServiceTest {
             for (var choice : RecoveryChoice.values()) {
                 try (var recovered = recovery.prepare(interrupted, choice)) {
                     assertEquals(Map.of(key, choice == RecoveryChoice.RESUME_TARGET
-                            ? section("minecraft:stone", compact ? "minecraft:air" : "minecraft:barrel")
-                            : section("minecraft:gold_block", compact ? "minecraft:air" : "minecraft:barrel")), recovered.sections());
+                            ? section("minecraft:stone", "minecraft:barrel")
+                            : section("minecraft:gold_block", "minecraft:barrel")), recovered.sections());
                     assertEquals(false, recovered.restorePlayerSpawns());
                     assertEquals(Map.of(), recovered.entities());
                 }

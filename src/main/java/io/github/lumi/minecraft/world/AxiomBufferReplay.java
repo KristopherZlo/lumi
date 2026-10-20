@@ -15,6 +15,7 @@ import net.minecraft.server.level.ServerLevel;
 
 /** Uses Axiom's Undo packet handler, with Lumi's existing exact readback and persistence. */
 public final class AxiomBufferReplay implements WorldStateApply.ApplySession {
+    public static final int EAGER_SECTION_LIMIT = 64;
     private final ServerLevel level;
     private final DimensionFreezeState freeze;
     private final PreparedWorldAccess world;
@@ -26,7 +27,7 @@ public final class AxiomBufferReplay implements WorldStateApply.ApplySession {
     public static boolean supports(LiveActionJournal.Plan plan, ServerLevel level) {
         // Section endpoints are produced by AxiomSetBufferMixin; scalar edits use Lumi's executor.
         // ponytail: cap eager native preparation; cold or larger actions retain streaming replay.
-        if (plan.checkpoint().isPresent() || plan.sections().isEmpty() || plan.sections().size() > 64
+        if (plan.checkpoint().isPresent() || plan.sections().isEmpty() || plan.sections().size() > EAGER_SECTION_LIMIT
                 || !plan.expected().isEmpty() || !plan.expectedEntities().isEmpty() || !plan.biomes().isEmpty()) return false;
         long nbtBytes = 0;
         for (var entry : plan.sections().entrySet()) {
