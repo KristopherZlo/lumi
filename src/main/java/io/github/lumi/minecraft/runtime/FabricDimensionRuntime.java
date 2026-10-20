@@ -16,7 +16,7 @@ import io.github.lumi.minecraft.operation.PendingRestorePublication;
 import io.github.lumi.minecraft.operation.ActionReplayPublication;
 import io.github.lumi.domain.service.ActionReplayPreparation;
 import io.github.lumi.domain.service.NativeActionRecovery;
-import io.github.lumi.minecraft.operation.AxiomReplayOperation;
+import io.github.lumi.minecraft.operation.LiveReplayOperation;
 import io.github.lumi.minecraft.world.AxiomBufferReplay;
 import io.github.lumi.minecraft.world.WorldStateApply;
 import io.github.lumi.domain.service.WorldActionHistory;
@@ -1198,37 +1198,43 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     private DimensionMutation createActionReplay(LiveActionJournal.Plan plan) throws IOException {
-        if (axiomBarrier == null || !AxiomBufferReplay.supports(plan, level)) {
-            return createPortableActionReplay(plan);
-        }
+        boolean nativeAxiom = axiomBarrier != null && AxiomBufferReplay.supports(plan, level);
+        var captured = nativeAxiom ? null : captureSectionReplay(plan);
+        if (!nativeAxiom && captured == null) return createPortableActionReplay(plan);
         var expected = activeRef();
         UUID operation = UUID.randomUUID();
         boolean undo = plan.direction() == LiveActionJournal.Direction.UNDO;
-        var source = plan.expectedSections();
         var publication = new PendingRestorePublication(mutations);
         var publicationHold = new AtomicReference<io.github.lumi.minecraft.world.DimensionFreeze.Lease>();
         return new BackgroundPreparedMutation<>(CompletableFuture.supplyAsync(() -> {
             try {
-                var before = worldApply.beginLoadedVerification(worldApply.prepare(new WorldStateApply.State(source, Map.of())));
-                var nativeReplay = worldApply.prepareAxiomReplay(plan);
-                return new AxiomReplayOperation(plan, before, nativeReplay, publication, background,
+                var recoveryPlan = nativeAxiom ? plan : actionReplays.sectionPlan(captured, plan);
+                var source = recoveryPlan.expectedSections();
+                var states = nativeAxiom ? null : worldApply.prepareBoth(
+                        new WorldStateApply.State(recoveryPlan.replacementSections(), Map.of()),
+                        new WorldStateApply.State(source, Map.of()), ignored -> { }, ignored -> { });
+                var before = worldApply.beginLoaded(nativeAxiom ? worldApply.prepare(new WorldStateApply.State(source, Map.of())) : states.returnPoint());
+                var target = nativeAxiom ? null : (io.github.lumi.minecraft.world.PreparedMinecraftState) states.target();
+                var replay = nativeAxiom ? worldApply.prepareAxiomReplay(plan) : worldApply.beginLoaded(target);
+                boolean early = nativeAxiom ? ((AxiomBufferReplay) replay).canApplyBeforeIntent() : target.canApplyBeforeIntent();
+                return new LiveReplayOperation(plan, before, replay, publication, background,
                         () -> {
                             requireExpectedRef(expected);
                             if (!selectedPlan(plan.player(), plan.direction()).equals(Optional.of(plan)) || !persistActionHistory()) {
                                 throw new IOException("Action changed during native replay preparation");
                             }
-                            actionHistory.beginNativeReplay(operation, plan);
+                            actionHistory.beginNativeReplay(operation, plan, recoveryPlan);
                         }, () -> {
                             publicationHold.set(mutations.holdPublication(source.keySet()));
                             publication.publishSections(source);
-                            source.keySet().forEach(mutations::markBuilderMutation);
                         },
                         () -> { var hold = publicationHold.getAndSet(null); if (hold != null) hold.release(); },
                         () -> {
                             actionHistory.publishReplay(operation, new ActionReplayTarget(plan.player(), plan.actionId(), undo), !undo);
-                            LumiMod.LOGGER.info("Lumi native Axiom {} completed: {} sections, no hidden Save/Restore", undo ? "Undo" : "Redo", source.size());
+                            LumiMod.LOGGER.info("Lumi {} {} completed: {} sections, no hidden Save/Restore",
+                                    nativeAxiom ? "native Axiom" : "loaded block", undo ? "Undo" : "Redo", source.size());
                         }, () -> actionHistory.clearNativeReplay(operation),
-                        this::createPortableActionReplay, ignored -> createNativeRecovery(expected), nativeReplay.canApplyBeforeIntent());
+                        this::createPortableActionReplay, ignored -> createNativeRecovery(expected), early);
             } catch (IOException failed) { throw new CompletionException(failed); }
         }, background), () -> requireExpectedRef(expected), value -> { value.cancel(); value.close(); }, true);
     }
@@ -1335,13 +1341,18 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     private Map<SectionKey, io.github.lumi.domain.model.SectionBlob> captureSectionReplay(LiveActionJournal.Plan plan) throws IOException {
-        // ponytail: bound eager capture to eight loaded, NBT-free sections; all other edits keep streaming preparation.
-        if (plan.checkpoint().isPresent() || plan.sections().isEmpty() || plan.sections().size() > MinecraftWorldStateApply.EAGER_SECTION_LIMIT
-                || !plan.expected().isEmpty() || !plan.expectedEntities().isEmpty() || !plan.biomes().isEmpty()
-                || plan.sections().values().stream().anyMatch(delta -> !delta.before().blockEntities().isEmpty()
-                        || !delta.after().blockEntities().isEmpty())) return null;
+        // ponytail: bound eager capture to eight loaded, NBT-free sections and 256 scalar blocks.
+        if (plan.checkpoint().isPresent() || !plan.expectedEntities().isEmpty() || !plan.biomes().isEmpty()
+                || plan.expected().size() > 256 || plan.sections().values().stream().anyMatch(delta -> !delta.before().blockEntities().isEmpty()
+                        || !delta.after().blockEntities().isEmpty())
+                || plan.expected().values().stream().anyMatch(block -> block.blockEntity().isPresent())
+                || plan.replacement().values().stream().anyMatch(block -> block.blockEntity().isPresent())) return null;
+        var keys = new java.util.HashSet<>(plan.sections().keySet());
+        plan.expected().keySet().forEach(position -> keys.add(new SectionKey(
+                Math.floorDiv(position.x(), 16), Math.floorDiv(position.y(), 16), Math.floorDiv(position.z(), 16))));
+        if (keys.isEmpty() || keys.size() > MinecraftWorldStateApply.EAGER_SECTION_LIMIT) return null;
         var captured = new java.util.LinkedHashMap<SectionKey, io.github.lumi.domain.model.SectionBlob>();
-        for (var key : plan.sections().keySet()) {
+        for (var key : keys) {
             var chunk = level.getChunkSource().getChunkNow(key.chunkX(), key.chunkZ());
             if (chunk == null || chunk.getBlockEntities().keySet().stream().anyMatch(position -> position.getY() >> 4 == key.sectionY())) return null;
             captured.put(key, worldReader.read(key));

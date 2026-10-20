@@ -66,7 +66,7 @@ class LiveActionOperationTest {
             var nativeReplay = new ReplaySession(events, "native", mode == 2 || mode == 4);
             var operation = new LiveActionOperation(journal, PLAYER, LiveActionJournal.Direction.UNDO,
                     world, LiveEntityWorldAccess.UNSUPPORTED, ignored -> false, ignored -> events.add("complete"),
-                    plan -> new AxiomReplayOperation(plan, source, nativeReplay, origins, Runnable::run,
+                    plan -> new LiveReplayOperation(plan, source, nativeReplay, origins, Runnable::run,
                             () -> { events.add("intent"); if (mode == 3) throw new IOException("intent failure"); },
                             () -> events.add("origins"), () -> events.add("release"), () -> events.add("cursor"), () -> events.add("discard"),
                             ignored -> { events.add("portable"); return new NoChangeMutation("portable test"); },
@@ -103,7 +103,7 @@ class LiveActionOperationTest {
             var events = new ArrayList<String>();
             var jobs = new java.util.ArrayDeque<Runnable>();
             var plan = action(block("stone"), block("gold_block")).prepareUndo(PLAYER).orElseThrow();
-            var operation = new AxiomReplayOperation(plan, new ReplaySession(events, "source", false),
+            var operation = new LiveReplayOperation(plan, new ReplaySession(events, "source", false),
                     new ReplaySession(events, "native", false), ignored -> { }, jobs::add,
                     () -> events.add("intent"), () -> events.add("hold"), () -> events.add("release"),
                     () -> events.add("cursor"), () -> { },

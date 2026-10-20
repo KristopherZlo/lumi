@@ -122,15 +122,35 @@ public final class WorldActionHistory {
     }
 
     public synchronized void beginNativeReplay(UUID operation, LiveActionJournal.Plan plan) throws IOException {
+        beginNativeReplay(operation, plan, plan);
+    }
+
+    public synchronized void beginNativeReplay(UUID operation, LiveActionJournal.Plan plan, LiveActionJournal.Plan recovery) throws IOException {
+        if (!plan.player().equals(recovery.player()) || !plan.actionIds().equals(recovery.actionIds()) || plan.direction() != recovery.direction())
+            throw new IllegalArgumentException("Recovery belongs to another action");
         if (persisted == null) throw new IOException("The selected action has not been stored");
         boolean undo = plan.direction() == LiveActionJournal.Direction.UNDO;
         var step = new ActionReplayTarget(plan.player(), plan.actionId(), undo);
         // Validate the durable cursor before making an intent reachable.
         persisted.index().move(step, !undo);
         pendingNativeReplay(); // Collect an already-published intent left by interrupted cleanup.
-        repository.writeNativeReplay(new WorldActionIndexCodec.State(epoch, version, persisted.workspace(),
-                persisted.branch(), persisted.index(), persisted.payloads(),
-                Optional.of(new WorldActionIndexCodec.Publication(operation, step, !undo))));
+        try (var publication = repository.beginPublication()) {
+            var index = persisted.index();
+            var payloads = persisted.payloads();
+            if (!recovery.equals(plan)) {
+                if (recovery.sections().isEmpty() || !recovery.expected().isEmpty() || !recovery.expectedEntities().isEmpty()
+                        || !recovery.biomes().isEmpty() || recovery.checkpoint().isPresent()) throw new IllegalArgumentException("Not a section recovery plan");
+                var selected = index.actions().stream().filter(action -> action.id().equals(plan.actionId())).findFirst().orElseThrow();
+                var payload = new WorldActionRecord.Payload(Map.of(), Map.of(), Map.of(), recovery.sections());
+                var blob = repository.writePayload(new WorldActionRecord(selected, payload), version);
+                index = new WorldActionIndex(index.revision(), index.nextSequence(), index.unsafeBeforeSequence(), java.util.List.of(selected),
+                        Map.of(plan.player(), new WorldActionIndex.Stacks(undo ? java.util.List.of(selected.id()) : java.util.List.of(),
+                                undo ? java.util.List.of() : java.util.List.of(selected.id()))));
+                payloads = Map.of(selected.id(), blob);
+            }
+            repository.writeNativeReplay(new WorldActionIndexCodec.State(epoch, version, persisted.workspace(),
+                    persisted.branch(), index, payloads, Optional.of(new WorldActionIndexCodec.Publication(operation, step, !undo))));
+        }
     }
 
     public synchronized Optional<WorldActionIndexCodec.State> pendingNativeReplay() throws IOException {

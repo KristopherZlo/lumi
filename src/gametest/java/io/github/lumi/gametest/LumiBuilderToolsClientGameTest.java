@@ -81,6 +81,14 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
                 });
             });
         }
+        exerciseTool(context, world, report, "lumi", origin.offset(2, 0, 0), () -> server.runOnServer(minecraft -> {
+            var player = minecraft.getPlayerList().getPlayers().getFirst();
+            var runtime = LumiMod.serverRuntime().find(player.level()).orElseThrow();
+            try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), player.getUUID())) {
+                player.level().setBlockAndUpdate(origin.offset(2, 0, 0), Blocks.GOLD_BLOCK.defaultBlockState());
+                player.level().setBlockAndUpdate(origin.offset(3, 0, 0), Blocks.GOLD_BLOCK.defaultBlockState());
+            }
+        }));
         if (loaded("axiom")) {
             exerciseBiomes(context, world, report);
             BlockPos target = origin.offset(4, 0, 0);
@@ -125,17 +133,18 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
         var repository = server.computeOnServer(minecraft -> LumiMod.serverRuntime()
                 .find(minecraft.getPlayerList().getPlayers().getFirst().level()).orElseThrow().repository());
         var commits = new io.github.lumi.storage.object.ObjectStore(repository.resolve("commits"));
-        var beforeReplay = tool.equals("axiom") ? commits.listIds() : java.util.Set.<io.github.lumi.domain.model.ObjectId>of();
-        if (tool.equals("axiom")) operations.nativeHistoryStep("axiom_native_undo", true); else operations.undo(tool);
+        var beforeReplay = commits.listIds();
+        operations.undoVisible(tool + "_visible_undo", tool.equals("axiom"), target, Blocks.STONE.defaultBlockState());
         checks.assertSnapshot(tool + "_undo", area, baseline.snapshot());
         operations.redo(tool);
         checks.assertSnapshot(tool + "_redo", area, editedState);
-        if (tool.equals("axiom")) {
+        {
             var added = new java.util.HashSet<>(commits.listIds());
             added.removeAll(beforeReplay);
             if (!added.isEmpty()) throw new AssertionError("Native Axiom Undo/Redo created hidden world commits: " + added.size());
-            report.assertRuntimeMessage("Lumi native Axiom Undo completed:");
-            report.assertRuntimeMessage("Lumi native Axiom Redo completed:");
+            String executor = tool.equals("axiom") ? "native Axiom" : "loaded block";
+            report.assertRuntimeMessage("Lumi " + executor + " Undo completed:");
+            report.assertRuntimeMessage("Lumi " + executor + " Redo completed:");
         }
         var edited = operations.save(tool + "-after", area);
         if (tool.equals("axiom")) {

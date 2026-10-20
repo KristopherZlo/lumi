@@ -63,7 +63,7 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
                 new State(plan.expectedSections(), java.util.Map.of()), ignored -> { }), world, level, freeze);
     }
 
-    public ApplySession beginLoadedVerification(PreparedState target) {
+    public ApplySession beginLoaded(PreparedState target) {
         if (!(target instanceof PreparedMinecraftState minecraft)) throw new IllegalArgumentException("Expected decoded loaded state");
         return new PreparedWorldMutationSession(minecraft, world, System::nanoTime);
     }

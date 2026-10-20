@@ -71,32 +71,11 @@ public final class ActionReplayPreparation {
             Commit current = commits.read(captured);
             var leaves = new WorldObjectGraph(objects).scan(current.tree()).leaves();
             Map<HistoryKey, ObjectId> changes = new HashMap<>();
-            for (var entry : plan.sections().entrySet()) {
-                ObjectId id = leaf(leaves, entry.getKey()).orElseThrow(() -> new IOException("Missing action section origin"));
-                SectionBlob currentSection = objects.readSection(id);
-                changes.put(entry.getKey(), objects.write(projectSection(
-                        entry.getKey(), currentSection, entry.getValue(), plan.direction())));
-            }
-            var sections = new HashMap<SectionKey, List<BlockPosition>>();
-            plan.expected().keySet().forEach(position -> sections.computeIfAbsent(new SectionKey(
-                    Math.floorDiv(position.x(), 16), Math.floorDiv(position.y(), 16), Math.floorDiv(position.z(), 16)),
-                    ignored -> new ArrayList<>()).add(position));
-            for (var entry : sections.entrySet()) {
-                ObjectId id = leaf(leaves, entry.getKey()).orElseThrow(() -> new IOException("Missing action block origin"));
-                SectionBlob before = objects.readSection(changes.getOrDefault(entry.getKey(), id));
-                var blocks = new ArrayList<>(before.blockStates());
-                var nbt = new HashMap<>(before.blockEntities());
-                for (var position : entry.getValue()) {
-                    int cell = (Math.floorMod(position.y(), 16) << 8) | (Math.floorMod(position.z(), 16) << 4)
-                            | Math.floorMod(position.x(), 16);
-                    var observed = new BlockSnapshot(blocks.get(cell), Optional.ofNullable(nbt.get(cell)));
-                    if (!observed.equals(plan.expected().get(position))) throw new IOException("Action block changed at " + position);
-                    var replacement = plan.replacement().get(position);
-                    blocks.set(cell, replacement.blockState());
-                    if (replacement.blockEntity().isPresent()) nbt.put(cell, replacement.blockEntity().orElseThrow());
-                    else nbt.remove(cell);
-                }
-                changes.put(entry.getKey(), objects.write(new SectionBlob(blocks, nbt, before.dataVersion())));
+            var positions = blockPositions(plan);
+            for (var key : sectionKeys(plan)) {
+                ObjectId id = leaf(leaves, key).orElseThrow(() -> new IOException("Missing action section origin"));
+                var target = projectSection(key, objects.readSection(id), plan, positions.getOrDefault(key, List.of()));
+                changes.put(key, objects.write(target));
             }
             int entityChunks = projectEntities(captured, plan, locations, leaves, changes);
             ObjectId tree = new MerkleTreeEditor(objects).update(Optional.of(current.tree()), changes);
@@ -108,17 +87,68 @@ public final class ActionReplayPreparation {
         }
     }
 
+    /** Projects a small block action into section endpoints without taking a world-wide Save. */
+    public LiveActionJournal.Plan sectionPlan(Map<SectionKey, SectionBlob> current, LiveActionJournal.Plan plan) throws IOException {
+        if (current.isEmpty() || !current.keySet().equals(sectionKeys(plan)) || !plan.expectedEntities().isEmpty()
+                || !plan.biomes().isEmpty() || plan.checkpoint().isPresent()) throw new IllegalArgumentException("Not a block replay");
+        var target = projectSections(current, plan);
+        var deltas = new HashMap<SectionKey, WorldActionRecord.SectionDelta>();
+        boolean undo = plan.direction() == LiveActionJournal.Direction.UNDO;
+        current.forEach((key, value) -> deltas.put(key, new WorldActionRecord.SectionDelta(
+                undo ? target.get(key) : value, undo ? value : target.get(key))));
+        return new LiveActionJournal.Plan(plan.player(), plan.actionIds(), plan.direction(), Map.of(), Map.of(),
+                Map.of(), Map.of(), Optional.empty(), Map.of(), deltas);
+    }
+
+    private static java.util.Set<SectionKey> sectionKeys(LiveActionJournal.Plan plan) {
+        var keys = new java.util.HashSet<>(plan.sections().keySet());
+        plan.expected().keySet().forEach(position -> keys.add(new SectionKey(
+                Math.floorDiv(position.x(), 16), Math.floorDiv(position.y(), 16), Math.floorDiv(position.z(), 16))));
+        return keys;
+    }
+
+    private static Map<SectionKey, List<BlockPosition>> blockPositions(LiveActionJournal.Plan plan) {
+        var positions = new HashMap<SectionKey, List<BlockPosition>>();
+        plan.expected().keySet().forEach(position -> positions.computeIfAbsent(new SectionKey(Math.floorDiv(position.x(), 16),
+                Math.floorDiv(position.y(), 16), Math.floorDiv(position.z(), 16)), ignored -> new ArrayList<>()).add(position));
+        return positions;
+    }
+
+    private static Map<SectionKey, SectionBlob> projectSections(Map<SectionKey, SectionBlob> current, LiveActionJournal.Plan plan) throws IOException {
+        var target = new HashMap<SectionKey, SectionBlob>();
+        var positions = blockPositions(plan);
+        for (var entry : current.entrySet()) target.put(entry.getKey(), projectSection(
+                entry.getKey(), entry.getValue(), plan, positions.getOrDefault(entry.getKey(), List.of())));
+        return target;
+    }
+
+    private static SectionBlob projectSection(SectionKey key, SectionBlob current, LiveActionJournal.Plan plan,
+            List<BlockPosition> positions) throws IOException {
+        var delta = plan.sections().get(key);
+        var before = delta == null ? current : projectSection(key, current, delta, plan.direction());
+        if (positions.isEmpty()) return before;
+        var blocks = new ArrayList<>(before.blockStates());
+        var nbt = new HashMap<>(before.blockEntities());
+        for (var position : positions) {
+            int cell = (Math.floorMod(position.y(), 16) << 8) | (Math.floorMod(position.z(), 16) << 4) | Math.floorMod(position.x(), 16);
+            if (!new BlockSnapshot(blocks.get(cell), Optional.ofNullable(nbt.get(cell))).equals(plan.expected().get(position)))
+                throw new IOException("Action block changed at " + position);
+            var replacement = plan.replacement().get(position);
+            blocks.set(cell, replacement.blockState());
+            if (replacement.blockEntity().isPresent()) nbt.put(cell, replacement.blockEntity().orElseThrow()); else nbt.remove(cell);
+        }
+        return new SectionBlob(blocks, nbt, before.dataVersion());
+    }
+
     /** Persists only the frozen affected sections; both endpoints remain ordinary recovery commits. */
     public SectionReplay prepareSections(BranchRef expected, Map<SectionKey, SectionBlob> current,
             Map<UUID, PlayerSpawn> spawns, LiveActionJournal.Plan plan, CommitAuthor author) throws IOException {
-        if (current.isEmpty() || !current.keySet().equals(plan.sections().keySet()) || !plan.expected().isEmpty()
+        if (current.isEmpty() || !current.keySet().equals(sectionKeys(plan))
                 || !plan.expectedEntities().isEmpty() || !plan.biomes().isEmpty() || plan.checkpoint().isPresent()) {
             throw new IllegalArgumentException("Section replay contains other action data");
         }
         try (var publication = objects.beginPublication()) {
-            var target = new HashMap<SectionKey, SectionBlob>();
-            for (var entry : current.entrySet()) target.put(entry.getKey(), projectSection(
-                    entry.getKey(), entry.getValue(), plan.sections().get(entry.getKey()), plan.direction()));
+            var target = projectSections(current, plan);
             var workspace = commits.read(expected.commit()).workspaceId();
             CommitId before = writeSections(current, expected.commit(), workspace, spawns, author);
             CommitId after = writeSections(target, before, workspace, spawns, author);

@@ -266,6 +266,26 @@ final class LumiBehaviorOperations {
         runOperation("redo_" + name, () -> ui.pressChord("key.lumi.redo"));
     }
 
+    void undoVisible(String name, boolean nativeAxiom, net.minecraft.core.BlockPos position,
+            net.minecraft.world.level.block.state.BlockState expected) throws IOException {
+        awaitHistoryReady();
+        context.waitFor(client -> !io.github.lumi.client.integration.AxiomClientWorkBarrier.isPaused()
+                && !LumiClient.networking().worldActionPending());
+        long started = System.nanoTime();
+        var firstVisible = new java.util.concurrent.atomic.AtomicLong();
+        ClientAction action = nativeAxiom
+                ? () -> context.runOnClient(client -> com.moulberry.axiom.world_modification.Dispatcher.callAction(com.moulberry.axiom.UserAction.UNDO, null))
+                : () -> ui.pressChord("key.lumi.undo");
+        var request = send(name, action, started);
+        awaitOperation(name, request, new AtomicReference<>(), started, () -> {
+            if (firstVisible.get() == 0 && context.computeOnClient(client -> client.level != null
+                    && client.level.getBlockState(position).equals(expected))) firstVisible.compareAndSet(0, System.nanoTime());
+        });
+        if (firstVisible.get() == 0) throw new AssertionError(name + " did not become visible before completion");
+        report.event("visible", name, "succeeded", 0, (firstVisible.get() - started) / 1_000_000,
+                "upper bound to first client block update; durable completion measured separately");
+    }
+
     void nativeHistoryStep(String name, boolean undo) throws IOException {
         nativeHistoryAction(name, () -> com.moulberry.axiom.world_modification.Dispatcher.callAction(
                 undo ? com.moulberry.axiom.UserAction.UNDO : com.moulberry.axiom.UserAction.REDO, null));

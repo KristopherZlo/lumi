@@ -19,14 +19,14 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.Executor;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class PendingRestorePublicationTest {
     @TempDir Path repositoryRoot;
 
-    @Test
-    void marksAppliedSectionsAsPendingWithoutMovingARef() throws Exception {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void marksAppliedSectionsAsPendingWithoutMovingARef(boolean builder) throws Exception {
         MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
                 new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
                 new WorkingIndexRepository(repositoryRoot), queued());
@@ -37,7 +37,8 @@ class PendingRestorePublicationTest {
                 Map.of(key, section("minecraft:stone")), Map.of());
 
         PendingRestorePublication publication = new PendingRestorePublication(mutations);
-        publication.publish(restore);
+        if (builder) publication.publishSections(restore.returnSections()); else publication.publish(restore);
+        assertEquals(builder, mutations.hasPendingBuilderChanges());
 
         assertEquals(1L, mutations.snapshot().generations().get(key));
         assertFalse(publication.isDurable());

@@ -42,15 +42,15 @@ public final class PendingRestorePublication implements RestorePublication {
 
     @Override
     public void publish(PreparedRestore restore) throws IOException {
-        publishOrigins(restore.returnSections(), restore.returnEntities());
+        publishOrigins(restore.returnSections(), restore.returnEntities(), false);
     }
 
     public void publishSections(Map<SectionKey, SectionBlob> before) throws IOException {
-        publishOrigins(before, Map.of());
+        publishOrigins(before, Map.of(), true);
     }
 
     private void publishOrigins(Map<SectionKey, SectionBlob> sections,
-            Map<EntityChunkKey, EntityChunkBlob> entities) throws IOException {
+            Map<EntityChunkKey, EntityChunkBlob> entities, boolean builder) throws IOException {
         if (boundary != null) {
             throw new IllegalStateException("Pending Restore was already published");
         }
@@ -69,6 +69,7 @@ public final class PendingRestorePublication implements RestorePublication {
         } catch (UncheckedIOException failed) {
             throw failed.getCause();
         }
+        if (builder) sections.keySet().forEach(mutations::markBuilderMutation);
         boundary = mutations.durabilityBoundary(new WorkingIndexSnapshot(generations));
     }
 

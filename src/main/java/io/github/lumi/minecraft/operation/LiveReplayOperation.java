@@ -9,11 +9,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 
-/** One shared cursor, a native executor, and a compact durable intent instead of Save/Restore. */
-public final class AxiomReplayOperation implements DimensionMutation {
+/** One shared cursor, the owning executor, and a compact durable intent instead of Save/Restore. */
+public final class LiveReplayOperation implements DimensionMutation {
     private final LiveActionJournal.Plan plan;
     private final WorldStateApply.ApplySession before;
-    private final WorldStateApply.ApplySession nativeReplay;
+    private final WorldStateApply.ApplySession replay;
     private final RestorePublication origins;
     private final Executor background;
     private final Work prepareIntent, registerOrigins, releasePublication, publishCursor, clearIntent;
@@ -25,13 +25,13 @@ public final class AxiomReplayOperation implements DimensionMutation {
     private DimensionMutation delegate;
     private Throwable failure;
 
-    public AxiomReplayOperation(LiveActionJournal.Plan plan, WorldStateApply.ApplySession before,
-            WorldStateApply.ApplySession nativeReplay, RestorePublication origins, Executor background,
+    public LiveReplayOperation(LiveActionJournal.Plan plan, WorldStateApply.ApplySession before,
+            WorldStateApply.ApplySession replay, RestorePublication origins, Executor background,
             Work prepareIntent, Work registerOrigins, Work releasePublication, Work publishCursor, Work clearIntent,
             LiveActionOperation.ReplayFactory portable, LiveActionOperation.ReplayFactory recovery, boolean earlyApply) {
         this.plan = plan;
         this.before = before;
-        this.nativeReplay = nativeReplay;
+        this.replay = replay;
         this.origins = origins;
         this.background = background;
         this.prepareIntent = prepareIntent;
@@ -70,17 +70,17 @@ public final class AxiomReplayOperation implements DimensionMutation {
                     case APPLY -> {
                         if (io.isCompletedExceptionally()) io.join();
                         mutationStarted = true;
-                        if (!nativeReplay.applyUntil(deadline)) return;
+                        if (!replay.applyUntil(deadline)) return;
                         phase = Phase.VERIFY;
                     }
                     case VERIFY -> {
-                        var result = nativeReplay.verifyUntil(deadline);
+                        var result = replay.verifyUntil(deadline);
                         if (result == WorldStateApply.Verification.IN_PROGRESS) return;
-                        if (result == WorldStateApply.Verification.MISMATCH) throw new IOException("Native Axiom replay did not verify exactly");
+                        if (result == WorldStateApply.Verification.MISMATCH) throw new IOException("Live replay did not verify exactly");
                         phase = Phase.INTENT;
                     }
                     case PERSIST -> {
-                        if (!origins.awaitDurable(deadline) || !nativeReplay.persistUntil(deadline)) return;
+                        if (!origins.awaitDurable(deadline) || !replay.persistUntil(deadline)) return;
                         io = async(publishCursor);
                         phase = Phase.PUBLISH;
                     }
@@ -101,7 +101,7 @@ public final class AxiomReplayOperation implements DimensionMutation {
             if (!intentStarted) { phase = Phase.FAILED; return; }
             if (phase == Phase.ABORT || phase == Phase.RECOVER) { phase = Phase.DEGRADED; return; }
             if (!mutationStarted) { io = async(clearIntent); phase = Phase.ABORT; return; }
-            LumiMod.LOGGER.warn("Native Axiom replay failed during {}; recovering under the same freeze", phase, failure);
+            LumiMod.LOGGER.warn("Live replay failed during {}; recovering under the same freeze", phase, failure);
             // Do not publish speculative chunks, or start recovery, ahead of the pending intent.
             phase = Phase.RECOVER;
         }
@@ -117,13 +117,13 @@ public final class AxiomReplayOperation implements DimensionMutation {
     @Override public boolean isSafeToRelease() { return delegate != null ? delegate.isSafeToRelease() : phase == Phase.SUCCEEDED || phase == Phase.FAILED; }
     @Override public MutationTerminalState terminalState() {
         if (delegate != null) return delegate.terminalState();
-        if (!isTerminal()) throw new IllegalStateException("Native replay is not terminal");
+        if (!isTerminal()) throw new IllegalStateException("Live replay is not terminal");
         return phase == Phase.SUCCEEDED ? MutationTerminalState.SUCCEEDED : phase == Phase.FAILED ? MutationTerminalState.FAILED : MutationTerminalState.DEGRADED;
     }
     @Override public Optional<Throwable> failure() { return delegate != null ? delegate.failure() : Optional.ofNullable(failure); }
-    @Override public OperationProgress progress() { return delegate != null ? delegate.progress() : OperationProgress.indeterminate("Axiom: " + phase.name().toLowerCase(java.util.Locale.ROOT)); }
+    @Override public OperationProgress progress() { return delegate != null ? delegate.progress() : OperationProgress.indeterminate("Undo/Redo: " + phase.name().toLowerCase(java.util.Locale.ROOT)); }
     @Override public boolean cancel() { if (intentStarted || delegate != null) return false; phase = Phase.FAILED; return true; }
-    @Override public void close() throws IOException { try { if (delegate != null) delegate.close(); } finally { before.close(); nativeReplay.close(); } }
+    @Override public void close() throws IOException { try { if (delegate != null) delegate.close(); } finally { before.close(); replay.close(); } }
 
     @FunctionalInterface public interface Work { void run() throws IOException; }
     private enum Phase { PREFLIGHT, WAIT_APPLY, INTENT, APPLY, VERIFY, PERSIST, PUBLISH, ABORT, RECOVER, SUCCEEDED, FAILED, DEGRADED }
