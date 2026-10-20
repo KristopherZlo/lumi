@@ -198,6 +198,7 @@ final class LumiAxiomNativeHistoryScenario {
     }
 
     private void nativeRegressions(ClientGameTestContext context, TestSingleplayerContext world, LumiBehaviorOperations operations) throws IOException {
+        nativeControlMask(context, world, operations);
         var growth = origin.north(2);
         world.getServer().runOnServer(server -> server.getPlayerList().getPlayers().getFirst().level().setBlockAndUpdate(growth, Blocks.DIRT.defaultBlockState()));
         var growthEntry = context.computeOnClient(client -> {
@@ -240,6 +241,56 @@ final class LumiAxiomNativeHistoryScenario {
         operations.nativeHistoryStep("native_large_redo", false);
         for (var pos : positions) assertBlock(context, world, pos, Blocks.GOLD_BLOCK);
         operations.nativeHistoryStep("native_large_final_undo", true);
+    }
+
+    private void nativeControlMask(ClientGameTestContext context, TestSingleplayerContext world, LumiBehaviorOperations operations) throws IOException {
+        var position = origin.east(24);
+        for (boolean editorOnly : new boolean[] {false, true}) {
+            var entry = context.computeOnClient(client -> {
+                var forwards = new BlockBuffer(); var backwards = new BlockBuffer();
+                forwards.set(position.getX(), position.getY(), position.getZ(),
+                        (editorOnly ? Blocks.DIAMOND_BLOCK : Blocks.GOLD_BLOCK).defaultBlockState());
+                backwards.set(position.getX(), position.getY(), position.getZ(),
+                        (editorOnly ? Blocks.GOLD_BLOCK : Blocks.AIR).defaultBlockState());
+                var history = new HistoryEntry<com.moulberry.axiom.world_modification.BlockOrBiomeBuffer>(
+                        forwards, backwards, position, "Native control mask fixture",
+                        editorOnly ? 0 : HistoryEntry.MODIFIER_CAN_BE_UNDONE_INGAME);
+                Dispatcher.push(history);
+                return io.github.lumi.client.integration.AxiomNativeHistoryFiles.binding(history).entry();
+            });
+            assertBlock(context, world, position, editorOnly ? Blocks.DIAMOND_BLOCK : Blocks.GOLD_BLOCK);
+            awaitPublished(context, entry);
+        }
+        assertGameControlStops(context, true);
+        assertBlock(context, world, position, Blocks.DIAMOND_BLOCK);
+        operations.undo("editor_entry_via_lumi");
+        assertBlock(context, world, position, Blocks.GOLD_BLOCK);
+        assertGameControlStops(context, false);
+        context.runOnClient(client -> com.moulberry.axiom.editor.EditorUI.enable());
+        context.waitFor(client -> com.moulberry.axiom.editor.EditorUI.isActive());
+        try {
+            operations.nativeHistoryStep("editor_entry_redo", false);
+            assertBlock(context, world, position, Blocks.DIAMOND_BLOCK);
+            operations.nativeHistoryStep("editor_entry_undo", true);
+            assertBlock(context, world, position, Blocks.GOLD_BLOCK);
+        } finally {
+            context.runOnClient(client -> com.moulberry.axiom.editor.EditorUI.disable());
+        }
+        context.waitFor(client -> !com.moulberry.axiom.editor.EditorUI.isActive());
+        operations.nativeHistoryStep("game_entry_after_editor_undo", true);
+        assertBlock(context, world, position, Blocks.AIR);
+    }
+
+    private static void assertGameControlStops(ClientGameTestContext context, boolean undo) {
+        context.runOnClient(client -> {
+            var before = AxiomWorldHistory.INSTANCE.visibleHistory().getPosition();
+            if (com.moulberry.axiom.editor.EditorUI.isActive())
+                throw new AssertionError("In-game control fixture has an active editor");
+            Dispatcher.callAction(undo ? com.moulberry.axiom.UserAction.UNDO : com.moulberry.axiom.UserAction.REDO, null);
+            if (LumiClient.networking().worldActionPending()
+                    || before != AxiomWorldHistory.INSTANCE.visibleHistory().getPosition())
+                throw new AssertionError("In-game Axiom control skipped an editor-only entry");
+        });
     }
 
     private static void awaitPublished(ClientGameTestContext context, java.util.UUID entry) {

@@ -87,10 +87,9 @@ final class AxiomNativeHistory {
         if (localReplay) return false;
         var projected = projection(payload);
         int position = projected.getPosition() + (undo ? 0 : 1);
-        if (inGame) while (position >= 0 && position < projected.getSize()
-                && !projected.getHistoryEntry(position).hasModifier(HistoryEntry.MODIFIER_CAN_BE_UNDONE_INGAME)) position += undo ? -1 : 1;
         if (position < 0 || position >= projected.getSize()) return true;
         var entry = projected.getHistoryEntry(position);
+        if (inGame && !entry.hasModifier(HistoryEntry.MODIFIER_CAN_BE_UNDONE_INGAME)) return true;
         UUID id = controls.get(entry);
         Row row = byId.get(id);
         if (row == null || !row.binding.epoch().equals(payload.epoch())) { unavailable(); return true; }
