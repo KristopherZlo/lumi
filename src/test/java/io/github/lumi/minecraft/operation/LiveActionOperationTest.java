@@ -137,6 +137,33 @@ class LiveActionOperationTest {
         }
     }
 
+    @Test void observedNativeResultIsVerifiedAndPublishedWithoutApplyingAgain() throws Exception {
+        for (boolean mismatch : new boolean[] {false, true}) {
+            var events = new ArrayList<String>();
+            var jobs = new java.util.ArrayDeque<Runnable>();
+            var plan = action(block("stone"), block("gold_block")).prepareUndo(PLAYER).orElseThrow();
+            var operation = LiveReplayOperation.alreadyApplied(plan, new ReplaySession(events, "observed", mismatch),
+                    ignored -> { }, jobs::add, () -> events.add("origins"), () -> events.add("release"),
+                    () -> events.add("cursor"), () -> events.add("install"),
+                    ignored -> { events.add("recovery"); return new NoChangeMutation("recovered"); });
+            operation.advance(Long.MAX_VALUE);
+            assertTrue(events.contains("origins"));
+            assertTrue(events.contains("observed.verify"));
+            assertTrue(!events.contains("observed.apply"));
+            assertTrue(!events.contains("install"));
+            assertEquals(!mismatch, events.contains("observed.persist"));
+            if (!mismatch) {
+                assertTrue(!operation.isTerminal());
+                jobs.removeFirst().run();
+            }
+            for (int tick = 0; tick < 3 && !operation.isTerminal(); tick++) operation.advance(Long.MAX_VALUE);
+            assertEquals(MutationTerminalState.SUCCEEDED, operation.terminalState());
+            assertEquals(!mismatch, events.contains("install"));
+            assertEquals(mismatch, events.contains("recovery"));
+            operation.close();
+        }
+    }
+
     private static final class ReplaySession implements io.github.lumi.minecraft.world.WorldStateApply.ApplySession {
         private final java.util.List<String> events;
         private final String name;

@@ -23,6 +23,7 @@ public final class LiveReplayOperation implements DimensionMutation {
     private boolean intentStarted, mutationStarted;
     private DimensionMutation delegate;
     private Throwable failure;
+    private Work installCursor = () -> { };
 
     public LiveReplayOperation(LiveActionJournal.Plan plan, WorldStateApply.ApplySession before,
             WorldStateApply.ApplySession replay, RestorePublication origins, Executor background,
@@ -42,6 +43,20 @@ public final class LiveReplayOperation implements DimensionMutation {
         this.recovery = recovery;
     }
 
+    /** The owning editor already applied the world; only verification and durable publication remain. */
+    public static LiveReplayOperation alreadyApplied(LiveActionJournal.Plan plan,
+            WorldStateApply.ApplySession observed, RestorePublication origins, Executor background,
+            Work registerOrigins, Work releasePublication, Work publishCursor, Work installCursor, LiveActionOperation.ReplayFactory recovery) {
+        var operation = new LiveReplayOperation(plan, null, observed, origins, background,
+                () -> { }, registerOrigins, releasePublication, publishCursor, () -> { }, recovery, recovery);
+        operation.phase = Phase.OBSERVED;
+        operation.io = CompletableFuture.completedFuture(null);
+        operation.intentStarted = true;
+        operation.mutationStarted = true;
+        operation.installCursor = installCursor;
+        return operation;
+    }
+
     @Override public void advance(long deadline) throws IOException {
         if (delegate != null) { delegate.advance(deadline); return; }
         try {
@@ -49,6 +64,7 @@ public final class LiveReplayOperation implements DimensionMutation {
             while (!isTerminal() && (first || System.nanoTime() < deadline)) {
                 first = false;
                 switch (phase) {
+                    case OBSERVED -> { registerOrigins.run(); phase = Phase.VERIFY; }
                     case PREFLIGHT -> {
                         var result = before.verifyUntil(deadline);
                         if (result == WorldStateApply.Verification.IN_PROGRESS) return;
@@ -89,7 +105,7 @@ public final class LiveReplayOperation implements DimensionMutation {
                         delegate = recovery.prepare(plan);
                         return;
                     }
-                    case PUBLISH -> { if (!io.isDone()) return; io.join(); phase = Phase.SUCCEEDED; }
+                    case PUBLISH -> { if (!io.isDone()) return; io.join(); installCursor.run(); phase = Phase.SUCCEEDED; }
                     case SUCCEEDED, FAILED, DEGRADED -> { return; }
                 }
             }
@@ -120,8 +136,8 @@ public final class LiveReplayOperation implements DimensionMutation {
     @Override public Optional<Throwable> failure() { return delegate != null ? delegate.failure() : Optional.ofNullable(failure); }
     @Override public OperationProgress progress() { return delegate != null ? delegate.progress() : OperationProgress.indeterminate("Undo/Redo: " + phase.name().toLowerCase(java.util.Locale.ROOT)); }
     @Override public boolean cancel() { if (intentStarted || delegate != null) return false; phase = Phase.FAILED; return true; }
-    @Override public void close() throws IOException { try { if (delegate != null) delegate.close(); } finally { before.close(); replay.close(); } }
+    @Override public void close() throws IOException { try { if (delegate != null) delegate.close(); } finally { if (before != null) before.close(); replay.close(); } }
 
     @FunctionalInterface public interface Work { void run() throws IOException; }
-    private enum Phase { PREFLIGHT, INTENT, APPLY, VERIFY, PERSIST, PUBLISH, ABORT, RECOVER, SUCCEEDED, FAILED, DEGRADED }
+    private enum Phase { OBSERVED, PREFLIGHT, INTENT, APPLY, VERIFY, PERSIST, PUBLISH, ABORT, RECOVER, SUCCEEDED, FAILED, DEGRADED }
 }

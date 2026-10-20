@@ -54,7 +54,12 @@ public final class AxiomNativeReplayOperation implements DimensionMutation {
     public boolean dispatch(ServerPlayer player, UUID request, UUID dispatch, boolean complete) {
         if (player != actor || !this.request.equals(request)) return false;
         if (complete) dispatches.remove(dispatch);
-        else if (accepting && !sent && dispatches.size() < 64) dispatches.add(dispatch);
+        else if (accepting && !sent) {
+            if (dispatches.size() >= 64) {
+                failure = new IOException("Too many concurrent native Axiom dispatches");
+                sent = true; accepting = false;
+            } else dispatches.add(dispatch);
+        }
         deadline = System.nanoTime() + 30_000_000_000L;
         return true;
     }
@@ -71,8 +76,12 @@ public final class AxiomNativeReplayOperation implements DimensionMutation {
         if (!accepting || sent || player.level() != level) return true;
         touched = true;
         applying = true;
-        try { freeze.runAuthorizedEntityAddition(nativeApply); }
-        catch (RuntimeException | Error failed) { failure = failed; sent = true; accepting = false; }
+        try {
+            if (io.github.lumi.LumiMod.serverRuntime().permission(player) != io.github.lumi.domain.service.PermissionDecision.ALLOWED)
+                throw new IllegalStateException("Lumi editing permission changed");
+            freeze.runAuthorizedEntityAddition(nativeApply);
+        }
+        catch (IOException | RuntimeException | Error failed) { failure = failed; sent = true; accepting = false; }
         finally { applying = false; }
         deadline = System.nanoTime() + 30_000_000_000L;
         return true;
@@ -86,12 +95,14 @@ public final class AxiomNativeReplayOperation implements DimensionMutation {
     public void include(io.github.lumi.domain.model.SectionKey key, io.github.lumi.domain.model.SectionBlob section, DimensionFreeze.Lease hold) {
         if (hold != null) extraHolds.add(hold);
         if (!includes(key) && before.sections().size() >= 4096) throw new IllegalStateException("Native replay exceeded its section capture limit");
-        keys.put(key, 0L);
+        keys.put(key, 1L);
         var sections = new java.util.HashMap<>(before.sections()); sections.put(key, section);
         before = new CapturedWorldState(sections, before.entities(), new io.github.lumi.domain.model.WorkingIndexSnapshot(keys),
                 new io.github.lumi.domain.model.CommitStatistics(sections.size(), before.entities().size(),
                         (long) sections.size() * io.github.lumi.domain.model.SectionBlob.BLOCK_COUNT, before.statistics().entities()));
     }
+
+    public Set<io.github.lumi.domain.model.SectionKey> sectionKeys() { return before == null ? Set.of() : before.sections().keySet(); }
 
     public void accept(ServerPlayer player, AxiomNativeReplayPayload payload) {
         if (player != actor || !request.equals(payload.request()) || !accepting) return;
@@ -143,7 +154,9 @@ public final class AxiomNativeReplayOperation implements DimensionMutation {
     }
     @Override public Optional<Throwable> failure() { return failure != null ? Optional.of(failure) : delegate == null ? Optional.empty() : delegate.failure(); }
     @Override public OperationProgress progress() {
-        return delegate == null ? OperationProgress.indeterminate("Axiom Undo/Redo") : delegate.progress();
+        var progress = delegate == null ? null : delegate.progress();
+        return progress == null ? OperationProgress.indeterminate("Axiom Undo/Redo")
+                : new OperationProgress("Axiom Undo/Redo", progress.completed(), progress.total());
     }
     @Override public void close() throws IOException {
         capture.close();

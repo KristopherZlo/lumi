@@ -54,6 +54,8 @@ import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.HistoryKey;
 import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.OperationKind;
+import io.github.lumi.domain.model.OperationPhase;
+import io.github.lumi.domain.model.OperationTarget;
 import io.github.lumi.domain.model.PackageName;
 import io.github.lumi.domain.model.PartialRestorePlan;
 import io.github.lumi.domain.model.SectionKey;
@@ -1154,22 +1156,38 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     .orElseThrow(() -> new IllegalStateException("lumi.axiom.entry_unavailable"));
             if (latest && !selectedPlan(player, direction).equals(Optional.of(selected)))
                 throw new IllegalStateException("History changed; refresh and try again");
+            if (!net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom"))
+                return createSessionAction(player, direction, Optional.of(selected.actionId()));
+            if (Stream.concat(liveActions.view(player).undo().stream(), liveActions.view(player).redo().stream())
+                    .anyMatch(group -> group.action().equals(selected.actionId()) && group.axiomEntries().size() != 1))
+                throw new IllegalStateException("lumi.axiom.entry_unavailable");
             return createNativeReplay(selected, request);
         });
-        operations.enqueue(operation, OperationPriority.URGENT, outcome -> { nativeReplay = null; terminalObserver.accept(outcome); });
+        operations.enqueue(operation, OperationPriority.URGENT, outcome -> {
+            if (nativeReplay != null && outcome.terminalState() != io.github.lumi.minecraft.operation.MutationTerminalState.SUCCEEDED) {
+                nativeReplay.sectionKeys().forEach(blockEntityBaselines::discard);
+                try { liveBlocks.rebaseSections(nativeReplay.sectionKeys()); }
+                catch (IOException failed) { LumiMod.LOGGER.error("Cannot refresh block entity baselines after interrupted native replay", failed); }
+            }
+            nativeReplay = null;
+            terminalObserver.accept(outcome);
+        });
         return operation;
     }
 
     private DimensionMutation createNativeReplay(LiveActionJournal.Plan plan, UUID request) throws IOException {
         var actor = level.getServer().getPlayerList().getPlayer(plan.player());
         if (actor == null || actor.level() != level) throw new IOException("Native Axiom actor left the dimension");
+        if (!net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(actor, io.github.lumi.network.AxiomNativeReplayPayload.TYPE))
+            throw new IOException("The client does not support native Axiom replay");
         var expected = activeRef();
+        var nativeSpawns = worldReader.readPlayerSpawns();
         Map<io.github.lumi.domain.model.HistoryKey, Long> keys = new HashMap<>();
-        plan.sections().keySet().forEach(key -> keys.put(key, 0L));
-        plan.expected().keySet().forEach(pos -> keys.put(new SectionKey(pos.x() >> 4, pos.y() >> 4, pos.z() >> 4), 0L));
-        plan.biomes().keySet().forEach(pos -> keys.put(pos.section(), 0L));
+        plan.sections().keySet().forEach(key -> keys.put(key, 1L));
+        plan.expected().keySet().forEach(pos -> keys.put(new SectionKey(pos.x() >> 4, pos.y() >> 4, pos.z() >> 4), 1L));
+        plan.biomes().keySet().forEach(pos -> keys.put(pos.section(), 1L));
         for (var state : Stream.concat(plan.expectedEntities().values().stream(), plan.replacementEntities().values().stream()).flatMap(Optional::stream).toList())
-            keys.put(liveEntityWorld.chunk(state), 0L);
+            keys.put(liveEntityWorld.chunk(state), 1L);
         var reader = new io.github.lumi.minecraft.world.WorldStateReader() {
             @Override public SectionBlob read(SectionKey key) throws IOException {
                 level.getChunk(key.chunkX(), key.chunkZ());
@@ -1203,18 +1221,30 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     requireExpectedRef(expected);
                     if (!persistActionHistory()) throw new IOException("Action changed during native Axiom replay");
                     var recorded = actionReplays.recordNative(expected, succeeded ? before : after, succeeded ? after : before,
-                            new CommitAuthor(actor.getUUID(), actor.getName().getString()));
-                    WorldStateApply executor = new io.github.lumi.minecraft.world.AlreadyAppliedWorldState(worldApply, journaled, succeeded);
-                    var publication = new ActionReplayPublication(new PendingRestorePublication(mutations), actionHistory,
-                            request, step, !step.undo(), applied -> {
+                            nativeSpawns, new CommitAuthor(actor.getUUID(), actor.getName().getString()));
+                    Consumer<Boolean> install = applied -> {
                         liveActions.installCursor(step, applied);
-                        publishLiveAction(plan);
-                    });
-                    var restore = RestoreOperation.startCheckpointAction(recorded.restore(), executor, publication,
-                            journals, request, restoreStateListener, OperationKind.ACTION_REPLAY, recorded.returnPoint(), Optional.of(step), ignored -> { });
-                    return restore;
+                        if (succeeded && applied == !undo) publishLiveAction(plan);
+                    };
+                    var publication = new ActionReplayPublication(new PendingRestorePublication(mutations), actionHistory,
+                            request, step, !step.undo(), install);
+                    var restore = recorded.restore();
+                    var observed = worldApply.prepare(new WorldStateApply.State(restore.sections(), restore.entities()));
+                    var journal = journals.create(new OperationJournal(request, OperationKind.ACTION_REPLAY, OperationPhase.APPLYING,
+                            new OperationTarget(expected.name(), expected.commit(), expected.revision(),
+                                    Optional.of(restore.targetCommit()), Optional.of(recorded.returnPoint())), Optional.empty(), Optional.of(step)));
+                    if (!succeeded) return RestoreOperation.resume(restore, worldApply, publication, journals, journal, restoreStateListener);
+                    publication.prepare(restore);
+                    return LiveReplayOperation.alreadyApplied(plan, worldApply.beginLoaded(observed), publication, background,
+                            () -> publication.finishOnServer(restore), journaled::run, () -> {
+                                publication.persist(restore);
+                                journals.clear(journal);
+                            }, () -> {
+                                restoreStateListener.restored(observed.source());
+                                publication.installed();
+                            }, ignored -> createNativeRecovery(expected, install));
                 } catch (IOException failed) { throw new CompletionException(failed); }
-            }, background), () -> requireExpectedRef(expected), value -> { value.cancel(); value.close(); }, true, true);
+            }, background), () -> { requireExpectedRef(expected); journaled.run(); }, value -> { value.cancel(); value.close(); }, true, true);
         });
         return nativeReplay;
     }
@@ -1372,6 +1402,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     private DimensionMutation createNativeRecovery(BranchRef expected) {
+        return createNativeRecovery(expected, ignored -> { });
+    }
+
+    private DimensionMutation createNativeRecovery(BranchRef expected, Consumer<Boolean> install) {
         return new BackgroundPreparedMutation<>(CompletableFuture.supplyAsync(() -> {
             try {
                 var journal = new NativeActionRecovery(actionHistory, actionReplays, journals)
@@ -1379,7 +1413,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 var restore = recoveries.prepare(journal, RecoveryChoice.RESUME_TARGET);
                 var step = journal.actionReplay().orElseThrow();
                 var publication = new ActionReplayPublication(new PendingRestorePublication(mutations), actionHistory,
-                        journal.operationId(), step, !step.undo(), ignored -> { });
+                        journal.operationId(), step, !step.undo(), install);
                 return RestoreOperation.resume(restore, worldApply, publication, journals, journal, restoreStateListener, ignored -> { });
             } catch (IOException failed) { throw new CompletionException(failed); }
         }, background), () -> requireExpectedRef(expected), ignored -> { }, true, true);
