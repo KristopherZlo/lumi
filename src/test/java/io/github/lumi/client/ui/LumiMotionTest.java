@@ -54,5 +54,6 @@ class LumiMotionTest {
         } finally {
             LumiMotion.setEnabled(true);
         }
+        assertEquals(0, motion.toward(0));
     }
 }

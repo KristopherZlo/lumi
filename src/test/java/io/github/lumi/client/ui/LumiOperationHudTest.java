@@ -34,6 +34,26 @@ class LumiOperationHudTest {
     }
 
     @Test
+    void previewGroupsRepeatedUndoWithoutRestartingTheEntrance() {
+        var motion = new LumiEffectPreview.Motion();
+        motion.change(LumiEffectPreview.State.UNDO, 0);
+        motion.change(LumiEffectPreview.State.UNDO, 400_000_000L);
+        var repeated = motion.frame(400_000_000L);
+        assertEquals(2, repeated.repetitions());
+        assertEquals(1, repeated.mix());
+        assertEquals(42, repeated.height());
+        motion.change(LumiEffectPreview.State.REDO, 500_000_000L);
+        assertEquals(1, motion.frame(500_000_000L).repetitions());
+        assertEquals(2, motion.frame(500_000_000L).previousRepetitions());
+        motion.change(LumiEffectPreview.State.RESTORE, 600_000_000L);
+        assertEquals(0, motion.frame(1_000_000_000L).progress());
+        assertTrue(motion.frame(1_500_000_000L).progress() > 0);
+        motion.reset();
+        motion.change(LumiEffectPreview.State.UNDO, 1_600_000_000L);
+        assertEquals(1, motion.frame(1_600_000_000L).repetitions());
+    }
+
+    @Test
     void stacksOperationBelowCollapsedOrExpandedWorkspacePanel() {
         assertEquals(38, LumiOperationHud.nextPanelY(10, 22));
         assertEquals(84, LumiOperationHud.nextPanelY(10, 68));

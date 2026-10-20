@@ -38,13 +38,18 @@ final class LumiMotion {
     }
 
     float toward(float target) {
+        if (!enabled) {
+            fromValue = targetValue = target;
+            durationNanos = 0;
+            return target;
+        }
         float current = fromValue + (targetValue - fromValue) * value();
         if (target != targetValue) {
             fromValue = current;
             targetValue = target;
             start(300);
         }
-        return enabled ? current : target;
+        return current;
     }
 
     static void setEnabled(boolean value) {

@@ -22,7 +22,7 @@ public final class LumiEffectPreview {
         REDO("Edit restored", "Brush stroke", 42, false, 1800),
         RESTORE("Restoring world", "Courtyard", 50, true, 4200),
         COMPARE("Preparing Compare", "main to roof-study", 50, true, 4200),
-        ERROR("Restore blocked", "Newer edits overlap", 42, false, 5000);
+        ERROR("Restore blocked", "Newer edits overlap", 42, false, 0);
         final String title, detail;
         final int height, holdMillis;
         final boolean progress;
@@ -32,7 +32,7 @@ public final class LumiEffectPreview {
         }
     }
     private static final State[] DEMO = {State.IDLE, State.DIRTY, State.SAVE,
-            State.BRANCH, State.RESTORE, State.COMPARE, State.ERROR, State.IDLE};
+            State.BRANCH, State.UNDO, State.REDO, State.RESTORE, State.COMPARE, State.ERROR, State.IDLE};
     private final Motion motion = new Motion();
     private ClientLevel world;
     private int demoIndex = -1;
@@ -92,7 +92,7 @@ public final class LumiEffectPreview {
             int index = (int) ((now-demoStarted) / 3_000_000_000L);
             if (index >= DEMO.length) { demoIndex = -1; motion.change(State.IDLE, now); }
             else if (index != demoIndex) { demoIndex = index; motion.change(DEMO[index], now); }
-        } else if (motion.state.holdMillis > 0 && (now-motion.changed)/1_000_000 >= motion.state.holdMillis) {
+        } else if (motion.state.holdMillis > 0 && (now-motion.updated)/1_000_000 >= motion.state.holdMillis) {
             motion.change(State.IDLE, now);
         }
         if (client.options.hideGui) return true;
@@ -105,10 +105,10 @@ public final class LumiEffectPreview {
                 LumiTheme.withOpacity(LumiTheme.WINDOW, (float) (frame.opacity*.9)),
                 LumiTheme.withOpacity(LumiTheme.WINDOW_BORDER, (float) (frame.opacity*.45)));
         graphics.enableScissor(x+1, y+1, x+width-1, y+height-1);
-        if (frame.previous == frame.state) drawState(graphics, frame.state, x, y, width, frame.opacity, 0, frame.progress);
+        if (frame.previous == frame.state) drawState(graphics, frame.state, frame.repetitions, x, y, width, frame.opacity, 0, frame.progress);
         else {
-            drawState(graphics, frame.previous, x, y, width, frame.opacity*(1-frame.mix), (int) (-4*frame.mix), frame.previousProgress);
-            drawState(graphics, frame.state, x, y, width, frame.opacity*frame.mix, (int) (4*(1-frame.mix)), frame.progress);
+            drawState(graphics, frame.previous, frame.previousRepetitions, x, y, width, frame.opacity*(1-frame.mix), (int) (-4*frame.mix), frame.previousProgress);
+            drawState(graphics, frame.state, frame.repetitions, x, y, width, frame.opacity*frame.mix, (int) (4*(1-frame.mix)), frame.progress);
         }
         graphics.disableScissor();
         if (frame.state == State.SAVE) {
@@ -124,21 +124,24 @@ public final class LumiEffectPreview {
         return true;
     }
 
-    private static void drawState(GuiGraphics graphics, State state, int x, int y, int width,
+    private static void drawState(GuiGraphics graphics, State state, int repetitions, int x, int y, int width,
             double opacity, int shift, double progress) {
         if (opacity < .04) return;
         int accent = state == State.ERROR ? LumiTheme.DANGER : state == State.IDLE ? LumiTheme.MUTED : LumiTheme.ACCENT;
         int detailWidth = state.height == 24
                 ? Math.min(Minecraft.getInstance().font.width(state.detail), Math.max(0, (width-20)/2)) : 0;
-        text(graphics, "Preview · " + state.title, x+10+shift, y+8,
+        String title = repetitions > 1 && (state == State.UNDO || state == State.REDO)
+                ? repetitions + (state == State.UNDO ? " edits undone" : " edits restored") : state.title;
+        text(graphics, "Preview · " + title, x+10+shift, y+8,
                 width-20-(detailWidth > 0 ? detailWidth+8 : 0), LumiTheme.TEXT, opacity);
         if (state.height == 24) {
             text(graphics, state.detail, x+width-detailWidth-10+shift, y+8, detailWidth, accent, opacity);
         } else text(graphics, state.detail, x+10+shift, y+23, width-20, accent, opacity);
-        if (state.progress) {
-            graphics.fill(x+10, y+43, x+width-10, y+45, LumiTheme.withOpacity(LumiTheme.CHIP, (float) opacity));
+        if (state.progress && progress > 0) {
+            float barOpacity = (float) (opacity * Math.min(1, progress * 8));
+            graphics.fill(x+10, y+43, x+width-10, y+45, LumiTheme.withOpacity(LumiTheme.CHIP, barOpacity));
             graphics.fill(x+10, y+43, x+10+(int) ((width-20)*progress), y+45,
-                    LumiTheme.withOpacity(accent, (float) opacity));
+                    LumiTheme.withOpacity(accent, barOpacity));
         }
     }
 
@@ -150,18 +153,29 @@ public final class LumiEffectPreview {
 
     static final class Motion {
         private State state = State.IDLE, previous = State.IDLE;
-        private long changed;
+        private long changed, updated;
+        private int repetitions = 1, previousRepetitions = 1;
         private double fromHeight = 24, fromOpacity, previousProgress;
         private boolean visible;
         boolean animated = true;
 
         void change(State next, long now) {
+            if (visible && next == state && (next == State.UNDO || next == State.REDO)
+                    && now-updated < next.holdMillis * 1_000_000L) {
+                repetitions++;
+                updated = now;
+                return;
+            }
             var before = frame(now);
             previous = state; fromHeight = before.height; fromOpacity = before.opacity;
-            previousProgress = before.progress; state = next; changed = now; visible = true;
+            previousProgress = before.progress; previousRepetitions = repetitions;
+            repetitions = 1; state = next; changed = updated = now; visible = true;
         }
 
-        void reset() { visible = false; state = previous = State.IDLE; fromHeight = 24; fromOpacity = 0; }
+        void reset() {
+            visible = false; state = previous = State.IDLE;
+            repetitions = previousRepetitions = 1; fromHeight = 24; fromOpacity = 0;
+        }
 
         Frame frame(long now) {
             double elapsed = Math.max(0, (now-changed)/1_000_000_000.0);
@@ -169,10 +183,12 @@ public final class LumiEffectPreview {
             double mix = animated ? 1-Math.pow(1-linear, 3) : 1;
             return new Frame(previous, state, mix, fromHeight+(state.height-fromHeight)*mix,
                     visible ? fromOpacity+(1-fromOpacity)*mix : 0,
-                    state.progress ? Math.clamp(elapsed/2.5, 0, 1) : 0, previousProgress);
+                    state.progress ? Math.clamp((elapsed-.45)/2.5, 0, 1) : 0, previousProgress,
+                    repetitions, previousRepetitions);
         }
     }
 
     record Frame(State previous, State state, double mix, double height,
-            double opacity, double progress, double previousProgress) { }
+            double opacity, double progress, double previousProgress,
+            int repetitions, int previousRepetitions) { }
 }
