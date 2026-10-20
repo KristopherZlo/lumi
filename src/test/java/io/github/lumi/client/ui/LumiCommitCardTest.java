@@ -30,6 +30,15 @@ class LumiCommitCardTest {
     }
 
     @Test
+    void reservesRoomForTheNameBesideALocalizedCurrentBadge() {
+        assertEquals(0, LumiCommitCard.badgeWidth(0, 80));
+        assertEquals(0, LumiCommitCard.badgeWidth(99, 80));
+        assertEquals(50, LumiCommitCard.badgeWidth(100, 180));
+        assertEquals(88, LumiCommitCard.badgeWidth(300, 80));
+        assertTrue(LumiCommitCard.badgeWidth(300, 800) <= 150);
+    }
+
+    @Test
     void scrollsOnlyTagContentLinearlyThroughTwoSpaces() {
         assertEquals("hello  hello", LumiCommitCard.marqueeText("hello"));
         assertEquals(

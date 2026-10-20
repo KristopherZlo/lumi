@@ -330,6 +330,7 @@
   "luma.project.history_search_help": "Search by name, author, or save id.",
   "luma.project.details_title": "Save details",
   "luma.project.active_head_badge": "Current save",
+  "luma.history.card_blocks": "%s blocks",
   "luma.project.head_badge": "Latest %s",
   "luma.project.diagnostics_title": "Diagnostics",
   "luma.project.diagnostics_help": "Rare checks and technical details stay here until you need them.",

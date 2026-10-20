@@ -20,6 +20,7 @@ public class LumiButton extends Button {
     private final Identifier icon;
     private final Identifier disabledIcon;
     private final Integer accentColor;
+    private final LumiMotion hoverMotion = new LumiMotion();
     private boolean upsideDown;
 
     public LumiButton(
@@ -94,19 +95,28 @@ public class LumiButton extends Button {
     }
 
     private void renderFlatContents(GuiGraphics graphics) {
-        int fill = active ? kind.fill(isHoveredOrFocused()) : 0xff18191b;
+        float hover = hoverMotion.toward(active && isHoveredOrFocused() ? 1 : 0);
+        int fill = active ? kind.fill(false) : 0xff18191b;
         if (active && accentColor != null) {
             graphics.fill(
                     getX(), getY(), getX() + getWidth(), getY() + getHeight(),
                     accentColor);
             fill = LumiTheme.withAlpha(
-                    accentColor, isHoveredOrFocused() ? 0xbb : 0x88);
+                    accentColor, Math.round(0x88 + (0xbb - 0x88) * hover));
             graphics.fill(
                     getX() + 1, getY() + 1,
                     getX() + getWidth() - 1, getY() + getHeight() - 1, fill);
         } else {
             graphics.fill(
                     getX(), getY(), getX() + getWidth(), getY() + getHeight(), fill);
+            if (active && hover > 0) {
+                graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(),
+                        LumiTheme.withOpacity(kind.fill(true), hover));
+            }
+        }
+        if (active && kind == Kind.SELECTED) {
+            graphics.fill(getX(), getY() + 3, getX() + 2, getY() + getHeight() - 3,
+                    accentColor == null ? LumiTheme.ACCENT : accentColor);
         }
         if (icon != null) {
             int preferredSize = LumiUiScale.current().targetGuiScale() == 3 ? 8 : 12;
@@ -158,9 +168,9 @@ public class LumiButton extends Button {
     }
 
     public enum Kind {
-        NORMAL(0xff2a292c, 0xff39363a),
+        NORMAL(0xff222326, 0xff343438),
         PRIMARY(0xff7a5a21, 0xff936d29),
-        DANGER(0xff7a2424, 0xff963030),
+        DANGER(0xff40262a, 0xff783438),
         SELECTED(0xff211f18, 0xff211f18);
 
         private final int fill;

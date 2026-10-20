@@ -34,4 +34,25 @@ class LumiMotionTest {
         assertEquals(1.0F, motion.value());
         assertFalse(motion.running());
     }
+
+    @Test
+    void retargetsHoverWithoutJumpingAndCanDisableMotion() {
+        AtomicLong now = new AtomicLong();
+        LumiMotion motion = new LumiMotion(now::get);
+        assertEquals(0, motion.toward(1));
+        now.set(150_000_000L);
+        float hovered = motion.toward(1);
+        assertTrue(hovered > 0 && hovered < 1);
+        assertEquals(hovered, motion.toward(0));
+        now.set(450_000_000L);
+        assertEquals(0, motion.toward(0));
+        try {
+            LumiMotion.setEnabled(false);
+            assertEquals(1, motion.toward(1));
+            assertEquals(0, motion.toward(0));
+            assertFalse(motion.running());
+        } finally {
+            LumiMotion.setEnabled(true);
+        }
+    }
 }

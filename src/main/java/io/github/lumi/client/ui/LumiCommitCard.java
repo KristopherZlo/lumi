@@ -7,6 +7,8 @@ import io.github.lumi.network.HistorySnapshotPayload;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.Map;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -31,6 +33,7 @@ final class LumiCommitCard {
     private final Font font;
     private final ClientVersionPreviewStore previews;
     private final String dimensionId;
+    private final Map<CardKey, LumiMotion> hoverMotions = new HashMap<>();
     private CardKey hoveredCard;
     private long hoverStartedNanos;
 
@@ -51,45 +54,61 @@ final class LumiCommitCard {
             boolean featured,
             int mouseX,
             int mouseY) {
-        int border = head || featured
-                ? accentColor : LumiTheme.INSET_BORDER;
-        LumiTheme.outlined(
-                graphics, layout.x(), layout.y(), layout.width(), layout.height(),
-                featured ? LumiTheme.PANEL : LumiTheme.INSET, border);
+        long elapsedNanos = hoverElapsed(
+                version.id(), layout, mouseX, mouseY, System.nanoTime());
+        boolean hovered = elapsedNanos >= 0;
+        float hover = hoverMotions.computeIfAbsent(
+                new CardKey(version.id(), layout.x(), layout.y()),
+                ignored -> new LumiMotion()).toward(hovered ? 1 : 0);
+        graphics.fill(layout.x(), layout.y(), layout.right(), layout.bottom(),
+                LumiTheme.withOpacity(LumiTheme.INSET, featured ? .8F : .4F));
+        if (hover > 0) {
+            graphics.fill(layout.x(), layout.y(), layout.right(), layout.bottom(),
+                    LumiTheme.withOpacity(LumiTheme.TEXT, hover * .055F));
+        }
+        if (head) {
+            graphics.fill(layout.x(), layout.y() + 5, layout.x() + 2, layout.bottom() - 5,
+                    accentColor);
+        }
         if (layout.showPreview()) {
             drawPreview(graphics, version, layout.previewX(), layout.previewY());
         }
         if (layout.textWidth() <= 0) return;
-        long elapsedNanos = hoverElapsed(
-                version.id(), layout, mouseX, mouseY, System.nanoTime());
-        boolean hovered = elapsedNanos >= 0;
+        String badge = head
+                ? Component.translatable("luma.project.active_head_badge").getString()
+                : featured ? Component.translatable("luma.dashboard.latest_badge").getString() : "";
+        int badgeWidth = badge.isEmpty() ? 0 : badgeWidth(layout.textWidth(), font.width(badge));
+        if (badgeWidth > 0) {
+            int badgeX = layout.textX() + layout.textWidth() - badgeWidth;
+            graphics.fill(badgeX, layout.messageY() - 2,
+                    badgeX + badgeWidth, layout.messageY() + 10, LumiTheme.STATUS);
+            graphics.drawString(font, font.plainSubstrByWidth(badge, badgeWidth - 8),
+                    badgeX + 4, layout.messageY(), accentColor, false);
+        }
         drawMarquee(
                 graphics, VersionText.name(version),
-                layout.textX(), layout.messageY(), layout.textWidth(),
+                layout.textX(), layout.messageY(), Math.max(0, layout.textWidth() - badgeWidth
+                        - (badgeWidth > 0 ? CONTENT_GAP : 0)),
                 LumiTheme.TEXT, hovered, elapsedNanos);
         if (!layout.showMeta()) return;
-        String featuredText = featured
-                ? Component.translatable("luma.dashboard.latest_badge").getString()
-                        + " · "
-                : "";
-        String headText = head
-                ? " · " + Component.translatable(
-                        "luma.project.active_head_badge").getString()
-                : "";
-        String meta = featuredText + version.author() + " · "
-                + HISTORY_TIME.format(Instant.ofEpochMilli(version.timestampMillis()))
-                + " · " + version.statistics().blocks() + " blocks"
-                + headText
-                + (tags.isEmpty() ? "" : " · ");
+        String tagText = tagText(tags);
+        int tagWidth = Math.min(font.width(tagText), layout.textWidth() * 2 / 5);
+        int metaWidth = Math.max(0, layout.textWidth() - tagWidth
+                - (tagWidth > 0 ? CONTENT_GAP : 0));
+        String meta = Component.translatable("luma.history.card_blocks",
+                version.statistics().blocks()).getString() + " · " + version.author() + " · "
+                + HISTORY_TIME.format(Instant.ofEpochMilli(version.timestampMillis()));
         graphics.drawString(
-                font, font.plainSubstrByWidth(meta, layout.textWidth()),
+                font, font.plainSubstrByWidth(meta, metaWidth),
                 layout.textX(), layout.metaY(), LumiTheme.MUTED, false);
-        int tagX = layout.textX()
-                + Math.min(font.width(meta), layout.textWidth());
         drawMarquee(
-                graphics, tagText(tags), tagX, layout.metaY(),
-                layout.textWidth() - (tagX - layout.textX()),
+                graphics, tagText, layout.textX() + layout.textWidth() - tagWidth,
+                layout.metaY(), tagWidth,
                 LumiTheme.MUTED, hovered, elapsedNanos);
+    }
+
+    static int badgeWidth(int textWidth, int labelWidth) {
+        return textWidth < 100 ? 0 : Math.min(labelWidth + 8, textWidth / 2);
     }
 
     private void drawMarquee(

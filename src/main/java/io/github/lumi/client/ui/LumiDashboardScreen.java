@@ -315,7 +315,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                 layout.bodyX(), layout.bodyWidth(), rowY);
         LumiButton restore = addIconButton(card.actionX(0), card.actionY(),
                 "rollback", "luma.action.restore",
-                () -> openRestore.accept(version), LumiButton.Kind.PRIMARY);
+                () -> openRestore.accept(version), LumiButton.Kind.NORMAL);
         LumiButton details = addIconButton(card.actionX(1), card.actionY(),
                 "folder", "luma.action.open_details",
                 () -> openDetails.accept(version), LumiButton.Kind.NORMAL);
@@ -633,12 +633,10 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         }
 
         if (dashboardGeometry.latestVisible()) {
-            drawPanel(graphics, x, dashboardGeometry.latestY(), width,
-                    dashboardGeometry.latestHeight());
             graphics.drawString(font,
                     Component.translatable("luma.dashboard.latest_badge"),
                     x + PANEL_PADDING, dashboardGeometry.latestY() + 7,
-                    LumiTheme.TEXT, false);
+                    LumiTheme.MUTED, false);
             latestCreated().ifPresent(version -> renderVersionCard(
                     graphics, version, latestCardY(dashboardGeometry), true,
                     mouseX, mouseY));
@@ -764,8 +762,8 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     }
 
     private static void drawPanel(GuiGraphics graphics, int x, int y, int width, int height) {
-        LumiTheme.outlined(graphics, x, y, width, height,
-                LumiTheme.PANEL, LumiTheme.PANEL_BORDER);
+        graphics.fill(x, y, x + width, y + height,
+                LumiTheme.withOpacity(LumiTheme.PANEL, .45F));
     }
 
     private void requestPendingStatistics() {
@@ -893,9 +891,9 @@ public final class LumiDashboardScreen extends LumiPageScreen {
 
     static LumiCommitCard.Layout versionCardLayout(
             int bodyX, int bodyWidth, int rowY) {
-        int cardX = bodyX + PANEL_PADDING * 2;
+        int cardX = bodyX + PANEL_PADDING;
         return LumiCommitCard.layout(
-                cardX, rowY, Math.max(0, bodyWidth - PANEL_PADDING * 4),
+                cardX, rowY, Math.max(0, bodyWidth - PANEL_PADDING * 2),
                 historyRowHeight(bodyWidth), true, true,
                 compactHistoryCards(bodyWidth));
     }

@@ -5,9 +5,12 @@ import java.util.function.LongSupplier;
 
 /** One real-time UI motion with a fast start and smooth stop. */
 final class LumiMotion {
+    private static boolean enabled = true;
     private final LongSupplier nanoTime;
     private long startedNanos;
     private long durationNanos;
+    private float fromValue;
+    private float targetValue;
 
     LumiMotion() {
         this(System::nanoTime);
@@ -26,12 +29,26 @@ final class LumiMotion {
     }
 
     float value() {
-        if (durationNanos == 0L) {
+        if (!enabled || durationNanos == 0L) {
             return 1.0F;
         }
         long elapsed = Math.max(0L, nanoTime.getAsLong() - startedNanos);
         float progress = Math.min(1.0F, (float) elapsed / durationNanos);
         return easeOutQuint(progress);
+    }
+
+    float toward(float target) {
+        float current = fromValue + (targetValue - fromValue) * value();
+        if (target != targetValue) {
+            fromValue = current;
+            targetValue = target;
+            start(300);
+        }
+        return enabled ? current : target;
+    }
+
+    static void setEnabled(boolean value) {
+        enabled = value;
     }
 
     boolean running() {

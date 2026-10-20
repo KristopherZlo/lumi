@@ -53,7 +53,9 @@ public final class LumiEffectPreview {
             }));
             command.then(ClientCommandManager.literal("motion").then(ClientCommandManager
                     .argument("enabled", BoolArgumentType.bool()).executes(context -> {
-                        preview.motion.animated = BoolArgumentType.getBool(context, "enabled"); return 1;
+                        preview.motion.animated = BoolArgumentType.getBool(context, "enabled");
+                        LumiMotion.setEnabled(preview.motion.animated);
+                        return 1;
                     })));
             dispatcher.register(command);
         });

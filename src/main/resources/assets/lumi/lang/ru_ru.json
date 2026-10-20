@@ -285,6 +285,7 @@
   "luma.project.history_search_help": "Ищи по названию, автору или ID сохранения.",
   "luma.project.details_title": "Детали сохранения",
   "luma.project.active_head_badge": "Текущее сохранение",
+  "luma.history.card_blocks": "%s блоков",
   "luma.project.head_badge": "Последнее %s",
   "luma.project.diagnostics_title": "Диагностика",
   "luma.project.diagnostics_help": "Редкие проверки и технические детали остаются здесь, пока не понадобятся.",
