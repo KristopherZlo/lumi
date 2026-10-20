@@ -20,7 +20,7 @@ import net.minecraft.resources.Identifier;
 
 /** Compact HUD backed by immutable server events and local highlight progress. */
 public final class LumiOperationHud {
-    private static final Identifier ID =
+    static final Identifier ID =
             Identifier.fromNamespaceAndPath(LumiMod.MOD_ID, "operation_hud");
     private static final int SCREEN_TOP = 44;
     private final ClientHistoryStore history;

@@ -1,85 +1,176 @@
 package io.github.lumi.client.ui;
 
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import java.util.Locale;
+import java.util.function.BooleanSupplier;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.resources.Identifier;
 
-/** Development-only visual samples; commands never invoke history or world edits. */
+/** Development-only HUD samples. No command changes world or history state. */
 public final class LumiEffectPreview {
-    enum Effect { SAVE, BRANCH }
-    private static final long DURATION = 1_100_000_000L;
-    private Sample active;
+    enum State {
+        IDLE("main", "All saved", 24, false, 0), DIRTY("main", "24 edits", 24, false, 0),
+        SAVE("Saved", "Courtyard arch", 42, false, 2400),
+        BRANCH("roof-study", "Switched from main", 42, false, 2400),
+        UNDO("Edit undone", "Brush stroke", 42, false, 1800),
+        REDO("Edit restored", "Brush stroke", 42, false, 1800),
+        RESTORE("Restoring world", "Courtyard", 50, true, 4200),
+        COMPARE("Preparing Compare", "main to roof-study", 50, true, 4200),
+        ERROR("Restore blocked", "Newer edits overlap", 42, false, 5000);
+        final String title, detail;
+        final int height, holdMillis;
+        final boolean progress;
+        State(String title, String detail, int height, boolean progress, int holdMillis) {
+            this.title = title; this.detail = detail; this.height = height;
+            this.progress = progress; this.holdMillis = holdMillis;
+        }
+    }
+    private static final State[] DEMO = {State.IDLE, State.DIRTY, State.SAVE,
+            State.BRANCH, State.RESTORE, State.COMPARE, State.ERROR, State.IDLE};
+    private final Motion motion = new Motion();
+    private ClientLevel world;
+    private int demoIndex = -1;
+    private long demoStarted;
 
-    public static void register() {
+    public static void register(BooleanSupplier realFeedbackVisible) {
         if (!FabricLoader.getInstance().isDevelopmentEnvironment()) return;
         var preview = new LumiEffectPreview();
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, access) -> {
-            var command = ClientCommandManager.literal("lumi-effect")
-                    .executes(context -> preview.play(Effect.SAVE));
-            for (var effect : Effect.values()) command.then(ClientCommandManager
-                    .literal(effect.name().toLowerCase(Locale.ROOT)).executes(context -> preview.play(effect)));
+            var command = ClientCommandManager.literal("lumi-effect").executes(context -> preview.start(State.SAVE));
+            for (var state : State.values()) command.then(ClientCommandManager
+                    .literal(state.name().toLowerCase(Locale.ROOT)).executes(context -> preview.start(state)));
+            command.then(ClientCommandManager.literal("off").executes(context -> { preview.clear(); return 1; }));
+            command.then(ClientCommandManager.literal("demo").executes(context -> {
+                int result = preview.start(State.IDLE);
+                if (result != 0) { preview.demoIndex = 0; preview.demoStarted = System.nanoTime(); }
+                return result;
+            }));
+            command.then(ClientCommandManager.literal("motion").then(ClientCommandManager
+                    .argument("enabled", BoolArgumentType.bool()).executes(context -> {
+                        preview.motion.animated = BoolArgumentType.getBool(context, "enabled"); return 1;
+                    })));
             dispatcher.register(command);
         });
-        HudElementRegistry.attachElementAfter(VanillaHudElements.BOSS_BAR,
-                Identifier.fromNamespaceAndPath("lumi", "effect_preview"), (graphics, delta) -> preview.renderHud(graphics));
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> preview.active = null);
+        HudElementRegistry.replaceElement(LumiOperationHud.ID, original -> (graphics, delta) -> {
+            if (preview.world != null && realFeedbackVisible.getAsBoolean()) preview.clear();
+            if (!preview.render(graphics)) {
+                //? if >=26.1 {
+                /*original.extractRenderState(graphics, delta);
+                *///?} else {
+                original.render(graphics, delta);
+                //?}
+            }
+        });
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> preview.clear());
     }
 
-    private int play(Effect effect) {
+    private int start(State state) {
         var client = Minecraft.getInstance();
         if (client.player == null || client.level == null) return 0;
-        active = new Sample(client.level, effect, System.nanoTime());
+        world = client.level; demoIndex = -1;
+        motion.change(state, System.nanoTime());
         return 1;
     }
 
-    private Sample current() {
-        if (active != null && (active.world != Minecraft.getInstance().level
-                || System.nanoTime() - active.started >= DURATION)) active = null;
-        return active;
-    }
+    private void clear() { world = null; demoIndex = -1; motion.reset(); }
 
-    private double progress(Sample sample) {
-        return Math.clamp((double) (System.nanoTime() - sample.started) / DURATION, 0, 1);
-    }
-
-    private void renderHud(GuiGraphics graphics) {
-        var sample = current();
+    private boolean render(GuiGraphics graphics) {
         var client = Minecraft.getInstance();
-        if (sample == null || client.options.hideGui
-                || sample.effect != Effect.SAVE && sample.effect != Effect.BRANCH) return;
-        double t = progress(sample);
-        int alpha = (int) (255 * Math.min(1, t*8) * Math.min(1, (1-t)*5));
-        if (alpha < 8) return;
-        int width = Math.min(220, graphics.guiWidth()-16), x = (graphics.guiWidth()-width)/2, y = 28;
-        graphics.fill(x, y, x+width, y+32, (alpha*4/5) << 24 | 0x141517);
-        var font = client.font;
-        if (sample.effect == Effect.SAVE) {
-            int gap = (int) (10 * (1-Math.min(1,t*4)));
-            for (int side : new int[] {-1, 1}) {
-                int edge = side < 0 ? x-gap : x+width+gap-1;
-                graphics.fill(edge, y-gap, edge+1, y+32+gap, alpha << 24 | 0xd9b86c);
-                int left = side < 0 ? edge : edge-8;
-                graphics.fill(left, y-gap, left+9, y-gap+1, alpha << 24 | 0xd9b86c);
-                graphics.fill(left, y+31+gap, left+9, y+32+gap, alpha << 24 | 0xd9b86c);
+        if (world == null) return false;
+        if (world != client.level) { clear(); return false; }
+        if (client.screen instanceof LumiScreen) return false;
+        long now = System.nanoTime();
+        if (demoIndex >= 0) {
+            int index = (int) ((now-demoStarted) / 3_000_000_000L);
+            if (index >= DEMO.length) { demoIndex = -1; motion.change(State.IDLE, now); }
+            else if (index != demoIndex) { demoIndex = index; motion.change(DEMO[index], now); }
+        } else if (motion.state.holdMillis > 0 && (now-motion.changed)/1_000_000 >= motion.state.holdMillis) {
+            motion.change(State.IDLE, now);
+        }
+        if (client.options.hideGui) return true;
+        var frame = motion.frame(now);
+        if (frame.opacity < .04) return true;
+        int width = Math.min(224, Math.max(1, graphics.guiWidth()-20));
+        int x = graphics.guiWidth()-width-10, y = 10, height = (int) Math.round(frame.height);
+        graphics.fill(x+1, y+2, x+width+1, y+height+2, LumiTheme.withOpacity(0xff000000, (float) (frame.opacity*.18)));
+        LumiTheme.outlined(graphics, x, y, width, height,
+                LumiTheme.withOpacity(LumiTheme.WINDOW, (float) (frame.opacity*.9)),
+                LumiTheme.withOpacity(LumiTheme.WINDOW_BORDER, (float) (frame.opacity*.45)));
+        graphics.enableScissor(x+1, y+1, x+width-1, y+height-1);
+        if (frame.previous == frame.state) drawState(graphics, frame.state, x, y, width, frame.opacity, 0, frame.progress);
+        else {
+            drawState(graphics, frame.previous, x, y, width, frame.opacity*(1-frame.mix), (int) (-4*frame.mix), frame.previousProgress);
+            drawState(graphics, frame.state, x, y, width, frame.opacity*frame.mix, (int) (4*(1-frame.mix)), frame.progress);
+        }
+        graphics.disableScissor();
+        if (frame.state == State.SAVE) {
+            int inset = motion.animated ? (int) (5*(1-frame.mix)) : 0;
+            int color = LumiTheme.withOpacity(LumiTheme.ACCENT, (float) (frame.opacity*.8));
+            for (int side = 0; side < 2; side++) {
+                int edge = side == 0 ? x+inset : x+width-inset-1;
+                int left = side == 0 ? edge : edge-7;
+                graphics.fill(edge, y+inset, edge+1, y+8+inset, color);
+                graphics.fill(left, y+inset, left+8, y+inset+1, color);
             }
-            graphics.drawCenteredString(font, "[Preview] Saved: Courtyard", graphics.guiWidth()/2, y+12, alpha << 24 | 0xf4f1ea);
-        } else {
-            boolean incoming = t >= .4;
-            double part = incoming ? Math.min(1,(t-.4)/.35) : 1-t/.4;
-            int textAlpha = (int) (alpha*part);
-            int shift = (int) ((incoming ? 1 : -1) * (1-part) * 14);
-            if (textAlpha >= 8) graphics.drawCenteredString(font, incoming ? "[Preview] roof-study" : "[Preview] main",
-                    graphics.guiWidth()/2+shift, y+12, textAlpha << 24 | 0xd9b86c);
+        }
+        return true;
+    }
+
+    private static void drawState(GuiGraphics graphics, State state, int x, int y, int width,
+            double opacity, int shift, double progress) {
+        if (opacity < .04) return;
+        int accent = state == State.ERROR ? LumiTheme.DANGER : state == State.IDLE ? LumiTheme.MUTED : LumiTheme.ACCENT;
+        int detailWidth = state.height == 24
+                ? Math.min(Minecraft.getInstance().font.width(state.detail), Math.max(0, (width-20)/2)) : 0;
+        text(graphics, "Preview · " + state.title, x+10+shift, y+8,
+                width-20-(detailWidth > 0 ? detailWidth+8 : 0), LumiTheme.TEXT, opacity);
+        if (state.height == 24) {
+            text(graphics, state.detail, x+width-detailWidth-10+shift, y+8, detailWidth, accent, opacity);
+        } else text(graphics, state.detail, x+10+shift, y+23, width-20, accent, opacity);
+        if (state.progress) {
+            graphics.fill(x+10, y+43, x+width-10, y+45, LumiTheme.withOpacity(LumiTheme.CHIP, (float) opacity));
+            graphics.fill(x+10, y+43, x+10+(int) ((width-20)*progress), y+45,
+                    LumiTheme.withOpacity(accent, (float) opacity));
         }
     }
 
-    private record Sample(ClientLevel world, Effect effect, long started) { }
+    private static void text(GuiGraphics graphics, String text, int x, int y, int width, int color, double opacity) {
+        var font = Minecraft.getInstance().font;
+        graphics.drawString(font, font.plainSubstrByWidth(text, Math.max(0, width)), x, y,
+                LumiTheme.withOpacity(color, (float) opacity), false);
+    }
+
+    static final class Motion {
+        private State state = State.IDLE, previous = State.IDLE;
+        private long changed;
+        private double fromHeight = 24, fromOpacity, previousProgress;
+        private boolean visible;
+        boolean animated = true;
+
+        void change(State next, long now) {
+            var before = frame(now);
+            previous = state; fromHeight = before.height; fromOpacity = before.opacity;
+            previousProgress = before.progress; state = next; changed = now; visible = true;
+        }
+
+        void reset() { visible = false; state = previous = State.IDLE; fromHeight = 24; fromOpacity = 0; }
+
+        Frame frame(long now) {
+            double elapsed = Math.max(0, (now-changed)/1_000_000_000.0);
+            double linear = Math.clamp(elapsed/.3, 0, 1);
+            double mix = animated ? 1-Math.pow(1-linear, 3) : 1;
+            return new Frame(previous, state, mix, fromHeight+(state.height-fromHeight)*mix,
+                    visible ? fromOpacity+(1-fromOpacity)*mix : 0,
+                    state.progress ? Math.clamp(elapsed/2.5, 0, 1) : 0, previousProgress);
+        }
+    }
+
+    record Frame(State previous, State state, double mix, double height,
+            double opacity, double progress, double previousProgress) { }
 }
