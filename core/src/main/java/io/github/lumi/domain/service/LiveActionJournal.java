@@ -1134,6 +1134,15 @@ public final class LiveActionJournal {
             return actionIds.getLast();
         }
 
+        public Map<SectionKey, SectionBlob> expectedSections() { return sectionEndpoint(direction == Direction.UNDO); }
+        public Map<SectionKey, SectionBlob> replacementSections() { return sectionEndpoint(direction != Direction.UNDO); }
+
+        private Map<SectionKey, SectionBlob> sectionEndpoint(boolean after) {
+            var endpoint = new LinkedHashMap<SectionKey, SectionBlob>();
+            sections.forEach((key, delta) -> endpoint.put(key, after ? delta.after() : delta.before()));
+            return Collections.unmodifiableMap(endpoint);
+        }
+
         private static <K, V> Map<K, V> immutableOrderedCopy(Map<K, V> source) {
             var copy = new LinkedHashMap<K, V>();
             Objects.requireNonNull(source, "source").forEach((key, value) -> copy.put(

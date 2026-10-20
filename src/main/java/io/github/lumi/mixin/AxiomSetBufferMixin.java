@@ -30,6 +30,10 @@ abstract class AxiomSetBufferMixin {
             ChunkedBooleanRegion changedRegion, ServerPlayer player, Operation<Void> original) {
         var runtime = LumiMod.serverRuntime().find(level)
                 .orElseThrow(() -> new IllegalStateException("Lumi dimension runtime is not loaded"));
+        if (runtime.freeze().isAuthorizedMutation()) {
+            original.call(buffer, level, changedRegion, player);
+            return;
+        }
         if (player == null || player.level() != level || !runtime.freeze().isMutationAllowed()) return;
         var keys = new LinkedHashSet<SectionKey>();
         buffer.forEach((x, y, z, state) -> {

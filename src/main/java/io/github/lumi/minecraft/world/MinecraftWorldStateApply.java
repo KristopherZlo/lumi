@@ -57,6 +57,16 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
         return preparation.prepare(target);
     }
 
+    /** Native Axiom execution shares verification/persistence, without constructing a Restore. */
+    public AxiomBufferReplay prepareAxiomReplay(io.github.lumi.domain.service.LiveActionJournal.Plan plan) throws IOException {
+        return new AxiomBufferReplay(plan, preparation.prepare(new State(plan.replacementSections(), java.util.Map.of())), world, level, freeze);
+    }
+
+    public ApplySession beginLoadedVerification(PreparedState target) {
+        if (!(target instanceof PreparedMinecraftState minecraft)) throw new IllegalArgumentException("Expected decoded loaded state");
+        return new PreparedWorldMutationSession(minecraft, world, System::nanoTime);
+    }
+
     @Override
     public PreparedState prepare(State target, LongConsumer progress) throws IOException {
         return preparation.prepare(target, progress);

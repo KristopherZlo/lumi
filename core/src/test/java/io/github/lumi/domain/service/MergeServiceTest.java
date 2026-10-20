@@ -83,6 +83,23 @@ class MergeServiceTest {
                     assertEquals(spawns, recovered.returnPlayerSpawns());
                 }
             }
+            var workspace = commits.read(saved.commit()).workspaceId();
+            var history = new WorldActionHistory(new io.github.lumi.storage.repository.WorldActionHistoryRepository(repositoryRoot),
+                    io.github.lumi.domain.model.WorldDataVersion.LEGACY_12111);
+            history.flush(workspace, saved.name(), journal.snapshotIndex(), journal::snapshotAction, () -> true);
+            history.beginNativeReplay(UUID.randomUUID(), plan);
+            var journals = new io.github.lumi.storage.repository.OperationJournalRepository(repositoryRoot);
+            var nativeRecovery = new NativeActionRecovery(history, service, journals);
+            var interrupted = nativeRecovery.open(saved, workspace).orElseThrow();
+            assertEquals(interrupted, nativeRecovery.open(saved, workspace).orElseThrow());
+            for (var choice : RecoveryChoice.values()) {
+                try (var recovered = recovery.prepare(interrupted, choice)) {
+                    assertEquals(Map.of(key, choice == RecoveryChoice.RESUME_TARGET
+                            ? section("minecraft:stone", "minecraft:air") : section("minecraft:gold_block", "minecraft:air")), recovered.sections());
+                    assertEquals(false, recovered.restorePlayerSpawns());
+                    assertEquals(Map.of(), recovered.entities());
+                }
+            }
             assertEquals(Optional.of(saved), refs.read(saved.name()));
             assertThrows(java.io.IOException.class, () -> service.prepareSections(saved,
                     Map.of(key, section("minecraft:diamond_block", "minecraft:barrel")), Map.of(), plan, author()));

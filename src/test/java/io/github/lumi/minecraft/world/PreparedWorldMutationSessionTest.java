@@ -55,6 +55,8 @@ class PreparedWorldMutationSessionTest {
         PreparedWorldMutationSession session =
                 new PreparedWorldMutationSession(target, world, clock::get);
 
+        assertEquals(WorldStateApply.Verification.IN_PROGRESS, session.verifyUntil(clock.get()));
+        assertThrows(IllegalStateException.class, () -> session.persistUntil(Long.MAX_VALUE));
         assertFalse(session.applyUntil(1));
         assertEquals(1, world.sectionWrites);
         assertTrue(session.applyUntil(Long.MAX_VALUE));

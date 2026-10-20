@@ -263,7 +263,8 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             }
             playerSpawnsVerified = true;
         }
-        return playerSpawnsVerified ? WorldStateApply.Verification.VERIFIED
+        return sectionVerificationIndex == sections.size() && entityVerificationIndex == entities.size()
+                && playerSpawnsVerified ? WorldStateApply.Verification.VERIFIED
                 : WorldStateApply.Verification.IN_PROGRESS;
     }
 

@@ -89,7 +89,7 @@ public final class WorldActionHistory {
     public synchronized void publishReplay(UUID operation, ActionReplayTarget step, boolean applied) throws IOException {
         if (persisted == null) throw new IOException("The selected action has not been stored");
         var marker = new WorldActionIndexCodec.Publication(operation, step, applied);
-        if (persisted.publication().filter(marker::equals).isPresent()) return;
+        if (persisted.publication().filter(marker::equals).isPresent()) { clearPublishedNativeReplay(operation); return; }
         final WorldActionIndex index;
         try {
             index = persisted.index().move(step, applied);
@@ -103,6 +103,18 @@ public final class WorldActionHistory {
                 index, persisted.payloads(), Optional.of(marker));
         repository.writeIndex(next);
         persisted = next;
+        clearPublishedNativeReplay(operation);
+    }
+
+    private void clearPublishedNativeReplay(UUID operation) {
+        try {
+            var intent = repository.readNativeReplay();
+            if (intent.isPresent() && intent.orElseThrow().publication().orElseThrow().operation().equals(operation)) repository.clearNativeReplay(operation);
+        } catch (IOException failed) {
+            // World and cursor are already durable; startup retries this idempotent cleanup.
+            java.util.logging.Logger.getLogger(WorldActionHistory.class.getName()).log(java.util.logging.Level.WARNING,
+                    "Cannot collect published native replay intent", failed);
+        }
     }
 
     public synchronized void beginNativeReplay(UUID operation, LiveActionJournal.Plan plan) throws IOException {
@@ -111,6 +123,7 @@ public final class WorldActionHistory {
         var step = new ActionReplayTarget(plan.player(), plan.actionId(), undo);
         // Validate the durable cursor before making an intent reachable.
         persisted.index().move(step, !undo);
+        pendingNativeReplay(); // Collect an already-published intent left by interrupted cleanup.
         repository.writeNativeReplay(new WorldActionIndexCodec.State(epoch, version, persisted.workspace(),
                 persisted.branch(), persisted.index(), persisted.payloads(),
                 Optional.of(new WorldActionIndexCodec.Publication(operation, step, !undo))));
