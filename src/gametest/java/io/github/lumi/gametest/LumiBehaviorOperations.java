@@ -313,6 +313,7 @@ final class LumiBehaviorOperations {
         boolean nativeMode = step && context.computeOnClient(client -> io.github.lumi.client.integration.AxiomWorldHistory.INSTANCE.nativeMode());
         long started = System.nanoTime();
         var seen = new java.util.concurrent.atomic.AtomicBoolean();
+        var journal = nativeMode ? repository().resolve("operations/active.bin") : null;
         var request = send(name, () -> {
             context.waitFor(client -> !io.github.lumi.client.integration.AxiomClientWorkBarrier.isPaused()
                     && !LumiClient.networking().worldActionPending());
@@ -322,6 +323,8 @@ final class LumiBehaviorOperations {
             });
         }, started);
         awaitOperation(name, request, new AtomicReference<>(), started, () -> {
+            if (journal != null && java.nio.file.Files.exists(journal))
+                throw new AssertionError(name + " created a Lumi world-replacement journal");
             if (nativeMode && context.computeOnClient(client -> {
                 var event = LumiClient.history().state().events().get(request);
                 return event != null && event.progress().map(progress -> progress.phase().startsWith("Restore:")

@@ -54,8 +54,6 @@ import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.HistoryKey;
 import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.OperationKind;
-import io.github.lumi.domain.model.OperationPhase;
-import io.github.lumi.domain.model.OperationTarget;
 import io.github.lumi.domain.model.PackageName;
 import io.github.lumi.domain.model.PartialRestorePlan;
 import io.github.lumi.domain.model.SectionKey;
@@ -1180,71 +1178,20 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         if (actor == null || actor.level() != level) throw new IOException("Native Axiom actor left the dimension");
         if (!net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(actor, io.github.lumi.network.AxiomNativeReplayPayload.TYPE))
             throw new IOException("The client does not support native Axiom replay");
-        var expected = activeRef();
-        var nativeSpawns = worldReader.readPlayerSpawns();
-        Map<io.github.lumi.domain.model.HistoryKey, Long> keys = new HashMap<>();
-        plan.sections().keySet().forEach(key -> keys.put(key, 1L));
-        plan.expected().keySet().forEach(pos -> keys.put(new SectionKey(pos.x() >> 4, pos.y() >> 4, pos.z() >> 4), 1L));
-        plan.biomes().keySet().forEach(pos -> keys.put(pos.section(), 1L));
-        for (var state : Stream.concat(plan.expectedEntities().values().stream(), plan.replacementEntities().values().stream()).flatMap(Optional::stream).toList())
-            keys.put(liveEntityWorld.chunk(state), 1L);
-        var reader = new io.github.lumi.minecraft.world.WorldStateReader() {
-            @Override public SectionBlob read(SectionKey key) throws IOException {
-                level.getChunk(key.chunkX(), key.chunkZ());
-                var section = worldReader.read(key);
-                var biomes = new HashMap<Integer, String>();
-                nativeReplay.biomes().stream().filter(pos -> pos.section().equals(key)).forEach(pos ->
-                        biomes.put(pos.localIndex(), level.getNoiseBiome(pos.x(), pos.y(), pos.z()).unwrapKey().orElseThrow().identifier().toString()));
-                return biomes.isEmpty() ? section : section.withActionBiomes(biomes);
-            }
-            @Override public io.github.lumi.domain.model.EntityChunkBlob read(EntityChunkKey key) throws IOException { return worldReader.read(key); }
-            @Override public Map<UUID, io.github.lumi.domain.model.PlayerSpawn> readPlayerSpawns() { return Map.of(); }
-        };
-        var holdKeys = keys.keySet().stream().map(key -> key instanceof SectionKey section ? section
-                : new SectionKey(((EntityChunkKey) key).chunkX(), level.getMinSectionY(), ((EntityChunkKey) key).chunkZ())).toList();
-        var hold = mutations.holdPublication(holdKeys);
-        nativeReplay = new io.github.lumi.minecraft.operation.AxiomNativeReplayOperation(actor, request, plan, keys, freeze,
-                () -> new BatchedWorldStateCapture(reader).begin(new WorkingIndexSnapshot(keys)), hold, before -> {
-            before.sections().forEach((key, value) -> { mutations.registerSectionMutation(key, () -> value); mutations.markBuilderMutation(key); });
-            before.entities().forEach((key, value) -> mutations.registerEntityMutation(key, () -> value));
-        }, () -> {
-            // Native entity callbacks are Undo-only; retain Lumi's exact UUID/NBT Redo guarantee.
+        var chunks = Stream.concat(plan.expectedEntities().values().stream(), plan.replacementEntities().values().stream())
+                .flatMap(Optional::stream).map(this::liveEntityChunk).collect(java.util.stream.Collectors.toSet());
+        for (var key : chunks) mutations.registerEntityMutation(key, () -> {
+            try { return worldReader.read(key); }
+            catch (IOException failed) { throw new java.io.UncheckedIOException(failed); }
+        });
+        nativeReplay = new io.github.lumi.minecraft.operation.AxiomNativeReplayOperation(actor, request, plan, freeze, () -> {
             try {
+                // Axiom callbacks implement Undo only; use the existing prepared entity adapter for Redo.
                 for (var entry : plan.replacementEntities().entrySet())
                     if (!liveEntityWorld.read(entry.getKey()).equals(entry.getValue())) liveEntityWorld.write(entry.getKey(), entry.getValue());
+                publishLiveAction(plan);
+                liveActions.completeSelected(plan);
             } catch (IOException failed) { throw new java.io.UncheckedIOException(failed); }
-        }, (before, after, succeeded, journaled) -> {
-            boolean undo = plan.direction() == LiveActionJournal.Direction.UNDO;
-            var step = new ActionReplayTarget(plan.player(), plan.actionId(), succeeded ? undo : !undo, true);
-            return new BackgroundPreparedMutation<>(CompletableFuture.supplyAsync(() -> {
-                try {
-                    requireExpectedRef(expected);
-                    if (!persistActionHistory()) throw new IOException("Action changed during native Axiom replay");
-                    var recorded = actionReplays.recordNative(expected, succeeded ? before : after, succeeded ? after : before,
-                            nativeSpawns, new CommitAuthor(actor.getUUID(), actor.getName().getString()));
-                    Consumer<Boolean> install = applied -> {
-                        liveActions.installCursor(step, applied);
-                        if (succeeded && applied == !undo) publishLiveAction(plan);
-                    };
-                    var publication = new ActionReplayPublication(new PendingRestorePublication(mutations), actionHistory,
-                            request, step, !step.undo(), install);
-                    var restore = recorded.restore();
-                    var observed = worldApply.prepare(new WorldStateApply.State(restore.sections(), restore.entities()));
-                    var journal = journals.create(new OperationJournal(request, OperationKind.ACTION_REPLAY, OperationPhase.APPLYING,
-                            new OperationTarget(expected.name(), expected.commit(), expected.revision(),
-                                    Optional.of(restore.targetCommit()), Optional.of(recorded.returnPoint())), Optional.empty(), Optional.of(step)));
-                    if (!succeeded) return RestoreOperation.resume(restore, worldApply, publication, journals, journal, restoreStateListener);
-                    publication.prepare(restore);
-                    return LiveReplayOperation.alreadyApplied(plan, worldApply.beginLoaded(observed), publication, background,
-                            () -> publication.finishOnServer(restore), journaled::run, () -> {
-                                publication.persist(restore);
-                                journals.clear(journal);
-                            }, () -> {
-                                restoreStateListener.restored(observed.source());
-                                publication.installed();
-                            }, ignored -> createNativeRecovery(expected, install));
-                } catch (IOException failed) { throw new CompletionException(failed); }
-            }, background), () -> { requireExpectedRef(expected); journaled.run(); }, value -> { value.cancel(); value.close(); }, true, true);
         });
         return nativeReplay;
     }
@@ -1267,34 +1214,23 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public void nativeReplayBlocks(io.github.lumi.domain.model.WorldActionScope footprint) {
         if (nativeReplay == null || !nativeReplay.applying()) return;
         liveActions.requireNativeFootprint(nativeReplay.plan(), footprint, java.util.Set.of());
-        for (var key : footprint.sections()) if (!nativeReplay.includes(key)) {
-            try {
-                level.getChunk(key.chunkX(), key.chunkZ());
-                var section = worldReader.read(key);
-                nativeReplay.include(key, section, mutations.holdPublication(java.util.List.of(key)));
-                mutations.registerSectionMutation(key, () -> section); mutations.markBuilderMutation(key);
-            } catch (IOException failed) { throw new java.io.UncheckedIOException(failed); }
-        }
+        footprint.sections().forEach(this::registerNativeSection);
     }
 
     public void nativeReplayBiomes(java.util.Set<io.github.lumi.domain.model.BiomePosition> positions) {
         if (nativeReplay == null || !nativeReplay.applying()) return;
         liveActions.requireNativeFootprint(nativeReplay.plan(), io.github.lumi.domain.model.WorldActionScope.empty(), positions);
-        for (var pos : positions) {
-            var key = pos.section();
-            try {
-                level.getChunk(key.chunkX(), key.chunkZ());
-                var source = nativeReplay.source(key);
-                var hold = source == null ? mutations.holdPublication(java.util.List.of(key)) : null;
-                if (source == null) source = worldReader.read(key);
-                var biomes = new HashMap<>(source.actionBiomes());
-                biomes.putIfAbsent(pos.localIndex(), level.getNoiseBiome(pos.x(), pos.y(), pos.z()).unwrapKey().orElseThrow().identifier().toString());
-                nativeReplay.biomes().add(pos);
-                nativeReplay.include(key, source.withActionBiomes(biomes), hold);
-                var captured = source;
-                mutations.registerSectionMutation(key, () -> captured);
-            } catch (IOException failed) { throw new java.io.UncheckedIOException(failed); }
-        }
+        positions.stream().map(io.github.lumi.domain.model.BiomePosition::section).distinct().forEach(this::registerNativeSection);
+    }
+
+    private void registerNativeSection(SectionKey key) {
+        if (!nativeReplay.includeSection(key)) return;
+        mutations.registerSectionMutation(key, () -> {
+            try { level.getChunk(key.chunkX(), key.chunkZ()); return worldReader.read(key); }
+            catch (IOException failed) { throw new java.io.UncheckedIOException(failed); }
+        });
+        mutations.markBuilderMutation(key);
+        blockEntityBaselines.discard(key);
     }
 
     public synchronized DimensionMutation startClearWorldActions(UUID player, Consumer<DimensionMutation> terminalObserver) throws IOException {
@@ -1402,10 +1338,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     private DimensionMutation createNativeRecovery(BranchRef expected) {
-        return createNativeRecovery(expected, ignored -> { });
-    }
-
-    private DimensionMutation createNativeRecovery(BranchRef expected, Consumer<Boolean> install) {
         return new BackgroundPreparedMutation<>(CompletableFuture.supplyAsync(() -> {
             try {
                 var journal = new NativeActionRecovery(actionHistory, actionReplays, journals)
@@ -1413,7 +1345,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 var restore = recoveries.prepare(journal, RecoveryChoice.RESUME_TARGET);
                 var step = journal.actionReplay().orElseThrow();
                 var publication = new ActionReplayPublication(new PendingRestorePublication(mutations), actionHistory,
-                        journal.operationId(), step, !step.undo(), install);
+                        journal.operationId(), step, !step.undo(), ignored -> { });
                 return RestoreOperation.resume(restore, worldApply, publication, journals, journal, restoreStateListener, ignored -> { });
             } catch (IOException failed) { throw new CompletionException(failed); }
         }, background), () -> requireExpectedRef(expected), ignored -> { }, true, true);

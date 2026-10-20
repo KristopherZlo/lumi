@@ -93,7 +93,7 @@ public final class LumiOperationHud {
 
     private int renderOperation(GuiGraphics graphics, int y) {
         OperationEventPayload event = history.state().activeOperation().orElse(null);
-        if (event == null) return y;
+        if (event == null || history.isNativeWorldAction(event.requestId())) return y;
         String text = event.queuePosition() > 0
                 ? event.message() : event.progress().map(value -> value.phase())
                         .orElse(event.message());

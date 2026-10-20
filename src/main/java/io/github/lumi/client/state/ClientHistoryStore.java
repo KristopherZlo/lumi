@@ -19,6 +19,7 @@ public final class ClientHistoryStore {
     public synchronized void accept(AxiomHistorySettingsPayload settings) { axiomSettings = settings; }
     public synchronized Optional<AxiomHistorySettingsPayload> axiomSettings() { return Optional.ofNullable(axiomSettings); }
     private UUID worldActionRequest;
+    private UUID nativeActionRequest;
     private final LinkedHashMap<UUID, OperationEventPayload> events = new LinkedHashMap<>();
 
     public synchronized void accept(HistorySnapshotPayload update) {
@@ -76,13 +77,22 @@ public final class ClientHistoryStore {
     public synchronized void beginWorldAction(UUID request) {
         if (worldActionRequest != null) throw new IllegalStateException("World action is awaiting confirmation");
         worldActionRequest = Objects.requireNonNull(request);
+        nativeActionRequest = null;
     }
+
+    public synchronized void beginNativeWorldAction(UUID request) {
+        beginWorldAction(request);
+        nativeActionRequest = request;
+    }
+
+    public synchronized boolean isNativeWorldAction(UUID request) { return request.equals(nativeActionRequest); }
 
     public synchronized void clear() {
         snapshot = null;
         worldActions = null;
         axiomSettings = null;
         worldActionRequest = null;
+        nativeActionRequest = null;
         events.clear();
     }
 }

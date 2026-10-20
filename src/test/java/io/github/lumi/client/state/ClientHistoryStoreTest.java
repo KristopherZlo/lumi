@@ -19,7 +19,9 @@ class ClientHistoryStoreTest {
         UUID epoch = UUID.randomUUID(), request = UUID.randomUUID();
         store.accept(new io.github.lumi.network.WorldActionViewPayload("minecraft:overworld", epoch,
                 new io.github.lumi.domain.model.WorldActionView(4, java.util.List.of(), java.util.List.of())));
-        store.beginWorldAction(request);
+        store.beginNativeWorldAction(request);
+        org.junit.jupiter.api.Assertions.assertTrue(store.isNativeWorldAction(request));
+        assertFalse(store.isNativeWorldAction(UUID.randomUUID()));
         store.accept(new io.github.lumi.network.WorldActionViewPayload("minecraft:overworld", epoch,
                 new io.github.lumi.domain.model.WorldActionView(5, java.util.List.of(), java.util.List.of()), Optional.of(UUID.randomUUID())));
         assertEquals(Optional.of(request), store.worldActionRequest());
@@ -27,6 +29,7 @@ class ClientHistoryStoreTest {
                 new io.github.lumi.domain.model.WorldActionView(5, java.util.List.of(), java.util.List.of()), Optional.of(request)));
         assertFalse(store.worldActionRequest().isPresent());
         store.beginWorldAction(UUID.randomUUID());
+        assertFalse(store.isNativeWorldAction(request));
         store.clear();
         assertFalse(store.worldActionRequest().isPresent());
     }

@@ -224,8 +224,10 @@ final class LumiAxiomNativeHistoryScenario {
         var largeEntry = context.computeOnClient(client -> {
             var forwards = new BlockBuffer(); var backwards = new BlockBuffer();
             for (var pos : positions) {
-                forwards.set(pos.getX(), pos.getY(), pos.getZ(), Blocks.GOLD_BLOCK.defaultBlockState());
-                backwards.set(pos.getX(), pos.getY(), pos.getZ(), Blocks.AIR.defaultBlockState());
+                for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) {
+                    forwards.set(pos.getX() + x, pos.getY(), pos.getZ() + z, Blocks.GOLD_BLOCK.defaultBlockState());
+                    backwards.set(pos.getX() + x, pos.getY(), pos.getZ() + z, Blocks.AIR.defaultBlockState());
+                }
             }
             var entry = new HistoryEntry<com.moulberry.axiom.world_modification.BlockOrBiomeBuffer>(forwards, backwards, positions.getFirst(), "Native 66 sections", HistoryEntry.MODIFIER_CAN_BE_UNDONE_INGAME);
             Dispatcher.push(entry);

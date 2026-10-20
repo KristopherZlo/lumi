@@ -277,7 +277,7 @@ public final class LumiClientNetworking {
         var kind = latest ? (undo ? HistoryCommandPayload.Kind.AXIOM_LUMI_UNDO : HistoryCommandPayload.Kind.AXIOM_LUMI_REDO)
                 : (undo ? HistoryCommandPayload.Kind.AXIOM_UNDO : HistoryCommandPayload.Kind.AXIOM_REDO);
         UUID request = send(kind, entry.toString());
-        history.beginWorldAction(request);
+        history.beginNativeWorldAction(request);
         return request;
     }
 
