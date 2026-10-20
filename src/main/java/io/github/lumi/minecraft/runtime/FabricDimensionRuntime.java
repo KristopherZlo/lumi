@@ -508,7 +508,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                             "Lumi operation degraded its dimension and retained the freeze: {}",
                             description));
             case FAILED -> operation.failure().ifPresentOrElse(
-                    failure -> LumiMod.LOGGER.error("Lumi operation failed: " + description, failure),
+                    failure -> {
+                        if (failure instanceof LiveActionJournal.OverlapConflict)
+                            LumiMod.LOGGER.info("Lumi Undo refused: {}", failure.getMessage());
+                        else LumiMod.LOGGER.error("Lumi operation failed: " + description, failure);
+                    },
                     () -> LumiMod.LOGGER.error("Lumi operation failed: {}", description));
         }
     }

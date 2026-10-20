@@ -292,7 +292,7 @@ public final class LumiClient implements ClientModInitializer {
         if (player == null) {
             return;
         }
-        MutableComponent message = value.startsWith("luma.")
+        MutableComponent message = value.startsWith("luma.") || value.startsWith("lumi.")
                 ? Component.translatable(value) : Component.literal(value);
         MutableComponent styled = message.withStyle(color);
         //? if >=26.2 {

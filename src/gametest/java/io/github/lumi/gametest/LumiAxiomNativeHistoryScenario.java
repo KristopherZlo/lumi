@@ -1,0 +1,244 @@
+package io.github.lumi.gametest;
+
+import com.moulberry.axiom.world_modification.BlockBuffer;
+import com.moulberry.axiom.world_modification.Dispatcher;
+import com.moulberry.axiom.world_modification.HistoryEntry;
+import io.github.lumi.LumiMod;
+import io.github.lumi.client.LumiClient;
+import io.github.lumi.client.integration.AxiomClientWorkBarrier;
+import io.github.lumi.client.integration.AxiomWorldHistory;
+import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
+import io.github.lumi.mixin.client.AxiomDispatcherPendingAccess;
+import io.github.lumi.network.OperationEventPayload;
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.List;
+import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
+import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+
+/** Exercises actual Dispatcher controls, the connected server ledger and native files. */
+final class LumiAxiomNativeHistoryScenario {
+    private BlockPos origin;
+    private int undoCount;
+
+    void run(ClientGameTestContext context, TestSingleplayerContext world, LumiBehaviorReport report) throws IOException {
+        ready(context);
+        var operations = new LumiBehaviorOperations(context, world.getServer(), report);
+        origin = world.getServer().computeOnServer(server -> {
+            server.tickRateManager().setFrozen(true);
+            var player = server.getPlayerList().getPlayers().getFirst();
+            LumiAxiomGameTests.activateAxiom(player);
+            return player.blockPosition().atY(170);
+        });
+        manual(world, origin, Blocks.STONE);
+        manual(world, origin.east(4), Blocks.STONE);
+        operations.awaitDurability("native_fixture");
+        operations.save("native-baseline");
+        context.runOnClient(client -> {
+            var forwards = new BlockBuffer();
+            var backwards = new BlockBuffer();
+            forwards.set(origin.getX(), origin.getY(), origin.getZ(), Blocks.GOLD_BLOCK.defaultBlockState());
+            backwards.set(origin.getX(), origin.getY(), origin.getZ(), Blocks.STONE.defaultBlockState());
+            Dispatcher.push(new HistoryEntry<>(forwards, backwards, origin, "Native integration fixture",
+                    HistoryEntry.MODIFIER_CAN_BE_UNDONE_INGAME));
+        });
+        assertBlock(context, world, origin, Blocks.GOLD_BLOCK);
+        context.waitFor(client -> LumiClient.networking().worldActions().orElseThrow().view().undo().stream()
+                .anyMatch(group -> !group.axiomEntries().isEmpty()));
+        if (context.computeOnClient(client -> AxiomDispatcherPendingAccess.lumi$history().getSize()) != 1)
+            throw new AssertionError("Real native history was replaced by shared display rows");
+        manual(world, origin.east(4), Blocks.DIAMOND_BLOCK);
+        operations.awaitDurability("native_newer_manual");
+        operations.nativeHistoryStep("native_selective_undo", true);
+        assertBlock(context, world, origin, Blocks.STONE);
+        assertBlock(context, world, origin.east(4), Blocks.DIAMOND_BLOCK);
+        operations.undo("manual_after_native");
+        assertBlock(context, world, origin.east(4), Blocks.STONE);
+        operations.nativeHistoryStep("native_selective_redo", false);
+        assertBlock(context, world, origin, Blocks.GOLD_BLOCK);
+        operations.redo("manual_after_native");
+        assertBlock(context, world, origin.east(4), Blocks.DIAMOND_BLOCK);
+        operations.undo("manual_first");
+        operations.undo("native_via_lumi");
+        assertBlock(context, world, origin, Blocks.STONE);
+        operations.nativeHistoryStep("native_redo_after_lumi", false);
+        operations.redo("manual_second");
+        assertBlock(context, world, origin, Blocks.GOLD_BLOCK);
+
+        manual(world, origin, Blocks.EMERALD_BLOCK);
+        operations.awaitDurability("native_overlap");
+        ready(context);
+        long serverRevision = world.getServer().computeOnServer(server -> {
+            var player = server.getPlayerList().getPlayers().getFirst();
+            return LumiMod.serverRuntime().find(player.level()).orElseThrow().liveActions().view(player.getUUID()).revision();
+        });
+        context.waitFor(client -> LumiClient.networking().worldActions().orElseThrow().view().revision() >= serverRevision);
+        var before = context.computeOnClient(client -> LumiClient.networking().worldActions().orElseThrow().view());
+        var events = context.computeOnClient(client -> new HashSet<>(LumiClient.history().state().events().keySet()));
+        context.runOnClient(client -> Dispatcher.callAction(com.moulberry.axiom.UserAction.UNDO, null));
+        context.waitFor(client -> LumiClient.history().state().events().values().stream().anyMatch(event ->
+                !events.contains(event.requestId()) && event.state() != OperationEventPayload.State.ACCEPTED
+                        && event.state() != OperationEventPayload.State.PROGRESS));
+        boolean refused = context.computeOnClient(client -> LumiClient.history().state().events().values().stream()
+                .filter(event -> !events.contains(event.requestId()))
+                .noneMatch(event -> event.state() == OperationEventPayload.State.SUCCEEDED));
+        if (!refused) throw new AssertionError("Native Undo silently crossed a later overlapping edit");
+        assertBlock(context, world, origin, Blocks.EMERALD_BLOCK);
+        if (!before.undo().equals(context.computeOnClient(client -> LumiClient.networking().worldActions().orElseThrow().view().undo())))
+            throw new AssertionError("Refused native Undo advanced the canonical cursor");
+        operations.undo("overlap_first");
+        operations.nativeHistoryStep("native_after_overlap_removed", true);
+        assertBlock(context, world, origin, Blocks.STONE);
+        operations.nativeHistoryStep("native_ready_for_reopen", false);
+        operations.undo("native_before_reopen");
+        assertBlock(context, world, origin, Blocks.STONE);
+        undoCount = context.computeOnClient(client -> LumiClient.networking().worldActions().orElseThrow().view().undo().size());
+        context.runOnClient(client -> {
+            var path = AxiomDispatcherPendingAccess.lumi$historyPath();
+            var loaded = com.moulberry.axiom.world_modification.HistoryIO.loadHistory(path);
+            if (loaded.getSize() != 1 || !(loaded.getHistoryEntry(0).forwards() instanceof BlockBuffer))
+                throw new AssertionError("Native Axiom replay payload did not survive file reload");
+        });
+        report.event("gate", "axiom_native_controls", "succeeded", 0, 0,
+                "real Dispatcher; selective Undo; both control orders; Redo; atomic overlap refusal; native files");
+        report.assertNoRuntimeFailures();
+    }
+
+    void reopened(ClientGameTestContext context, TestSingleplayerContext world, LumiBehaviorReport report) throws IOException {
+        ready(context);
+        var operations = new LumiBehaviorOperations(context, world.getServer(), report);
+        operations.nativeHistoryStep("native_redo_reopened", false);
+        assertBlock(context, world, origin, Blocks.GOLD_BLOCK);
+        if (context.computeOnClient(client -> LumiClient.networking().worldActions().orElseThrow().view().undo().size())
+                != undoCount + 1) throw new AssertionError("Reopen created an inverse action");
+        extras(context, world, report, operations);
+        var before = context.computeOnClient(client -> LumiClient.networking().worldActions().orElseThrow().view());
+        context.runOnClient(client -> Dispatcher.clear());
+        context.waitFor(client -> Dispatcher.getHistoryDataCount() == 0);
+        if (!before.undo().equals(context.computeOnClient(client -> LumiClient.networking().worldActions().orElseThrow().view().undo())))
+            throw new AssertionError("Axiom Clear deleted Lumi history");
+        operations.undo("lumi_after_native_clear");
+        assertBlock(context, world, origin, Blocks.STONE);
+        operations.redo("lumi_after_native_clear");
+        assertBlock(context, world, origin, Blocks.GOLD_BLOCK);
+        report.event("gate", "axiom_native_reopen", "succeeded", 0, 0,
+                "verified native identity; native Redo; native Clear preserves Lumi history; no inverse action");
+        var ui = new LumiUiTestDriver(context);
+        ui.openTab("luma.action.settings", io.github.lumi.client.ui.LumiSettingsScreen.class);
+        ui.pressUniqueButtonAfterScrolling(io.github.lumi.client.ui.LumiSettingsScreen.class, "lumi.axiom.mode");
+        context.waitFor(client -> LumiClient.history().axiomSettings().orElseThrow().selected()
+                == io.github.lumi.domain.model.AxiomHistoryMode.SHARED);
+        if (!context.computeOnClient(client -> AxiomWorldHistory.INSTANCE.nativeMode()))
+            throw new AssertionError("Mode changed during an active history session");
+        ui.closeScreen(io.github.lumi.client.ui.LumiSettingsScreen.class, io.github.lumi.client.ui.LumiDashboardScreen.class);
+        ui.closeScreen(io.github.lumi.client.ui.LumiDashboardScreen.class, null);
+        report.assertNoRuntimeFailures();
+    }
+
+    private void extras(ClientGameTestContext context, TestSingleplayerContext world, LumiBehaviorReport report,
+            LumiBehaviorOperations operations) throws IOException {
+        java.util.UUID id = java.util.UUID.randomUUID();
+        var callbackIds = new java.util.ArrayList<>(List.of(id));
+        world.getServer().runOnServer(server -> LumiAxiomGameTests.activateAxiom(server.getPlayerList().getPlayers().getFirst()));
+        context.runOnClient(client -> {
+            try (var ignored = io.github.lumi.client.integration.AxiomHistoryCaptureScope.open()) {
+                Dispatcher.push(new HistoryEntry<>(new BlockBuffer(),
+                        new BlockBuffer(), origin, "Native entity fixture", 0,
+                        HistoryEntry.MODIFIER_CAN_BE_UNDONE_INGAME,
+                        new com.moulberry.axiom.world_modification.undo.DeleteEntityAdditionalUndoOperation(callbackIds)));
+                var nbt = new net.minecraft.nbt.CompoundTag();
+                nbt.putString("id", "minecraft:armor_stand"); nbt.putBoolean("NoGravity", true);
+                new com.moulberry.axiom.packets.AxiomServerboundSpawnEntity(List.of(
+                        new com.moulberry.axiom.packets.AxiomServerboundSpawnEntity.SpawnEntry(id,
+                                net.minecraft.world.phys.Vec3.atCenterOf(origin.above(2)), 0, 0, null, nbt))).send();
+            }
+        });
+        awaitServer(context, () -> world.getServer().computeOnServer(server -> server.getPlayerList().getPlayers().getFirst().level().getEntity(id) != null));
+        operations.nativeHistoryStep("native_entity_undo", true);
+        if (world.getServer().computeOnServer(server -> server.getPlayerList().getPlayers().getFirst().level().getEntity(id) != null))
+            throw new AssertionError("Native entity Undo left the entity behind");
+        operations.nativeHistoryStep("native_entity_redo", false);
+        if (world.getServer().computeOnServer(server -> server.getPlayerList().getPlayers().getFirst().level().getEntity(id) == null))
+            throw new AssertionError("Native entity Redo lost its UUID");
+        operations.undo("native_entity_via_lumi");
+        if (callbackIds.size() != 1) throw new AssertionError("Server replay consumed native entity callback data");
+        var before = world.getServer().computeOnServer(server -> server.getPlayerList().getPlayers().getFirst().level()
+                .getNoiseBiome(origin.getX() >> 2, origin.getY() >> 2, origin.getZ() >> 2).unwrapKey().orElseThrow());
+        var biome = before.equals(net.minecraft.world.level.biome.Biomes.DESERT)
+                ? net.minecraft.world.level.biome.Biomes.PLAINS : net.minecraft.world.level.biome.Biomes.DESERT;
+        context.runOnClient(client -> {
+            var forwards = new com.moulberry.axiom.world_modification.BiomeBuffer();
+            var backwards = new com.moulberry.axiom.world_modification.BiomeBuffer();
+            forwards.set(origin.getX() >> 2, origin.getY() >> 2, origin.getZ() >> 2, biome);
+            backwards.set(origin.getX() >> 2, origin.getY() >> 2, origin.getZ() >> 2, before);
+            Dispatcher.push(new HistoryEntry<>(forwards, backwards, origin, "Native biome fixture", HistoryEntry.MODIFIER_CAN_BE_UNDONE_INGAME));
+        });
+        awaitServer(context, () -> world.getServer().computeOnServer(server -> server.getPlayerList().getPlayers().getFirst().level()
+                .getNoiseBiome(origin.getX() >> 2, origin.getY() >> 2, origin.getZ() >> 2).is(biome)));
+        operations.nativeHistoryStep("native_biome_undo", true);
+        if (!world.getServer().computeOnServer(server -> server.getPlayerList().getPlayers().getFirst().level()
+                .getNoiseBiome(origin.getX() >> 2, origin.getY() >> 2, origin.getZ() >> 2).is(before)))
+            throw new AssertionError("Native biome Undo differs");
+        operations.redo("native_biome_via_lumi");
+        operations.nativeHistoryStep("native_biome_final_undo", true);
+        report.event("gate", "axiom_native_entities_biomes", "succeeded", 0, 0, "native gesture identity; UUID; callback retained; both controls");
+    }
+
+    void sharedReopened(ClientGameTestContext context, TestSingleplayerContext world, LumiBehaviorReport report) throws IOException {
+        var ui = new LumiUiTestDriver(context); ui.completeOnboardingIfShown(); ui.awaitHistory();
+        context.waitFor(client -> AxiomWorldHistory.INSTANCE.shared() && !AxiomClientWorkBarrier.isPaused());
+        var operations = new LumiBehaviorOperations(context, world.getServer(), report);
+        manual(world, origin.east(4), Blocks.EMERALD_BLOCK);
+        operations.awaitDurability("shared_manual");
+        operations.nativeHistoryStep("shared_native_undo_manual", true);
+        assertBlock(context, world, origin.east(4), Blocks.DIAMOND_BLOCK);
+        operations.nativeHistoryStep("shared_native_redo_manual", false);
+        assertBlock(context, world, origin.east(4), Blocks.EMERALD_BLOCK);
+        report.event("gate", "axiom_history_setting", "succeeded", 0, 0, "real settings button; deferred apply; persisted SHARED mode; native controls undo manual edit");
+    }
+
+    private static void ready(ClientGameTestContext context) {
+        var ui = new LumiUiTestDriver(context);
+        ui.completeOnboardingIfShown(); ui.awaitHistory();
+        // The automated client skips Axiom's welcome/enable UI; use its real history-load entry point.
+        context.runOnClient(client -> {
+            if (Dispatcher.historyIdentifier == null) {
+                Dispatcher.tryLoadHistory("lumi-native-test-" + client.getSingleplayerServer().getWorldPath(
+                        net.minecraft.world.level.storage.LevelResource.ROOT).toAbsolutePath().toString().hashCode());
+                AxiomDispatcherPendingAccess.lumi$applyPendingHistory();
+            }
+        });
+        context.waitFor(client -> AxiomWorldHistory.INSTANCE.nativeMode() && AxiomWorldHistory.INSTANCE.admissionReady()
+                && !AxiomClientWorkBarrier.isPaused() && !LumiClient.networking().worldActionPending());
+    }
+
+    private static void manual(TestSingleplayerContext world, BlockPos position, Block block) {
+        world.getServer().runOnServer(server -> {
+            var player = server.getPlayerList().getPlayers().getFirst();
+            var runtime = LumiMod.serverRuntime().find(player.level()).orElseThrow();
+            try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), player.getUUID())) {
+                player.level().setBlockAndUpdate(position, block.defaultBlockState());
+            }
+        });
+    }
+
+    private static void assertBlock(ClientGameTestContext context, TestSingleplayerContext world, BlockPos position, Block expected) {
+        for (int tick = 0; tick < 200; tick++) {
+            if (world.getServer().computeOnServer(server -> server.getPlayerList().getPlayers().getFirst().level()
+                    .getBlockState(position).is(expected))) return;
+            context.waitTick();
+        }
+        throw new AssertionError("Wrong native-history world state at " + position + "; expected " + expected);
+    }
+
+    private static void awaitServer(ClientGameTestContext context, java.util.function.BooleanSupplier condition) {
+        for (int tick = 0; tick < 200; tick++) {
+            if (condition.getAsBoolean()) return;
+            context.waitTick();
+        }
+        throw new AssertionError("Native edit did not reach the server");
+    }
+}

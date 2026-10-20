@@ -36,6 +36,10 @@ import java.io.IOException;
 
 /** Ordered action history and ownership indexes for one shared dimension. */
 public final class LiveActionJournal {
+    /** Expected admission refusal; no world mutation or cursor transition has begun. */
+    public static final class OverlapConflict extends IllegalStateException {
+        public OverlapConflict() { super("A newer action overlaps the selected live action"); }
+    }
     private final Map<UUID, MutableAction> actions = new HashMap<>();
     private final Map<UUID, UUID> openActions = new HashMap<>();
     private final Set<UUID> pendingChanges = new HashSet<>();
@@ -777,21 +781,19 @@ public final class LiveActionJournal {
         for (MutableAction action : group) {
             for (var position : action.biomes.keySet()) {
                 if (overlaps(action, direction, biomeOwners.latest(position), groupIds)) {
-                    throw new IllegalStateException("A newer action overlaps the selected biome edit");
+                    throw new OverlapConflict();
                 }
             }
             for (BlockPosition position : action.changes.keySet()) {
                 if (overlaps(
                         action, direction, blockOwners.latest(position), groupIds)) {
-                    throw new IllegalStateException(
-                            "A newer action overlaps the selected live action");
+                    throw new OverlapConflict();
                 }
             }
             for (UUID entity : action.entities.keySet()) {
                 if (overlaps(
                         action, direction, entityOwners.latest(entity), groupIds)) {
-                    throw new IllegalStateException(
-                            "A newer action overlaps the selected live action");
+                    throw new OverlapConflict();
                 }
             }
         }
@@ -864,7 +866,7 @@ public final class LiveActionJournal {
                     throw new IllegalStateException("A newer branch or workspace switch must be undone first");
                 }
                 if (selected.overlapsCheckpoint(later)) {
-                    throw new IllegalStateException("A newer action overlaps the selected live action");
+                    throw new OverlapConflict();
                 }
             }
         }

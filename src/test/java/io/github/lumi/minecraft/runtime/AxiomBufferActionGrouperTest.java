@@ -10,6 +10,26 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class AxiomBufferActionGrouperTest {
+    @Test void explicitNativeIdentityJoinsDispatchesAndLatePacketsCannotAppendToAnUndoneEntry() {
+        UUID entry = UUID.randomUUID();
+        var identity = Optional.of(new io.github.lumi.domain.model.AxiomEntryIdentity(UUID.randomUUID(), entry));
+        UUID first = UUID.randomUUID(), second = UUID.randomUUID();
+        groups.begin(connection, ACTOR, first, identity, false);
+        assertTrue(groups.admits(connection, ACTOR, first));
+        packet(connection, ACTOR, first, "stone", "dirt");
+        groups.complete(connection, first);
+        groups.begin(connection, ACTOR, second, identity, false);
+        packet(connection, ACTOR, second, "dirt", "gold_block");
+        groups.complete(connection, second);
+        assertEquals(1, journal.view(ACTOR).undo().size());
+        journal.completeSelected(journal.prepareAxiom(ACTOR, entry, LiveActionJournal.Direction.UNDO).orElseThrow());
+        UUID stale = UUID.randomUUID();
+        groups.begin(connection, ACTOR, stale, identity, false);
+        assertFalse(groups.admits(connection, ACTOR, stale));
+        assertFalse(groups.admits(new Object(), ACTOR, stale));
+        groups.complete(connection, stale);
+        assertFalse(groups.admits(connection, ACTOR, stale));
+    }
     private static final UUID ACTOR = new UUID(0, 1);
     private static final BlockPosition POSITION = new BlockPosition(0, 64, 0);
     private final LiveActionJournal journal = new LiveActionJournal();

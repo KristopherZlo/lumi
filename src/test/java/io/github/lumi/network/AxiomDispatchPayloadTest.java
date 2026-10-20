@@ -11,12 +11,16 @@ import org.junit.jupiter.api.Test;
 class AxiomDispatchPayloadTest {
     @Test void roundTripsTheDispatchDimensionAndBothBoundaryStates() {
         for (boolean complete : new boolean[] {false, true}) {
-            var payload = new AxiomDispatchPayload(UUID.randomUUID(), "minecraft:the_nether", complete);
+          for (boolean linked : new boolean[] {false, true}) {
+            var payload = new AxiomDispatchPayload(UUID.randomUUID(), "minecraft:the_nether", complete,
+                    linked ? java.util.Optional.of(new io.github.lumi.domain.model.AxiomEntryIdentity(UUID.randomUUID(), UUID.randomUUID()))
+                            : java.util.Optional.empty(), linked);
             var buffer = new FriendlyByteBuf(Unpooled.buffer());
             try {
                 AxiomDispatchPayload.CODEC.encode(buffer, payload);
                 assertEquals(payload, AxiomDispatchPayload.CODEC.decode(buffer));
             } finally { buffer.release(); }
+          }
         }
         var entry = new io.github.lumi.domain.model.WorldActionView.Entry(UUID.randomUUID(),
                 io.github.lumi.domain.model.WorldActionView.Kind.BRANCH_SWITCH,

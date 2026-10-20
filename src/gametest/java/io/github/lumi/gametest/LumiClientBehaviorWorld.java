@@ -27,8 +27,8 @@ final class LumiClientBehaviorWorld {
             ClientGameTestContext context,
             String scenarioName,
             Scenario scenario,
-            Scenario reopenedScenario) {
-        run(context, scenarioName, scenario, reopenedScenario);
+            Scenario... reopenedScenarios) {
+        run(context, scenarioName, scenario, reopenedScenarios);
     }
 
     static void runExisting(
@@ -96,7 +96,7 @@ final class LumiClientBehaviorWorld {
             ClientGameTestContext context,
             String scenarioName,
             Scenario scenario,
-            Scenario reopenedScenario) {
+            Scenario... reopenedScenarios) {
         try (LumiBehaviorReport report = LumiBehaviorReport.create(
                 FabricLoader.getInstance().getGameDir(), scenarioName)) {
             long started = System.nanoTime();
@@ -112,7 +112,7 @@ final class LumiClientBehaviorWorld {
                 context.takeScreenshot("lumi-" + scenarioName + "-world-created");
                 scenario.run(context, singleplayer, report);
             }
-            if (reopenedScenario != null) {
+            if (reopenedScenarios != null) for (var reopenedScenario : reopenedScenarios) {
                 started = System.nanoTime();
                 try (TestSingleplayerContext reopened = worldSave.open()) {
                     prepareClient(context, reopened, true);

@@ -32,6 +32,7 @@ final class AxiomNativeHistory {
     private final Map<BlockOrBiomeBuffer, AxiomNativeHistoryFiles.Binding> buffers = new IdentityHashMap<>();
     private final LinkedHashMap<UUID, Boolean> pending = new LinkedHashMap<>();
     private final Map<HistoryEntry<?>, UUID> controls = new IdentityHashMap<>();
+    private final Map<UUID, Boolean> confirmed = new HashMap<>();
     private final HistoryBuffer<BlockOrBiomeBuffer> display = new HistoryBuffer<>();
     private HistoryBuffer<BlockOrBiomeBuffer> actual;
     private long revision = -1;
@@ -108,7 +109,10 @@ final class AxiomNativeHistory {
 
     void tick(WorldActionViewPayload payload) {
         projection(payload);
-        if (rawRevision != payload.view().revision()) { syncRawCursor(payload); rawRevision = payload.view().revision(); }
+        if (rawRevision != payload.view().revision()) {
+            syncLocalTools(payload);
+            syncRawCursor(payload); rawRevision = payload.view().revision();
+        }
         if (!navigating || LumiClient.networking().worldActionPending()) return;
         int wanted = -1;
         if (target != null) {
@@ -130,7 +134,7 @@ final class AxiomNativeHistory {
     void cancelNavigation() { navigating = false; }
 
     void clear() {
-        rows.clear(); byId.clear(); buffers.clear(); pending.clear(); controls.clear(); display.clear();
+        rows.clear(); byId.clear(); buffers.clear(); pending.clear(); controls.clear(); confirmed.clear(); display.clear();
         AxiomNativeHistoryFiles.disconnect();
         actual = null; revision = -1; rawRevision = -1; navigating = false;
     }
@@ -145,10 +149,11 @@ final class AxiomNativeHistory {
     }
 
     private void adopt() {
+        AxiomDispatcherPendingAccess.lumi$applyPendingHistory();
         var buffer = AxiomDispatcherPendingAccess.lumi$history();
         if (actual == buffer) return;
         for (var row : rows.values()) AxiomNativeHistoryFiles.forget(row.entry);
-        rows.clear(); byId.clear(); buffers.clear(); pending.clear();
+        rows.clear(); byId.clear(); buffers.clear(); pending.clear(); confirmed.clear();
         actual = buffer; revision = -1; rawRevision = -1;
         for (var linked : AxiomNativeHistoryFiles.take(buffer).entrySet()) {
             @SuppressWarnings("unchecked") var entry = (HistoryEntry<BlockOrBiomeBuffer>) linked.getKey();
@@ -197,8 +202,29 @@ final class AxiomNativeHistory {
         while (wanted >= 0 && rows.containsKey(wanted) && undone.contains(rows.get(wanted).binding.entry())) wanted--;
         if (wanted != actual.getPosition()) {
             actual.unsafeSetPosition(wanted);
-            HistoryIO.setPosition(AxiomDispatcherPendingAccess.lumi$historyPath(), wanted, actual.getSize());
+            if (com.moulberry.axiom.world_modification.Dispatcher.historyIdentifier != null)
+                HistoryIO.setPosition(AxiomDispatcherPendingAccess.lumi$historyPath(), wanted, actual.getSize());
         }
+    }
+
+    private void syncLocalTools(WorldActionViewPayload payload) {
+        Map<UUID, Boolean> next = new HashMap<>();
+        payload.view().undo().forEach(group -> group.axiomEntries().forEach(id -> next.put(id, true)));
+        payload.view().redo().forEach(group -> group.axiomEntries().forEach(id -> next.put(id, false)));
+        next.forEach((id, applied) -> {
+            var before = confirmed.get(id);
+            var row = byId.get(id);
+            if (before == null || before.equals(applied) || row == null) return;
+            var callback = row.entry.additionalUndoOperation();
+            // Entity callbacks mutate the world and may consume their lists; the server already replayed those.
+            if (!applied && (callback instanceof ModellingAdditionalUndoOperation || callback instanceof CreatePathAdditionalUndoOperation))
+                callback.perform();
+            else if (applied && callback instanceof ModellingAdditionalUndoOperation
+                    && com.moulberry.axiom.tools.ToolManager.isToolActive()
+                    && com.moulberry.axiom.tools.ToolManager.getCurrentTool() instanceof com.moulberry.axiom.tools.modelling.ModellingTool tool)
+                tool.reset();
+        });
+        confirmed.clear(); confirmed.putAll(next);
     }
 
     private static boolean localOnly(HistoryEntry<?> entry) {

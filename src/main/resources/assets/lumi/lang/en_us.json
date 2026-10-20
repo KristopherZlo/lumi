@@ -1159,5 +1159,7 @@
   "luma.easter.star_wars.save.0": "Then, on %2$s, the steadfast, inspired, and unusually farsighted builder %3$s created the celebrated Save \"%1$s\", carefully preserving another fragile and irreplaceable moment of the ever-expanding world.",
   "luma.easter.star_wars.save.1": "After many daring, intricate, and almost certainly exhausting adventures, %3$s reached %2$s and entrusted the ambitious, memorable, and magnificently named Save \"%1$s\" to Lumi's patient memory.",
   "luma.easter.star_wars.save.2": "Yet history refused to stand still. On %2$s, the resourceful, determined, and gloriously persistent %3$s forged the formidable Save \"%1$s\", ensuring that its countless blocks would not be lost to the relentless passage of time.",
-  "luma.easter.star_wars.save.3": "And so, amid increasingly dramatic, astonishing, and unnecessarily adjective-filled circumstances, %3$s recorded \"%1$s\" on %2$s, adding another luminous chapter to a history already overflowing with improbable construction."
+  "luma.easter.star_wars.save.3": "And so, amid increasingly dramatic, astonishing, and unnecessarily adjective-filled circumstances, %3$s recorded \"%1$s\" on %2$s, adding another luminous chapter to a history already overflowing with improbable construction.",
+  "luma.status.undo_overlap": "Later edits overlap this action. Undo those edits first. Nothing was changed.",
+  "luma.status.undo_conflict": "The world has changed since this action. Nothing was changed."
 }

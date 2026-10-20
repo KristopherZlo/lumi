@@ -644,6 +644,8 @@ public final class LumiServerNetworking {
             cause = cause.getCause();
         }
         String message = cause.getMessage();
+        if (message != null && message.startsWith("A newer action overlaps")) return "luma.status.undo_overlap";
+        if (message != null && message.startsWith("Visible world conflicts with live action")) return "luma.status.undo_conflict";
         return message == null || message.isBlank() ? "Operation failed" : message;
     }
 
