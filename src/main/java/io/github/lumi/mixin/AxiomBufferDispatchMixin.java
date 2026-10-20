@@ -47,6 +47,8 @@ abstract class AxiomBufferDispatchMixin implements AxiomBufferDispatch {
     @WrapMethod(method = "handle")
     private void lumi$dispatchScope(MinecraftServer server, ServerPlayer player, Operation<Void> original) {
         if (!world.equals(player.level().dimension())) return;
+        var runtime = io.github.lumi.LumiMod.serverRuntime().find(player.level()).orElseThrow();
+        if (lumi$dispatch != null && runtime.runNativeReplay(player, lumi$dispatch, () -> original.call(server, player))) return;
         if (lumi$dispatch == null) original.call(server, player);
         else if (server.getPlayerList().getPlayer(player.getUUID()) == player) {
             AxiomBufferDispatchContext.run(player, lumi$dispatch, () -> original.call(server, player));

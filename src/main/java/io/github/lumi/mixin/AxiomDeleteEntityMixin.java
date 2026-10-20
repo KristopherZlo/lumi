@@ -28,6 +28,8 @@ abstract class AxiomDeleteEntityMixin {
     private void lumi$captureDelete(MinecraftServer server, ServerPlayer player, Operation<Void> original) {
         var runtime = LumiMod.serverRuntime().find(player.level())
                 .orElseThrow(() -> new IllegalStateException("Lumi dimension runtime is not loaded"));
+        var scope = io.github.lumi.minecraft.runtime.AxiomBufferDispatchContext.entity(player.connection);
+        if (scope.isPresent() && runtime.runNativeReplay(player, scope.get().dispatch(), () -> original.call(server, player))) return;
         if (!runtime.freeze().isMutationAllowed()
                 || !io.github.lumi.minecraft.runtime.AxiomBufferDispatchContext.admitsEntity(runtime, player)) return;
         if (!AxiomServer.canUseAxiom(player, AxiomPermission.ENTITY_DELETE)) {

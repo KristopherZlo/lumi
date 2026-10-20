@@ -1143,17 +1143,92 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return operation;
     }
 
-    public synchronized DimensionMutation startAxiomAction(UUID player, UUID entry, LiveActionJournal.Direction direction,
+    private io.github.lumi.minecraft.operation.AxiomNativeReplayOperation nativeReplay;
+
+    public synchronized DimensionMutation startAxiomAction(UUID player, UUID entry, UUID request, LiveActionJournal.Direction direction,
             Consumer<DimensionMutation> terminalObserver) {
         try { requireActionIdle(); }
         catch (IOException failed) { throw new java.io.UncheckedIOException(failed); }
         var operation = new DeferredDimensionMutation(true, () -> {
             var selected = liveActions.prepareAxiom(player, entry, direction)
                     .orElseThrow(() -> new IllegalStateException("lumi.axiom.entry_unavailable"));
-            return createSessionAction(player, direction, Optional.of(selected.actionId()));
+            return createNativeReplay(selected, request);
         });
-        operations.enqueue(operation, OperationPriority.URGENT, terminalObserver);
+        operations.enqueue(operation, OperationPriority.URGENT, outcome -> { nativeReplay = null; terminalObserver.accept(outcome); });
         return operation;
+    }
+
+    private DimensionMutation createNativeReplay(LiveActionJournal.Plan plan, UUID request) throws IOException {
+        var actor = level.getServer().getPlayerList().getPlayer(plan.player());
+        if (actor == null || actor.level() != level) throw new IOException("Native Axiom actor left the dimension");
+        var expected = activeRef();
+        Map<io.github.lumi.domain.model.HistoryKey, Long> keys = new HashMap<>();
+        plan.sections().keySet().forEach(key -> keys.put(key, 0L));
+        plan.expected().keySet().forEach(pos -> keys.put(new SectionKey(pos.x() >> 4, pos.y() >> 4, pos.z() >> 4), 0L));
+        plan.biomes().keySet().forEach(pos -> keys.put(pos.section(), 0L));
+        for (var state : Stream.concat(plan.expectedEntities().values().stream(), plan.replacementEntities().values().stream()).flatMap(Optional::stream).toList())
+            keys.put(liveEntityWorld.chunk(state), 0L);
+        var scope = new WorkingIndexSnapshot(keys);
+        var reader = new io.github.lumi.minecraft.world.WorldStateReader() {
+            @Override public SectionBlob read(SectionKey key) throws IOException {
+                level.getChunk(key.chunkX(), key.chunkZ());
+                var section = worldReader.read(key);
+                var biomes = new HashMap<Integer, String>();
+                plan.biomes().keySet().stream().filter(pos -> pos.section().equals(key)).forEach(pos ->
+                        biomes.put(pos.localIndex(), level.getNoiseBiome(pos.x(), pos.y(), pos.z()).unwrapKey().orElseThrow().identifier().toString()));
+                return biomes.isEmpty() ? section : section.withActionBiomes(biomes);
+            }
+            @Override public io.github.lumi.domain.model.EntityChunkBlob read(EntityChunkKey key) throws IOException { return worldReader.read(key); }
+            @Override public Map<UUID, io.github.lumi.domain.model.PlayerSpawn> readPlayerSpawns() { return Map.of(); }
+        };
+        var holdKeys = keys.keySet().stream().map(key -> key instanceof SectionKey section ? section
+                : new SectionKey(((EntityChunkKey) key).chunkX(), level.getMinSectionY(), ((EntityChunkKey) key).chunkZ())).toList();
+        var hold = mutations.holdPublication(holdKeys);
+        nativeReplay = new io.github.lumi.minecraft.operation.AxiomNativeReplayOperation(actor, request, freeze,
+                () -> new BatchedWorldStateCapture(reader).begin(scope), hold, before -> {
+            before.sections().forEach((key, value) -> { mutations.registerSectionMutation(key, () -> value); mutations.markBuilderMutation(key); });
+            before.entities().forEach((key, value) -> mutations.registerEntityMutation(key, () -> value));
+        }, () -> {
+            // Native entity callbacks are Undo-only; retain Lumi's exact UUID/NBT Redo guarantee.
+            try {
+                for (var entry : plan.replacementEntities().entrySet())
+                    if (!liveEntityWorld.read(entry.getKey()).equals(entry.getValue())) liveEntityWorld.write(entry.getKey(), entry.getValue());
+            } catch (IOException failed) { throw new java.io.UncheckedIOException(failed); }
+        }, (before, after, succeeded, journaled) -> {
+            boolean undo = plan.direction() == LiveActionJournal.Direction.UNDO;
+            var step = new ActionReplayTarget(plan.player(), plan.actionId(), succeeded ? undo : !undo, true);
+            return new BackgroundPreparedMutation<>(CompletableFuture.supplyAsync(() -> {
+                try {
+                    requireExpectedRef(expected);
+                    if (!persistActionHistory()) throw new IOException("Action changed during native Axiom replay");
+                    var recorded = actionReplays.recordNative(expected, succeeded ? before : after, succeeded ? after : before,
+                            new CommitAuthor(actor.getUUID(), actor.getName().getString()));
+                    WorldStateApply executor = new io.github.lumi.minecraft.world.AlreadyAppliedWorldState(worldApply, journaled, succeeded);
+                    var publication = new ActionReplayPublication(new PendingRestorePublication(mutations), actionHistory,
+                            request, step, !step.undo(), applied -> {
+                        liveActions.installCursor(step, applied);
+                        publishLiveAction(plan);
+                    });
+                    var restore = RestoreOperation.startCheckpointAction(recorded.restore(), executor, publication,
+                            journals, request, restoreStateListener, OperationKind.ACTION_REPLAY, recorded.returnPoint(), Optional.of(step), ignored -> { });
+                    return restore;
+                } catch (IOException failed) { throw new CompletionException(failed); }
+            }, background), () -> requireExpectedRef(expected), value -> { value.cancel(); value.close(); }, true, true);
+        });
+        return nativeReplay;
+    }
+
+    public void nativeReplayDispatch(net.minecraft.server.level.ServerPlayer player, io.github.lumi.network.AxiomDispatchPayload payload) {
+        if (nativeReplay != null) nativeReplay.dispatch(player, payload.replay().orElseThrow(), payload.dispatch(), payload.complete());
+    }
+    public void nativeReplayResult(net.minecraft.server.level.ServerPlayer player, io.github.lumi.network.AxiomNativeReplayPayload payload) {
+        if (nativeReplay != null) nativeReplay.accept(player, payload);
+    }
+    public boolean runNativeReplay(net.minecraft.server.level.ServerPlayer player, UUID dispatch, Runnable nativeApply) {
+        return nativeReplay != null && nativeReplay.run(player, dispatch, nativeApply);
+    }
+    public void runNativeReplayRequest(net.minecraft.server.level.ServerPlayer player, UUID request, Runnable nativeApply) {
+        if (nativeReplay != null) nativeReplay.runRequest(player, request, nativeApply);
     }
 
     public synchronized DimensionMutation startClearWorldActions(UUID player, Consumer<DimensionMutation> terminalObserver) throws IOException {

@@ -88,6 +88,11 @@ public final class LumiServerNetworking {
     public static void register() {
         PayloadTypeRegistry.playS2C().register(WorldActionViewPayload.TYPE, WorldActionViewPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(AxiomHistorySettingsPayload.TYPE, AxiomHistorySettingsPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(AxiomNativeReplayPayload.TYPE, AxiomNativeReplayPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(AxiomNativeReplayPayload.TYPE, AxiomNativeReplayPayload.CODEC);
+        ServerPlayNetworking.registerGlobalReceiver(AxiomNativeReplayPayload.TYPE, (payload, context) ->
+                context.server().execute(() -> LumiMod.serverRuntime().find(payload.dimension())
+                        .ifPresent(runtime -> runtime.nativeReplayResult(context.player(), payload))));
         PayloadTypeRegistry.playS2C().register(BuilderToolBarrierPayload.TYPE, BuilderToolBarrierPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(BuilderToolBarrierPayload.TYPE, BuilderToolBarrierPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(BuilderToolBarrierPayload.TYPE, (payload, context) ->
@@ -104,6 +109,7 @@ public final class LumiServerNetworking {
                         else io.github.lumi.minecraft.runtime.AxiomBufferDispatchContext.beginEntity(player.connection, payload.dimension(), payload.dispatch());
                     }
                     LumiMod.serverRuntime().find(payload.dimension()).ifPresent(runtime -> {
+                    if (payload.replay().isPresent()) { runtime.nativeReplayDispatch(player, payload); return; }
                     if (payload.complete()) runtime.axiomBufferActions().complete(player.connection, payload.dispatch());
                     else if (runtime.level() == player.level() && runtime.freeze().isMutationAllowed()
                             && payload.entry().map(entry -> entry.epoch().equals(runtime.worldActionEpoch())).orElse(true)) runtime.axiomBufferActions()
@@ -811,7 +817,7 @@ public final class LumiServerNetworking {
             case AXIOM_UNDO, AXIOM_REDO -> {
                 if (LumiMod.serverRuntime().axiomSettings(player).effective() != io.github.lumi.domain.model.AxiomHistoryMode.NATIVE_AXIOM)
                     throw new IllegalStateException("lumi.axiom.mode_changed");
-                yield runtime.startAxiomAction(player.getUUID(), UUID.fromString(payload.argument()),
+                yield runtime.startAxiomAction(player.getUUID(), UUID.fromString(payload.argument()), payload.requestId(),
                         payload.kind() == HistoryCommandPayload.Kind.AXIOM_UNDO ? LiveActionJournal.Direction.UNDO : LiveActionJournal.Direction.REDO, terminal);
             }
             case WORLD_ACTIONS_CLEAR -> runtime.startClearWorldActions(player.getUUID(), terminal);
