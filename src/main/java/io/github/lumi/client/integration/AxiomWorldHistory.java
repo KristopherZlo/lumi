@@ -43,13 +43,13 @@ public final class AxiomWorldHistory {
 
     public boolean shared() { return managed() && LumiClient.history().axiomSettings().isPresent() && !nativeMode(); }
 
-    public boolean admissionReady() { return !managed() || ready(); }
+    public boolean admissionReady() { return (!managed() || ready()) && AxiomHistoryCaptureScope.validCurrent(); }
 
     public HistoryEntry<BlockOrBiomeBuffer> prepareNativePush(HistoryEntry<BlockOrBiomeBuffer> entry) {
-        return nativeMode() && ready() ? nativeHistory.push(entry, LumiClient.networking().worldActions().orElseThrow()) : entry;
+        return nativeMode() && ready() && AxiomHistoryCaptureScope.validCurrent() ? nativeHistory.push(entry, LumiClient.networking().worldActions().orElseThrow()) : entry;
     }
 
-    public UUID nativeEntry(BlockOrBiomeBuffer buffer) { return nativeMode() ? nativeHistory.entry(buffer) : null; }
+    public AxiomNativeHistoryFiles.Binding nativeEntry(BlockOrBiomeBuffer buffer) { return nativeMode() ? nativeHistory.entry(buffer) : null; }
 
     public HistoryBuffer<BlockOrBiomeBuffer> visibleHistory() {
         return nativeMode() && ready() ? nativeHistory.projection(LumiClient.networking().worldActions().orElseThrow()) : AxiomDispatcherPendingAccess.lumi$history();

@@ -16,6 +16,8 @@ public final class AxiomBiomeCapture {
 
     public static void run(BiomeBuffer buffer, FabricDimensionRuntime runtime, UUID actor, Runnable apply) {
         if (!runtime.freeze().isMutationAllowed()) return;
+        if (AxiomBufferDispatchContext.actor().filter(player -> AxiomBufferDispatchContext.current(player)
+                .filter(dispatch -> !runtime.axiomBufferActions().admits(player.connection, actor, dispatch)).isPresent()).isPresent()) return;
         try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), actor)) {
             UUID action = DirectLiveActionContext.current(runtime.liveActions()).orElseThrow();
             AxiomBufferDispatchContext.actor().ifPresent(player -> AxiomBufferDispatchContext.current(player)

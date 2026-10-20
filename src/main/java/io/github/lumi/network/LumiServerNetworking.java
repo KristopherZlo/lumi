@@ -96,13 +96,20 @@ public final class LumiServerNetworking {
                         .ifPresent(barrier -> barrier.acknowledge(context.player(), payload))));
         PayloadTypeRegistry.playC2S().register(AxiomDispatchPayload.TYPE, AxiomDispatchPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(AxiomDispatchPayload.TYPE, (payload, context) ->
-                context.server().execute(() -> LumiMod.serverRuntime().find(payload.dimension()).ifPresent(runtime -> {
+                context.server().execute(() -> {
                     ServerPlayer player = context.player();
                     if (context.server().getPlayerList().getPlayer(player.getUUID()) != player) return;
+                    if (payload.entity()) {
+                        if (payload.complete()) io.github.lumi.minecraft.runtime.AxiomBufferDispatchContext.completeEntity(player.connection, payload.dispatch());
+                        else io.github.lumi.minecraft.runtime.AxiomBufferDispatchContext.beginEntity(player.connection, payload.dimension(), payload.dispatch());
+                    }
+                    LumiMod.serverRuntime().find(payload.dimension()).ifPresent(runtime -> {
                     if (payload.complete()) runtime.axiomBufferActions().complete(player.connection, payload.dispatch());
-                    else if (runtime.level() == player.level() && runtime.freeze().isMutationAllowed()) runtime.axiomBufferActions()
-                            .begin(player.connection, player.getUUID(), payload.dispatch());
-                })));
+                    else if (runtime.level() == player.level() && runtime.freeze().isMutationAllowed()
+                            && payload.entry().map(entry -> entry.epoch().equals(runtime.worldActionEpoch())).orElse(true)) runtime.axiomBufferActions()
+                            .begin(player.connection, player.getUUID(), payload.dispatch(), payload.entry(), payload.entity());
+                    });
+                }));
         PayloadTypeRegistry.playC2S().register(
                 HistoryCommandPayload.TYPE, HistoryCommandPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(
@@ -153,6 +160,7 @@ public final class LumiServerNetworking {
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             for (var level : server.getAllLevels()) LumiMod.serverRuntime().find(level)
                     .ifPresent(runtime -> runtime.axiomBufferActions().finishConnection(handler));
+            io.github.lumi.minecraft.runtime.AxiomBufferDispatchContext.disconnect(handler);
             cleanupPlayer(handler.getPlayer().getUUID());
         });
         ServerTickEvents.END_SERVER_TICK.register(
@@ -619,6 +627,7 @@ public final class LumiServerNetworking {
     }
 
     private static void clearState() {
+        io.github.lumi.minecraft.runtime.AxiomBufferDispatchContext.clear();
         COMPARES.clear();
         ZONE_OVERLAYS.clear();
         ZONE_PENDING_PREVIEWS.clear();

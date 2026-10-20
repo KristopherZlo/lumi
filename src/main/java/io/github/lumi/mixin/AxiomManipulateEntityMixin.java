@@ -29,7 +29,8 @@ abstract class AxiomManipulateEntityMixin {
     private void lumi$captureManipulation(MinecraftServer server, ServerPlayer player, Operation<Void> original) {
         var runtime = LumiMod.serverRuntime().find(player.level())
                 .orElseThrow(() -> new IllegalStateException("Lumi dimension runtime is not loaded"));
-        if (!runtime.freeze().isMutationAllowed()) return;
+        if (!runtime.freeze().isMutationAllowed()
+                || !io.github.lumi.minecraft.runtime.AxiomBufferDispatchContext.admitsEntity(runtime, player)) return;
         if (!AxiomServer.canUseAxiom(player, AxiomPermission.ENTITY_MANIPULATE)) {
             original.call(server, player);
             return;
@@ -41,6 +42,8 @@ abstract class AxiomManipulateEntityMixin {
         }
         try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), player.getUUID());
                 var capture = new MinecraftEntityMutationCapture(runtime)) {
+            runtime.axiomBufferActions().attachEntity(player.connection, player.getUUID(),
+                    DirectLiveActionContext.current(runtime.liveActions()).orElseThrow());
             capture.capture(affected.stream().map(player.level()::getEntity).filter(Objects::nonNull).toList());
             original.call(server, player);
         } catch (IOException failed) {

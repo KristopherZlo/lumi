@@ -27,6 +27,24 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class LiveActionJournalTest {
+    @Test void nativeGestureJoinsExplicitSubDispatchesAndRejectsLateAppendAfterUndo() {
+        var journal = new LiveActionJournal();
+        UUID entry = UUID.randomUUID();
+        UUID first = journal.begin(PLAYER_A);
+        journal.linkAxiom(first, entry);
+        journal.record(first, POSITION, block("air"), block("stone"));
+        journal.close(first);
+        UUID second = journal.begin(PLAYER_A);
+        journal.linkAxiom(second, entry);
+        journal.record(second, new BlockPosition(4, 0, 0), block("air"), block("gold_block"));
+        journal.close(second);
+        assertEquals(1, journal.view(PLAYER_A).undo().size());
+        assertTrue(journal.canAppendAxiom(PLAYER_A, entry));
+        journal.completeSelected(journal.prepareAxiom(PLAYER_A, entry, LiveActionJournal.Direction.UNDO).orElseThrow());
+        assertTrue(!journal.canAppendAxiom(PLAYER_A, entry));
+        assertTrue(journal.canAppendAxiom(PLAYER_B, entry));
+    }
+
     @Test void selectedUndoKeepsNewerDisjointEditsAndSurvivesReopen(
             @org.junit.jupiter.api.io.TempDir java.nio.file.Path root) throws Exception {
         var journal = new LiveActionJournal();

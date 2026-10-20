@@ -50,6 +50,8 @@
     "client.AxiomDispatcherPendingAccess",
     "client.AxiomNativeHistoryFilesMixin",
     "client.AxiomNativeHistoryViewMixin",
+    "client.AxiomBuilderHistoryScopeMixin",
+    "client.AxiomPlacementHistoryScopeMixin",
     "client.AxiomModellingResetMixin",
     "client.AxiomContextMenuMixin",
     "client.AxiomClientTickBarrierMixin",

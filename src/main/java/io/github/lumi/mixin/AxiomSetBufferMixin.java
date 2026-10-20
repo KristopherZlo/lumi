@@ -35,6 +35,8 @@ abstract class AxiomSetBufferMixin {
             return;
         }
         if (player == null || player.level() != level || !runtime.freeze().isMutationAllowed()) return;
+        if (AxiomBufferDispatchContext.current(player).filter(dispatch -> !runtime.axiomBufferActions()
+                .admits(player.connection, player.getUUID(), dispatch)).isPresent()) return;
         var keys = new LinkedHashSet<SectionKey>();
         buffer.forEach((x, y, z, state) -> {
             if (state != BlockBuffer.EMPTY_STATE) keys.add(new SectionKey(x >> 4, y >> 4, z >> 4));

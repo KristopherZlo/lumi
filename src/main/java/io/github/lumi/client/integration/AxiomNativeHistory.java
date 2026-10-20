@@ -29,7 +29,7 @@ final class AxiomNativeHistory {
     private static final int MAX_ENTRIES = 16_384, MAX_PENDING = 64;
     private final TreeMap<Integer, Row> rows = new TreeMap<>();
     private final Map<UUID, Row> byId = new HashMap<>();
-    private final Map<BlockOrBiomeBuffer, UUID> buffers = new IdentityHashMap<>();
+    private final Map<BlockOrBiomeBuffer, AxiomNativeHistoryFiles.Binding> buffers = new IdentityHashMap<>();
     private final LinkedHashMap<UUID, Boolean> pending = new LinkedHashMap<>();
     private final Map<HistoryEntry<?>, UUID> controls = new IdentityHashMap<>();
     private final HistoryBuffer<BlockOrBiomeBuffer> display = new HistoryBuffer<>();
@@ -47,9 +47,10 @@ final class AxiomNativeHistory {
                 entry.origin(), entry.description(), entry.bytes(), entry.modifiers(), entry.additionalUndoOperation());
         int position = actual.getPosition() + 1;
         for (var row : List.copyOf(rows.tailMap(position).values())) forget(row);
-        var binding = new AxiomNativeHistoryFiles.Binding(payload.epoch(), UUID.randomUUID(), position);
+        var token = AxiomHistoryCaptureScope.current();
+        var binding = new AxiomNativeHistoryFiles.Binding(payload.epoch(), token == null ? UUID.randomUUID() : token.identity().entry(), position);
         add(new Row(entry, binding));
-        if (!(entry.forwards() instanceof DummyBuffer)) buffers.put(entry.forwards(), binding.entry());
+        if (!(entry.forwards() instanceof DummyBuffer)) buffers.put(entry.forwards(), binding);
         pending.put(binding.entry(), true);
         if (pending.size() > MAX_PENDING) pending.remove(pending.keySet().iterator().next());
         navigating = false;
@@ -57,7 +58,7 @@ final class AxiomNativeHistory {
         return entry;
     }
 
-    UUID entry(BlockOrBiomeBuffer buffer) { return buffers.remove(buffer); }
+    AxiomNativeHistoryFiles.Binding entry(BlockOrBiomeBuffer buffer) { return buffers.remove(buffer); }
 
     HistoryBuffer<BlockOrBiomeBuffer> projection(WorldActionViewPayload payload) {
         adopt();
@@ -165,7 +166,7 @@ final class AxiomNativeHistory {
     private void forget(Row row) {
         rows.remove(row.binding.position());
         if (byId.remove(row.binding.entry(), row)) pending.remove(row.binding.entry());
-        buffers.remove(row.entry.forwards(), row.binding.entry()); AxiomNativeHistoryFiles.forget(row.entry);
+        buffers.remove(row.entry.forwards(), row.binding); AxiomNativeHistoryFiles.forget(row.entry);
     }
 
     private void addGroups(List<WorldActionView.Entry> groups, UUID epoch) {

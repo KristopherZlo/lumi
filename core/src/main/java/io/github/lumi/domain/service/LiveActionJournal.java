@@ -418,12 +418,22 @@ public final class LiveActionJournal {
     }
 
     /** One native entry may own several explicitly grouped dispatches. */
+    public synchronized boolean canAppendAxiom(UUID actor, UUID entry) {
+        return actions.values().stream().noneMatch(action -> action.player.equals(actor)
+                && entry.equals(action.axiomEntry) && !action.applied);
+    }
+
     public synchronized void linkAxiom(UUID actionId, UUID entry) {
         MutableAction action = requireAction(actionId);
         Objects.requireNonNull(entry, "entry");
         if (action.axiomEntry != null && !entry.equals(action.axiomEntry))
             throw new IllegalStateException("Action already belongs to another native entry");
-        if (action.axiomEntry == null) { action.axiomEntry = entry; revision++; }
+        if (action.axiomEntry == null) {
+            var previous = actions.values().stream().filter(other -> other.available && other.player.equals(action.player)
+                    && entry.equals(other.axiomEntry)).findFirst();
+            previous.ifPresent(other -> mergeGroups(other.id, action.id));
+            action.axiomEntry = entry; revision++;
+        }
     }
 
     /** Native controls select their explicit entry, never an inferred last edit. */
