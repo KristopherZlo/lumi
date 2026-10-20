@@ -25,6 +25,11 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
         if (!LumiClientTestSuite.includes(LumiClientTestSuite.BUILDER_TOOLS)
                 || LumiHistoryBenchmarkConfig.enabled()) return;
         if (!loaded("worldedit") && !loaded("axiom")) return;
+        if (Boolean.getBoolean("lumi.gametest.nativeHistoryProbe") && loaded("axiom")) {
+            LumiClientBehaviorWorld.run(context, "builder-tools-native-probe",
+                    (test, world, report) -> new LumiAxiomNativeHistoryProbe(test, world).run(report));
+            return;
+        }
         try (var ignored = LumiUiScaleTestScope.readableViewport()) {
             LumiClientBehaviorWorld.runWithReopen(context, "builder-tools",
                     this::exercise, this::reopened);

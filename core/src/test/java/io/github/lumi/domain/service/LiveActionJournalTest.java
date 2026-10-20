@@ -27,6 +27,39 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class LiveActionJournalTest {
+    @Test void selectedUndoKeepsNewerDisjointEditsAndSurvivesReopen() throws Exception {
+        var journal = new LiveActionJournal();
+        var first = new BlockPosition(0, 0, 0);
+        var second = new BlockPosition(1, 0, 0);
+        UUID older = journal.begin(PLAYER_A);
+        journal.record(older, first, block("stone"), block("gold_block"));
+        journal.close(older);
+        UUID newer = journal.begin(PLAYER_A);
+        journal.record(newer, second, block("air"), block("stone"));
+        journal.close(newer);
+        var undo = journal.prepareSelected(PLAYER_A, older, LiveActionJournal.Direction.UNDO).orElseThrow();
+        var step = new io.github.lumi.domain.model.ActionReplayTarget(PLAYER_A, older, true);
+        var durable = journal.snapshotIndex().moveSelected(step, false);
+        journal.completeSelected(undo);
+        assertEquals(durable.players(), journal.snapshotIndex().players());
+        assertEquals(newer, journal.prepareUndo(PLAYER_A).orElseThrow().actionId());
+        assertTrue(journal.prepareSelected(PLAYER_A, older, LiveActionJournal.Direction.UNDO).isEmpty());
+        assertEquals(durable, durable.moveSelected(step, false));
+        var reopened = new LiveActionJournal();
+        reopened.restore(journal.snapshotIndex(), journal::snapshotAction);
+        reopened.completeSelected(reopened.prepareSelected(PLAYER_A, older, LiveActionJournal.Direction.REDO).orElseThrow());
+        assertEquals(older, reopened.prepareUndo(PLAYER_A).orElseThrow().actionId());
+        UUID overlap = reopened.begin(PLAYER_B);
+        reopened.record(overlap, first, block("gold_block"), block("diamond_block"));
+        reopened.close(overlap);
+        var beforeRefusal = reopened.snapshotIndex();
+        assertThrows(IllegalStateException.class,
+                () -> reopened.prepareSelected(PLAYER_A, older, LiveActionJournal.Direction.UNDO));
+        assertThrows(IllegalArgumentException.class,
+                () -> reopened.prepareSelected(PLAYER_B, older, LiveActionJournal.Direction.UNDO));
+        assertEquals(beforeRefusal, reopened.snapshotIndex());
+    }
+
     @Test void lateBlastFollowsNewerSectionOwnershipBeforeTheThirdPlacement() {
         var journal = new LiveActionJournal();
         var key = new SectionKey(0, 0, 0);

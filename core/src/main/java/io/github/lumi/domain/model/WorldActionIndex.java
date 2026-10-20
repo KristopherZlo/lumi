@@ -102,6 +102,15 @@ public record WorldActionIndex(
 
     /** Projects one whole group; publication can retry without moving the cursor twice. */
     public WorldActionIndex move(ActionReplayTarget step, boolean applied) {
+        return move(step, applied, false);
+    }
+
+    /** Moves an explicitly admitted group without undoing newer, disjoint groups. */
+    public WorldActionIndex moveSelected(ActionReplayTarget step, boolean applied) {
+        return move(step, applied, true);
+    }
+
+    private WorldActionIndex move(ActionReplayTarget step, boolean applied, boolean selective) {
         var selected = actions.stream().filter(action -> action.id().equals(step.action())
                 && action.actor().equals(step.actor())).findFirst().orElseThrow(
                         () -> new IllegalStateException("Selected action is no longer retained"));
@@ -111,11 +120,13 @@ public record WorldActionIndex(
         var target = new ArrayList<>(applied ? stacks.undo() : stacks.redo());
         var group = actions.stream().filter(action -> action.group().equals(selected.group())).toList();
         var ids = group.stream().map(WorldActionRecord.Metadata::id).toList();
-        if (!selected.closed() || source.isEmpty() || !source.getLast().equals(step.action())
-                || source.size() < ids.size() || !source.subList(source.size() - ids.size(), source.size()).equals(ids)) {
+        if (!selected.closed()
+                || !source.stream().filter(ids::contains).toList().equals(ids)
+                || (!selective && (source.isEmpty() || !source.getLast().equals(step.action()) || source.size() < ids.size()
+                    || !source.subList(source.size() - ids.size(), source.size()).equals(ids)))) {
             throw new IllegalStateException("Selected action cursor changed before publication");
         }
-        source.subList(source.size() - ids.size(), source.size()).clear();
+        source.removeIf(ids::contains);
         target.addAll(ids);
         var replacement = actions.stream().map(action -> action.group().equals(selected.group())
                 ? new WorldActionRecord.Metadata(action.id(), action.actor(), action.sequence(), action.group(),

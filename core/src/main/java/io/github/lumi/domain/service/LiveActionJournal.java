@@ -417,6 +417,26 @@ public final class LiveActionJournal {
         return prepare(player, Direction.REDO, stacks(player).redo);
     }
 
+    /** Selects one retained group; ordinary overlap and eviction checks still apply. */
+    public synchronized Optional<Plan> prepareSelected(UUID player, UUID actionId, Direction direction) {
+        Objects.requireNonNull(direction, "direction");
+        MutableAction selected = requireAction(actionId);
+        if (!selected.player.equals(player)) throw new IllegalArgumentException("Live action belongs to another builder");
+        Deque<UUID> source = direction == Direction.UNDO ? stacks(player).undo : stacks(player).redo;
+        var group = new ArrayDeque<UUID>();
+        source.stream().filter(id -> requireAction(id).groupId.equals(selected.groupId)).forEach(group::addLast);
+        return prepare(player, direction, group);
+    }
+
+    public synchronized void completeSelected(Plan plan) {
+        if (!prepareSelected(plan.player(), plan.actionId(), plan.direction()).equals(Optional.of(plan))) {
+            throw new IllegalStateException("Selected live action changed during apply");
+        }
+        installCursor(snapshotIndex().moveSelected(
+                new io.github.lumi.domain.model.ActionReplayTarget(plan.player(), plan.actionId(), plan.direction() == Direction.UNDO),
+                plan.direction() == Direction.REDO));
+    }
+
     public synchronized void complete(Plan plan) {
         revision++;
         Objects.requireNonNull(plan, "plan");
@@ -443,7 +463,10 @@ public final class LiveActionJournal {
 
     /** Installs a recovered durable cursor without executing the world operation again. */
     public synchronized void installCursor(io.github.lumi.domain.model.ActionReplayTarget step, boolean applied) {
-        WorldActionIndex index = snapshotIndex().move(step, applied);
+        installCursor(snapshotIndex().move(step, applied));
+    }
+
+    private void installCursor(WorldActionIndex index) {
         index.actions().forEach(metadata -> setApplied(requireAction(metadata.id()), metadata.applied()));
         index.players().forEach((actor, cursor) -> {
             var stacks = stacks(actor);
