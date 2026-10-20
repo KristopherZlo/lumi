@@ -14,11 +14,17 @@ class AxiomDispatchPayloadTest {
           for (boolean linked : new boolean[] {false, true}) {
             var payload = new AxiomDispatchPayload(UUID.randomUUID(), "minecraft:the_nether", complete,
                     linked ? java.util.Optional.of(new io.github.lumi.domain.model.AxiomEntryIdentity(UUID.randomUUID(), UUID.randomUUID()))
-                            : java.util.Optional.empty(), linked);
+                            : java.util.Optional.empty(), linked, linked ? java.util.Optional.of(UUID.randomUUID()) : java.util.Optional.empty());
             var buffer = new FriendlyByteBuf(Unpooled.buffer());
             try {
                 AxiomDispatchPayload.CODEC.encode(buffer, payload);
                 assertEquals(payload, AxiomDispatchPayload.CODEC.decode(buffer));
+                for (var state : AxiomNativeReplayPayload.State.values()) {
+                    buffer.clear();
+                    var replay = new AxiomNativeReplayPayload(UUID.randomUUID(), payload.dimension(), state);
+                    AxiomNativeReplayPayload.CODEC.encode(buffer, replay);
+                    assertEquals(replay, AxiomNativeReplayPayload.CODEC.decode(buffer));
+                }
             } finally { buffer.release(); }
           }
         }
