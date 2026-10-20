@@ -47,6 +47,7 @@ abstract class AxiomSetBlockMixin {
                 }
             });
             runtime.blockEntityBaselines().discard(key);
+            boolean ownsCapture = runtime.liveBlocks().beginBlockMutation(block);
             try {
                 original.call(level, position, state);
             } finally {
@@ -60,6 +61,8 @@ abstract class AxiomSetBlockMixin {
                     runtime.liveActions().makeUnavailable(action, "Cannot verify the Axiom edit after mutation");
                     runtime.mutations().markBuilderMutation(key);
                     LumiMod.LOGGER.error("Cannot capture Axiom no-updates edit at {}", position, failure);
+                } finally {
+                    if (ownsCapture) runtime.liveBlocks().endBlockMutation(block);
                 }
             }
         } catch (IOException failure) {

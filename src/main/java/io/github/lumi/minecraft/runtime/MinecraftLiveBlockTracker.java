@@ -25,6 +25,10 @@ public final class MinecraftLiveBlockTracker {
     private final MinecraftLiveBlockWorldAccess world;
     private final BiConsumer<UUID, BlockPosition> mutationObserver;
     private final Map<BlockPosition, BlockSnapshot> baselines = new HashMap<>();
+    private final Set<BlockPosition> blockMutations = new java.util.HashSet<>();
+
+    public boolean beginBlockMutation(BlockPosition position) { return blockMutations.add(position); }
+    public void endBlockMutation(BlockPosition position) { blockMutations.remove(position); }
 
     public MinecraftLiveBlockTracker(
             LiveActionJournal journal,
@@ -161,6 +165,8 @@ public final class MinecraftLiveBlockTracker {
             BlockPosition position,
             BlockSnapshot before,
             BlockSnapshot after) throws IOException {
+        // The outer block setter owns the first visible state and final NBT together.
+        if (blockMutations.contains(position)) return;
         Optional<UUID> root = DirectLiveActionContext.current(journal);
         if (root.isEmpty()) {
             return;

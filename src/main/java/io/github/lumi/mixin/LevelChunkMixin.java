@@ -80,23 +80,26 @@ abstract class LevelChunkMixin {
             LUMI_LIVE_BLOCKS.remove();
         }
         pending.ifPresent(value -> {
-            LevelChunk chunk = (LevelChunk) (Object) this;
-            if (value.before().equals(chunk.getBlockState(position))) {
-                return;
-            }
-            var runtime = LumiMod.serverRuntime().find(serverLevel).orElse(null);
-            if (runtime != null && value.generation() > LUMI_MUTATION_UNTRACKED) {
-                BlockPosition changed = blockPosition(position);
-                if (value.builder()) {
-                    runtime.mutations().recordBuilderBlockMutation(
-                            changed, value.generation());
-                } else {
-                    runtime.mutations().recordBlockMutation(
-                            changed, value.generation());
+            try {
+                LevelChunk chunk = (LevelChunk) (Object) this;
+                var runtime = LumiMod.serverRuntime().find(serverLevel).orElse(null);
+                if (!value.before().equals(chunk.getBlockState(position))
+                        && runtime != null && value.generation() > LUMI_MUTATION_UNTRACKED) {
+                    BlockPosition changed = blockPosition(position);
+                    if (value.builder()) {
+                        runtime.mutations().recordBuilderBlockMutation(
+                                changed, value.generation());
+                    } else {
+                        runtime.mutations().recordBlockMutation(
+                                changed, value.generation());
+                    }
                 }
+                value.live().ifPresent(live ->
+                        lumi$recordLiveAfter(serverLevel, position, live));
+            } finally {
+                value.live().filter(PendingLiveBlock::ownsCapture).ifPresent(live ->
+                        LumiMod.serverRuntime().find(serverLevel).ifPresent(runtime -> runtime.liveBlocks().endBlockMutation(live.position())));
             }
-            value.live().ifPresent(live ->
-                    lumi$recordLiveAfter(serverLevel, position, live));
         });
     }
 
@@ -231,7 +234,7 @@ abstract class LevelChunkMixin {
             BlockSnapshot before = runtime.liveBlocks().beforeMutation(
                     key, runtime.liveWorld().read(key));
             return Optional.of(new PendingLiveBlock(
-                    action.orElseThrow(), key, before));
+                    action.orElseThrow(), key, before, runtime.liveBlocks().beginBlockMutation(key)));
         } catch (IOException failed) {
             LumiMod.LOGGER.warn("Cannot capture live block before mutation at {}", position, failed);
             return Optional.empty();
@@ -264,7 +267,7 @@ abstract class LevelChunkMixin {
     }
 
     @Unique
-    private record PendingLiveBlock(UUID action, BlockPosition position, BlockSnapshot before) { }
+    private record PendingLiveBlock(UUID action, BlockPosition position, BlockSnapshot before, boolean ownsCapture) { }
 
     @Unique
     private static BlockPosition blockPosition(BlockPos position) {

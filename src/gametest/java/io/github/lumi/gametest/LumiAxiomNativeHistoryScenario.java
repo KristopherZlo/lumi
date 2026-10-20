@@ -257,6 +257,66 @@ final class LumiAxiomNativeHistoryScenario {
         assertBlock(context, world, origin.east(4), Blocks.DIAMOND_BLOCK);
         operations.nativeHistoryStep("shared_native_redo_manual", false);
         assertBlock(context, world, origin.east(4), Blocks.EMERALD_BLOCK);
+        var column = origin.atY(32);
+        for (int section = 0; section < 9; section++) manual(world, column.above(section * 16), Blocks.STONE);
+        context.runOnClient(client -> {
+            var forwards = new BlockBuffer();
+            var backwards = new BlockBuffer();
+            for (int section = 0; section < 9; section++) {
+                var position = column.above(section * 16);
+                forwards.set(position.getX(), position.getY(), position.getZ(), Blocks.GOLD_BLOCK.defaultBlockState());
+                backwards.set(position.getX(), position.getY(), position.getZ(), Blocks.STONE.defaultBlockState());
+            }
+            Dispatcher.push(new HistoryEntry<>(forwards, backwards, column, "Shared disjoint fixture",
+                    HistoryEntry.MODIFIER_CAN_BE_UNDONE_INGAME));
+        });
+        assertBlock(context, world, column.above(128), Blocks.GOLD_BLOCK);
+        world.getServer().runOnServer(server -> {
+            var level = server.getPlayerList().getPlayers().getFirst().level();
+            level.setBlockAndUpdate(column.east(), Blocks.BARREL.defaultBlockState());
+            ((net.minecraft.world.level.block.entity.BarrelBlockEntity) level.getBlockEntity(column.east()))
+                    .setItem(0, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND, 7));
+        });
+        operations.awaitDurability("shared_disjoint");
+        operations.nativeHistoryStep("shared_nine_sections_undo", true);
+        for (int section = 0; section < 9; section++) assertBlock(context, world, column.above(section * 16), Blocks.STONE);
+        operations.nativeHistoryStep("shared_nine_sections_redo", false);
+        for (int section = 0; section < 9; section++) assertBlock(context, world, column.above(section * 16), Blocks.GOLD_BLOCK);
+        if (!world.getServer().computeOnServer(server -> {
+            var item = ((net.minecraft.world.level.block.entity.BarrelBlockEntity)
+                    server.getPlayerList().getPlayers().getFirst().level().getBlockEntity(column.east())).getItem(0);
+            return item.is(net.minecraft.world.item.Items.DIAMOND) && item.getCount() == 7;
+        }))
+            throw new AssertionError("Shared replay changed disjoint block entity data");
+        var nbt = origin.east(8);
+        world.getServer().runOnServer(server -> server.getPlayerList().getPlayers().getFirst().level()
+                .setBlockAndUpdate(nbt, Blocks.AIR.defaultBlockState()));
+        manual(world, nbt, Blocks.BARREL);
+        operations.undo("scoped_nbt_undo");
+        assertBlock(context, world, nbt, Blocks.AIR);
+        operations.redo("scoped_nbt_redo");
+        assertBlock(context, world, nbt, Blocks.BARREL);
+        var entity = world.getServer().computeOnServer(server -> {
+            var player = server.getPlayerList().getPlayers().getFirst();
+            var runtime = LumiMod.serverRuntime().find(player.level()).orElseThrow();
+            try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), player.getUUID())) {
+                var pig = java.util.Objects.requireNonNull(net.minecraft.world.entity.EntityType.PIG.create(
+                        player.level(), net.minecraft.world.entity.EntitySpawnReason.COMMAND));
+                pig.setNoAi(true);
+                pig.setPersistenceRequired();
+                pig.setNoGravity(true);
+                pig.snapTo(origin.getX() + 8.5, origin.getY() + 2, origin.getZ() + 0.5, 0, 0);
+                player.level().addFreshEntity(pig);
+                return pig.getUUID();
+            }
+        });
+        operations.undo("scoped_entity_undo");
+        if (world.getServer().computeOnServer(server -> server.getPlayerList().getPlayers().getFirst().level().getEntity(entity) != null))
+            throw new AssertionError("Scoped Undo left the entity behind");
+        operations.redo("scoped_entity_redo");
+        if (world.getServer().computeOnServer(server -> server.getPlayerList().getPlayers().getFirst().level().getEntity(entity) == null))
+            throw new AssertionError("Scoped Redo lost the entity UUID");
+        report.event("gate", "scoped_action_replay", "succeeded", 0, 0, "nine sections; disjoint NBT; local NBT and entity Undo/Redo");
         report.event("gate", "axiom_history_setting", "succeeded", 0, 0, "real settings button; deferred apply; persisted SHARED mode; native controls undo manual edit");
     }
 
