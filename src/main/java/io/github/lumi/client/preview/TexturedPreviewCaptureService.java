@@ -49,8 +49,23 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
         boolean handedOff = false;
         try {
             render(client, target, framing, mesh);
+            CompletableFuture<NativeImage> image = new CompletableFuture<>();
+            readPixels(target).whenComplete((pixels, failed) -> {
+                if (failed != null) { image.completeExceptionally(failed); return; }
+                try {
+                    worker.execute(() -> {
+                        try {
+                            NativeImage cropped = imageCropper.crop(pixels);
+                            if (!image.complete(cropped)) cropped.close();
+                        } catch (Throwable error) { image.completeExceptionally(error); }
+                    });
+                } catch (RuntimeException rejected) {
+                    pixels.close();
+                    image.completeExceptionally(rejected);
+                }
+            });
             PendingPreviewCapture capture = new PendingPreviewCapture(
-                    target, readPixels(target).thenApplyAsync(imageCropper::crop, worker));
+                    target, image);
             handedOff = true;
             return capture;
         } finally {

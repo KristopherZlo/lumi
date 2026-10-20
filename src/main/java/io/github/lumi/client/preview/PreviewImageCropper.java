@@ -9,6 +9,12 @@ final class PreviewImageCropper {
 
     NativeImage crop(NativeImage source) {
         Objects.requireNonNull(source, "source");
+        try (source) {
+            return copy(source);
+        }
+    }
+
+    private NativeImage copy(NativeImage source) {
         int[] pixels = source.getPixelsABGR();
         int minX = source.getWidth();
         int minY = source.getHeight();
@@ -24,7 +30,6 @@ final class PreviewImageCropper {
             }
         }
         if (maxX < 0 || maxY < 0) {
-            source.close();
             return new NativeImage(1, 1, false);
         }
         int cropMinX = Math.max(0, minX - PADDING);
@@ -34,14 +39,18 @@ final class PreviewImageCropper {
         int width = Math.max(1, cropMaxX - cropMinX + 1);
         int height = Math.max(1, cropMaxY - cropMinY + 1);
         NativeImage cropped = new NativeImage(width, height, false);
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                cropped.setPixelABGR(
-                        x, y, pixels[index(source.getWidth(), cropMinX + x, cropMinY + y)]);
+        try {
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    cropped.setPixelABGR(
+                            x, y, pixels[index(source.getWidth(), cropMinX + x, cropMinY + y)]);
+                }
             }
+            return cropped;
+        } catch (RuntimeException | Error failed) {
+            cropped.close();
+            throw failed;
         }
-        source.close();
-        return cropped;
     }
 
     private static int alpha(int abgr) {

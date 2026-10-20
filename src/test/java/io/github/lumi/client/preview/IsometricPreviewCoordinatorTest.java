@@ -35,7 +35,7 @@ class IsometricPreviewCoordinatorTest {
         assertTrue(source.contains("if (capture == null)"));
         assertTrue(source.contains("if (capture != null) capture.close()"));
         assertTrue(source.contains("store.save(item.dimensionId(), target, image)"));
-        assertTrue(source.contains("worker.shutdownNow()"));
+        assertTrue(source.contains("worker.shutdown()"));
     }
 
     @Test
@@ -96,6 +96,24 @@ class IsometricPreviewCoordinatorTest {
             failed.tick();
             assertFalse(store.isLoading("minecraft:overworld", commit(2)));
         }
+    }
+
+    @Test
+    void discardedBuildClosesCompletedAndLateResults() {
+        var closes = new java.util.concurrent.atomic.AtomicInteger();
+        var completed = CompletableFuture.completedFuture(new Object());
+        IsometricPreviewCoordinator.discardBuild(completed, ignored -> closes.incrementAndGet());
+        assertTrue(closes.get() == 1);
+        var late = new CompletableFuture<Object>() {
+            @Override public boolean cancel(boolean interrupt) { return false; }
+        };
+        IsometricPreviewCoordinator.discardBuild(late, ignored -> closes.incrementAndGet());
+        late.complete(new Object());
+        assertTrue(closes.get() == 2);
+        var cancelled = new CompletableFuture<Object>();
+        IsometricPreviewCoordinator.discardBuild(cancelled, ignored -> closes.incrementAndGet());
+        assertTrue(cancelled.isCancelled());
+        assertTrue(closes.get() == 2);
     }
 
     private static CommitId commit(int value) {

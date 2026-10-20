@@ -69,37 +69,43 @@ public final class ClientVersionPreviewStore {
             return;
         }
         String key = key(dimensionId, commit);
-        CompletableFuture.runAsync(() -> {
-            Path temporary = null;
-            try (image) {
-                if (!hasVisiblePixel(image)) {
+        try {
+            CompletableFuture.runAsync(() -> {
+                Path temporary = null;
+                try (image) {
+                    if (!hasVisiblePixel(image)) {
+                        synchronized (this) {
+                            missing.add(key);
+                        }
+                        return;
+                    }
+                    temporary = Files.createTempFile("lumi-preview-", ".png");
+                    image.writeToFile(temporary);
+                    repository.orElseThrow().save(commit, Files.readAllBytes(temporary));
+                    synchronized (this) {
+                        missing.remove(key);
+                    }
+                } catch (Exception failed) {
                     synchronized (this) {
                         missing.add(key);
                     }
-                    return;
+                    LumiMod.LOGGER.warn("Failed to store preview for {}", commit.hex(), failed);
+                } finally {
+                    synchronized (this) {
+                        loading.remove(key);
+                    }
+                    try {
+                        if (temporary != null) Files.deleteIfExists(temporary);
+                    } catch (IOException failed) {
+                        LumiMod.LOGGER.warn("Failed to remove temporary Lumi preview", failed);
+                    }
                 }
-                temporary = Files.createTempFile("lumi-preview-", ".png");
-                image.writeToFile(temporary);
-                repository.orElseThrow().save(commit, Files.readAllBytes(temporary));
-                synchronized (this) {
-                    missing.remove(key);
-                }
-            } catch (Exception failed) {
-                synchronized (this) {
-                    missing.add(key);
-                }
-                LumiMod.LOGGER.warn("Failed to store preview for {}", commit.hex(), failed);
-            } finally {
-                synchronized (this) {
-                    loading.remove(key);
-                }
-                try {
-                    if (temporary != null) Files.deleteIfExists(temporary);
-                } catch (IOException failed) {
-                    LumiMod.LOGGER.warn("Failed to remove temporary Lumi preview", failed);
-                }
-            }
-        }, writer);
+                }, writer);
+        } catch (RuntimeException rejected) {
+            image.close();
+            failLoading(dimensionId, commit);
+            throw rejected;
+        }
     }
 
     public synchronized Optional<PreviewTexture> texture(

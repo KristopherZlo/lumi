@@ -109,6 +109,7 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
                         && item.mesh() == null) {
                     PreviewRenderMesh mesh = item.build().join();
                     Pending withMesh = item.withMesh(mesh);
+                    pending.put(requestId, withMesh);
                     pending.put(requestId, withMesh.withCapture(
                             capture().capture(
                                     Minecraft.getInstance(), item.bounds(),
@@ -121,13 +122,12 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
                     CommitId target = Objects.requireNonNull(
                             item.target(), "Preview target");
                     pending.remove(requestId);
-                    closeCapture(requestId, item);
+                    closeCapture(item, false);
                     store.save(item.dimensionId(), target, image);
                     return;
                 }
             } catch (RuntimeException failed) {
-                pending.remove(requestId);
-                closeCapture(requestId, item);
+                closeCapture(requestId, pending.remove(requestId));
                 if (item.target() != null) {
                     store.failLoading(item.dimensionId(), item.target());
                 }
@@ -169,16 +169,26 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
             return Optional.empty();
         }
         if (meshes == null) meshes = new PreviewRenderMeshBuilder();
-        CompletableFuture<PreviewRenderMesh> build =
-                CompletableFuture.supplyAsync(() -> {
+        CompletableFuture<PreviewRenderMesh> build = new CompletableFuture<>();
+        CompletableFuture.supplyAsync(() -> {
                     try {
                         return snapshots.read(
                                 server, level, dimensionId, target, bounds);
                     } catch (Exception failed) {
                         throw new CompletionException(failed);
                     }
-                }, worker).thenCompose(frozen ->
-                        meshes.scheduleBuild(frozen, bounds, worker));
+                }, worker).whenComplete((frozen, failed) -> {
+                    if (failed != null) { build.completeExceptionally(failed); return; }
+                    if (build.isCancelled()) return;
+                    try {
+                        var mesh = meshes.scheduleBuild(frozen, bounds, worker);
+                        build.whenComplete((ignored, error) -> { if (build.isCancelled()) mesh.cancel(true); });
+                        mesh.whenComplete((value, error) -> {
+                            if (error != null) build.completeExceptionally(error);
+                            else if (!build.complete(value)) value.close();
+                        });
+                    } catch (RuntimeException rejected) { build.completeExceptionally(rejected); }
+                });
         return Optional.of(build);
     }
 
@@ -202,13 +212,15 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
     }
 
     private void closeCapture(UUID ignored, Pending item) {
+        closeCapture(item, true);
+    }
+
+    private void closeCapture(Pending item, boolean discardImage) {
         if (item == null) return;
-        if (item.build() != null && !item.build().isDone()) {
-            item.build().cancel(true);
-        }
+        if (item.mesh() == null && item.build() != null) discardBuild(item.build(), PreviewRenderMesh::close);
         if (item.offscreen() != null) {
             item.offscreen().renderTarget().destroyBuffers();
-            if (!item.offscreen().imageFuture().isDone()) {
+            if (discardImage) {
                 item.offscreen().imageFuture().whenComplete((image, failed) -> {
                     if (image != null) image.close();
                 });
@@ -217,11 +229,16 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
         if (item.mesh() != null) item.mesh().close();
     }
 
+    static <T> void discardBuild(CompletableFuture<T> build, java.util.function.Consumer<T> dispose) {
+        build.whenComplete((value, failed) -> { if (value != null) dispose.accept(value); });
+        build.cancel(true);
+    }
+
     @Override
     public synchronized void close() {
         clear();
         if (capture != null) capture.close();
-        worker.shutdownNow();
+        worker.shutdown();
     }
 
     private record Pending(
