@@ -1,4 +1,4 @@
-package io.github.lumi.client;
+package io.github.lumi.client.ui;
 
 import java.util.Locale;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
@@ -13,12 +13,12 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.resources.Identifier;
 
 /** Development-only visual samples; commands never invoke history or world edits. */
-final class LumiEffectPreview {
+public final class LumiEffectPreview {
     enum Effect { SAVE, BRANCH }
     private static final long DURATION = 1_100_000_000L;
     private Sample active;
 
-    static void register() {
+    public static void register() {
         if (!FabricLoader.getInstance().isDevelopmentEnvironment()) return;
         var preview = new LumiEffectPreview();
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, access) -> {
