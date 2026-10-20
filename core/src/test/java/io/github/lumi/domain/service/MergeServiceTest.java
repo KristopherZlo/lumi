@@ -70,18 +70,6 @@ class MergeServiceTest {
             var replay = service.prepareSections(saved, Map.of(key, observed), spawns, plan, author());
             assertEquals(Map.of(key, section("minecraft:stone", "minecraft:barrel")), replay.restore().sections());
             assertEquals(Map.of(key, observed), replay.restore().returnSections());
-            var grown = section("minecraft:grass_block[snowy=false]", "minecraft:barrel");
-            var nativeResult = section("minecraft:gold_block", "minecraft:barrel");
-            var scope = new io.github.lumi.domain.model.WorkingIndexSnapshot(Map.of(key, 1L));
-            var statistics = new CommitStatistics(1, 0, 1, 0);
-            var nativeReplay = service.recordNative(saved,
-                    new CapturedWorldState(Map.of(key, grown), Map.of(), scope, statistics),
-                    new CapturedWorldState(Map.of(key, nativeResult), Map.of(), scope, statistics), spawns, author());
-            assertEquals(Map.of(key, grown), nativeReplay.restore().returnSections());
-            assertEquals(Map.of(key, nativeResult), nativeReplay.restore().sections());
-            assertEquals(spawns, commits.read(nativeReplay.returnPoint()).playerSpawns());
-            assertEquals(spawns, commits.read(nativeReplay.restore().targetCommit()).playerSpawns());
-            assertEquals(Optional.of(saved), refs.read(saved.name()));
             var operation = new io.github.lumi.domain.model.OperationJournal(UUID.randomUUID(),
                     io.github.lumi.domain.model.OperationKind.ACTION_REPLAY, io.github.lumi.domain.model.OperationPhase.APPLYING,
                     new io.github.lumi.domain.model.OperationTarget(saved.name(), saved.commit(), saved.revision(),

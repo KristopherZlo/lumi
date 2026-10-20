@@ -189,28 +189,6 @@ public final class ActionReplayPreparation {
 
     public record SectionReplay(CommitId returnPoint, PreparedRestore restore) { }
 
-    /** Records an observed native result; admission, not block equality, decides whether Axiom may run. */
-    public SectionReplay recordNative(BranchRef expected, CapturedWorldState before, CapturedWorldState after,
-            Map<UUID, PlayerSpawn> spawns, CommitAuthor author) throws IOException {
-        if (!before.generations().generations().keySet().equals(after.generations().generations().keySet()))
-            throw new IllegalArgumentException("Native replay capture scope changed");
-        try (var publication = objects.beginPublication()) {
-            var workspace = commits.read(expected.commit()).workspaceId();
-            CommitId source = writeNative(before, expected.commit(), workspace, spawns, author);
-            CommitId target = writeNative(after, source, workspace, spawns, author);
-            return new SectionReplay(source, new PreparedRestore(expected, target, after.sections(), after.entities(), before.sections(), before.entities()));
-        }
-    }
-
-    private CommitId writeNative(CapturedWorldState state, CommitId parent, UUID workspace, Map<UUID, PlayerSpawn> spawns, CommitAuthor author) throws IOException {
-        var changes = new HashMap<HistoryKey, ObjectId>();
-        for (var entry : state.sections().entrySet()) changes.put(entry.getKey(), objects.write(entry.getValue()));
-        for (var entry : state.entities().entrySet()) changes.put(entry.getKey(), objects.write(entry.getValue()));
-        var tree = new MerkleTreeEditor(objects).update(Optional.empty(), changes);
-        return commits.write(new Commit(tree, List.of(parent), author, "Native Axiom endpoint", Instant.now(), workspace,
-                Optional.empty(), CommitKind.HIDDEN_RETURN, state.statistics(), spawns));
-    }
-
     private int projectEntities(CommitId captured, LiveActionJournal.Plan plan, Map<EntityState, EntityChunkKey> locations,
             Map<HistoryKey, ObjectId> leaves, Map<HistoryKey, ObjectId> changes) throws IOException {
         if (plan.expectedEntities().isEmpty()) return 0;
