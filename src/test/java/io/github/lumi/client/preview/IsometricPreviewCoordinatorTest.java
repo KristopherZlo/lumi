@@ -101,19 +101,58 @@ class IsometricPreviewCoordinatorTest {
     @Test
     void discardedBuildClosesCompletedAndLateResults() {
         var closes = new java.util.concurrent.atomic.AtomicInteger();
-        var completed = CompletableFuture.completedFuture(new Object());
-        IsometricPreviewCoordinator.discardBuild(completed, ignored -> closes.incrementAndGet());
+        var store = new ClientVersionPreviewStore();
+        try (var coordinator = new IsometricPreviewCoordinator(store,
+                (dimension, commit, bounds) -> Optional.of(CompletableFuture.completedFuture(mesh(closes))))) {
+            UUID request = UUID.randomUUID();
+            coordinator.request(request, snapshot());
+            coordinator.accept(success(request, commit(1)));
+            coordinator.clear();
+            coordinator.clear();
+        }
         assertTrue(closes.get() == 1);
-        var late = new CompletableFuture<Object>() {
+        var late = new CompletableFuture<PreviewRenderMesh>() {
             @Override public boolean cancel(boolean interrupt) { return false; }
         };
-        IsometricPreviewCoordinator.discardBuild(late, ignored -> closes.incrementAndGet());
-        late.complete(new Object());
+        try (var coordinator = new IsometricPreviewCoordinator(store,
+                (dimension, commit, bounds) -> Optional.of(late))) {
+            UUID request = UUID.randomUUID();
+            coordinator.request(request, snapshot());
+            coordinator.accept(success(request, commit(2)));
+            coordinator.clear();
+            late.complete(mesh(closes));
+            coordinator.clear();
+        }
         assertTrue(closes.get() == 2);
         var cancelled = new CompletableFuture<Object>();
         IsometricPreviewCoordinator.discardBuild(cancelled, ignored -> closes.incrementAndGet());
         assertTrue(cancelled.isCancelled());
         assertTrue(closes.get() == 2);
+    }
+
+    @Test
+    void captureFailureClosesTheAcquiredMeshOnce() {
+        var closes = new java.util.concurrent.atomic.AtomicInteger();
+        var store = new ClientVersionPreviewStore();
+        try (var coordinator = new IsometricPreviewCoordinator(store,
+                (dimension, commit, bounds) -> Optional.of(CompletableFuture.completedFuture(mesh(closes))))) {
+            UUID request = UUID.randomUUID();
+            coordinator.request(request, snapshot());
+            coordinator.accept(success(request, commit(1)));
+            // No render device exists in this unit test, so offscreen capture must fail.
+            coordinator.tick();
+            assertFalse(store.isLoading("minecraft:overworld", commit(1)));
+            assertTrue(closes.get() == 1);
+            coordinator.clear();
+        }
+        assertTrue(closes.get() == 1);
+    }
+
+    private static PreviewRenderMesh mesh(java.util.concurrent.atomic.AtomicInteger closes) {
+        var buffers = new net.minecraft.client.renderer.SectionBufferBuilderPack() {
+            @Override public void close() { super.close(); closes.incrementAndGet(); }
+        };
+        return new PreviewRenderMesh(buffers, new java.util.EnumMap<>(net.minecraft.client.renderer.chunk.ChunkSectionLayer.class));
     }
 
     private static CommitId commit(int value) {
