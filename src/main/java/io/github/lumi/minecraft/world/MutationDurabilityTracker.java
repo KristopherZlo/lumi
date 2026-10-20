@@ -266,15 +266,25 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
                 new IndexRevision(indexRevision));
     }
 
+    /** Waits for selected origins while retaining the shared atomic index publication. */
+    public synchronized DurabilityBoundary durabilityBoundary(java.util.Set<? extends HistoryKey> keys) {
+        var selected = new LinkedHashMap<HistoryKey, Long>();
+        for (var key : keys) {
+            var generation = working.generation(key);
+            if (generation != null) selected.put(key, generation);
+        }
+        return durabilityBoundary(new WorkingIndexSnapshot(selected));
+    }
+
     /** Attaches the current index revision and matching builder markers to a focused boundary. */
     public synchronized DurabilityBoundary durabilityBoundary(
             WorkingIndexSnapshot captured) {
         Objects.requireNonNull(captured, "captured");
         requestIndexDurability();
         Map<HistoryKey, Long> builders = new LinkedHashMap<>();
-        builderGenerations.forEach((key, generation) -> {
-            Long capturedGeneration = captured.generations().get(key);
-            if (capturedGeneration != null && generation <= capturedGeneration) {
+        captured.generations().forEach((key, capturedGeneration) -> {
+            Long generation = builderGenerations.get(key);
+            if (generation != null && generation <= capturedGeneration) {
                 builders.put(key, generation);
             }
         });

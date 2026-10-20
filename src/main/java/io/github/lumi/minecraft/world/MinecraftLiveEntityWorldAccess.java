@@ -46,6 +46,11 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
         return current.isEmpty() ? Optional.empty() : capture(current.orElseThrow());
     }
 
+    public Optional<EntityChunkKey> currentChunk(UUID entityId) {
+        return entityRestorer.findDurableRoot(entityId).map(entity -> new EntityChunkKey(
+                entity.chunkPosition().x, entity.chunkPosition().z));
+    }
+
     public LiveEntityStateReferences references() { return references; }
 
     /** Reopens a portable action endpoint off-thread, before any frozen apply begins. */

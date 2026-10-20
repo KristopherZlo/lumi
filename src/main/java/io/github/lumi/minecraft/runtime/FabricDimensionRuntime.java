@@ -1384,9 +1384,24 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         }
         SaveRequest request = new SaveRequest(expected, author, "Return point before action replay",
                 Instant.now(), workspace.id(), Optional.empty(), CommitKind.HIDDEN_RETURN);
-        var capture = createChunkReadySave(request, scopedReturnPointPreparation(request),
-                (value, captured) -> saves.checkpoint(value, captured, sessionCheckpoints.name(operationId)),
-                ignored -> { });
+        SaveCaptureOperation capture;
+        if (checkpoint == null) {
+            var locations = new java.util.HashMap<io.github.lumi.domain.model.EntityState, EntityChunkKey>();
+            Stream.concat(plan.expectedEntities().values().stream(), plan.replacementEntities().values().stream())
+                    .flatMap(Optional::stream).forEach(state -> locations.put(state, liveEntityChunk(state)));
+            var scoped = new io.github.lumi.minecraft.world.ActionReplaySavePreparation(worldReader, mutations,
+                    entityDurability, new ChunkLoadSession(new MinecraftChunkLoadAccess(level, freeze)),
+                    ActionReplayPreparation.captureKeys(plan, locations), plan.expectedEntities().keySet(),
+                    (keys, ids) -> actionReplays.entityCaptureScope(expected.commit(), keys, ids),
+                    liveEntityWorld::currentChunk, background);
+            capture = new SaveCaptureOperation(request, scoped, new BatchedWorldStateCapture(scoped),
+                    (value, captured) -> saves.checkpoint(value, captured, sessionCheckpoints.name(operationId)),
+                    ignored -> { }, background);
+        } else {
+            LumiMod.LOGGER.info("Lumi action replay keeps full checkpoint scope for {}", plan.actionId());
+            capture = createChunkReadySave(request, scopedReturnPointPreparation(request),
+                    (value, captured) -> saves.checkpoint(value, captured, sessionCheckpoints.name(operationId)), ignored -> { });
+        }
         var restore = new ReturnPointRestoreOperation(capture, (saved, progress) ->
                 CompletableFuture.supplyAsync(() -> {
                     try {
