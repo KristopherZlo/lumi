@@ -287,7 +287,7 @@ public final class LumiClient implements ClientModInitializer {
                 ? ChatFormatting.RED : ChatFormatting.WHITE);
     }
 
-    private static void showFeedback(String value, ChatFormatting color) {
+    static void showFeedback(String value, ChatFormatting color) {
         var player = Minecraft.getInstance().player;
         if (player == null) {
             return;
@@ -880,8 +880,8 @@ public final class LumiClient implements ClientModInitializer {
                     && result.changedEntityChunks() == 0;
             showFeedback(empty
                     ? "luma.status.compare_no_changes"
-                    : "luma.status.compare_ready",
-                    empty ? ChatFormatting.YELLOW : ChatFormatting.GREEN);
+                    : result.changedBlocks() > 0 ? "luma.status.compare_loading" : "luma.status.compare_ready",
+                    empty || result.changedBlocks() > 0 ? ChatFormatting.YELLOW : ChatFormatting.GREEN);
         }
     }
 

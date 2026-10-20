@@ -13,7 +13,7 @@ import java.util.UUID;
 public final class ClientCompareStore {
     private Pending pending;
     private CompareResultPayload result;
-    private final List<BlockChange> changes = new ArrayList<>();
+    private List<BlockChange> changes = new ArrayList<>();
     private List<BlockChange> publishedChanges = List.of();
     private int nextBatch;
     private boolean highlightVisible = true;
@@ -25,7 +25,7 @@ public final class ClientCompareStore {
             CommitId after) {
         pending = new Pending(requestId, dimensionId, before, after);
         result = null;
-        changes.clear();
+        changes = new ArrayList<>();
         publishedChanges = List.of();
         nextBatch = 0;
         highlightVisible = true;
@@ -33,19 +33,20 @@ public final class ClientCompareStore {
 
     public synchronized boolean accept(CompareResultPayload candidate) {
         Objects.requireNonNull(candidate, "candidate");
-        if (pending != null && pending.matches(candidate)
-                && candidate.batchIndex() == nextBatch) {
-            nextBatch++;
-            if (!candidate.blockChanges().isEmpty()) {
-                changes.addAll(candidate.blockChanges());
-                publishedChanges = List.copyOf(changes);
+        if (pending != null && result == null && pending.matches(candidate)
+                && candidate.batchIndex() >= nextBatch) {
+            if (candidate.batchIndex() != nextBatch) {
+                result = new CompareResultPayload(candidate.requestId(), candidate.dimensionId(), candidate.before(), candidate.after(),
+                        0, 0, List.of(), List.of(), "luma.status.compare_failed", nextBatch, true, List.of(), 0);
+                changes = new ArrayList<>();
+                return true;
             }
+            nextBatch++;
+            changes.addAll(candidate.blockChanges());
             if (candidate.complete()) {
                 result = candidate;
-                if (!candidate.error().isEmpty()) {
-                    changes.clear();
-                    publishedChanges = List.of();
-                }
+                publishedChanges = candidate.error().isEmpty() ? List.copyOf(changes) : List.of();
+                changes = new ArrayList<>();
             }
             return true;
         }
@@ -80,14 +81,29 @@ public final class ClientCompareStore {
         return highlightVisible && highlight().isPresent();
     }
 
-    public synchronized boolean hasHighlight() {
-        return highlight().isPresent();
+    public synchronized Optional<UUID> pendingRequest() {
+        return pending != null && result == null ? Optional.of(pending.requestId()) : Optional.empty();
+    }
+
+    public synchronized boolean isInDimension(String dimension) {
+        return pending != null && pending.dimensionId().equals(dimension);
+    }
+
+    public synchronized Optional<UUID> retainDimension(String dimension) {
+        if (pending == null || isInDimension(dimension)) return Optional.empty();
+        var cancelled = pendingRequest();
+        clear();
+        return cancelled;
+    }
+
+    public synchronized void cancel(UUID request) {
+        if (pending != null && pending.requestId().equals(request)) clear();
     }
 
     public synchronized void clear() {
         pending = null;
         result = null;
-        changes.clear();
+        changes = new ArrayList<>();
         publishedChanges = List.of();
         nextBatch = 0;
         highlightVisible = true;
@@ -96,7 +112,7 @@ public final class ClientCompareStore {
     private Optional<CompareResultPayload> highlight() {
         return Optional.ofNullable(result)
                 .filter(candidate -> candidate.error().isEmpty())
-                .filter(candidate -> !changes.isEmpty()
+                .filter(candidate -> !publishedChanges.isEmpty()
                         || !candidate.sectionPreview().isEmpty());
     }
 

@@ -201,6 +201,10 @@ public final class LumiServerNetworking {
     private static void receive(
             HistoryCommandPayload payload, ServerPlayNetworking.Context context) {
         ServerPlayer player = context.player();
+        if (payload.kind() == HistoryCommandPayload.Kind.COMPARE_CANCEL) {
+            COMPARES.cancelOwned(UUID.fromString(payload.argument()), player.getUUID());
+            return;
+        }
         FabricDimensionRuntime runtime = LumiMod.serverRuntime()
                 .find(player.level()).orElse(null);
         if (runtime == null) {
@@ -228,11 +232,6 @@ public final class LumiServerNetworking {
             requirePermission(player);
             if (payload.kind() == HistoryCommandPayload.Kind.SNAPSHOT_REFRESH) {
                 sendSnapshot(player, runtime);
-                return;
-            }
-            if (payload.kind() == HistoryCommandPayload.Kind.COMPARE_CANCEL) {
-                COMPARES.cancelOwned(
-                        UUID.fromString(payload.argument()), player.getUUID());
                 return;
             }
             if (payload.kind() == HistoryCommandPayload.Kind.ZONE_OVERLAY) {

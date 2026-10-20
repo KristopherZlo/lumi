@@ -52,6 +52,21 @@ class CompareRequestRegistryTest {
     }
 
     @Test
+    void cancellingSupersededRequestLeavesItsReplacementOwned() throws Exception {
+        var registry = new CompareRequestRegistry();
+        var first = new UUID(0, 8);
+        var second = new UUID(0, 9);
+        var old = registry.start(first, PLAYER, cancelled -> new CompletableFuture<>());
+        registry.start(second, PLAYER, cancelled -> new CompletableFuture<>());
+        assertTrue(registry.cancelOwned(first, PLAYER));
+        assertTrue(old.cancelled().get());
+        assertFalse(registry.finish(first, old));
+        assertFalse(registry.cancelOwned(first, PLAYER));
+        assertFalse(registry.cancelOwned(second, OTHER_PLAYER));
+        assertTrue(registry.isOwned(second, PLAYER));
+    }
+
+    @Test
     void playerAndServerCleanupCancelOutstandingWork() throws Exception {
         var registry = new CompareRequestRegistry();
         var owned = registry.start(

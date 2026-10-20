@@ -26,6 +26,7 @@ public final class LumiPendingChangeOverlay {
     private final PendingPreviewRefreshController refresh;
     private final LumiCompareOverlayRenderer compareOverlay =
             new LumiCompareOverlayRenderer();
+    private java.util.List<io.github.lumi.domain.model.BlockChange> announced = java.util.List.of();
 
     public LumiPendingChangeOverlay(
             ClientHistoryStore history,
@@ -44,10 +45,7 @@ public final class LumiPendingChangeOverlay {
         /*WorldRenderEvents.COLLECT_SUBMITS.register(this::render);
         WorldRenderEvents.END_MAIN.register(context -> {
             var client = Minecraft.getInstance();
-            var visible = comparisons.visibleChanges();
-            if (client.player != null && !visible.isEmpty()) {
-                compareOverlay.render(context, visible, actionDown(client));
-            }
+            renderComparison(context, client);
         });
         *///?} else {
         WorldRenderEvents.END_MAIN.register(this::render);
@@ -63,12 +61,13 @@ public final class LumiPendingChangeOverlay {
     }
 
     public HighlightPreparationProgress highlightProgress() {
-        return comparisons.visibleChanges().isEmpty()
+        return !comparisonMatches(Minecraft.getInstance()) || comparisons.visibleChanges().isEmpty()
                 ? HighlightPreparationProgress.NONE : compareOverlay.progress();
     }
 
     private void tick(Minecraft client) {
-        compareOverlay.retainInput(comparisons.blockChanges());
+        compareOverlay.retainInput(comparisonMatches(client) ? comparisons.blockChanges() : java.util.List.of());
+        if (comparisons.blockChanges().isEmpty() || !comparisonMatches(client)) announced = java.util.List.of();
         if (zonePreviews.hasScope() && zonePreviews.currentZone(
                 history.state().snapshot().orElse(null)).isEmpty()) zonePreviews.clear();
         boolean actionDown = actionDown(client);
@@ -79,7 +78,7 @@ public final class LumiPendingChangeOverlay {
     private void render(WorldRenderContext context) {
         Minecraft client = Minecraft.getInstance();
         var snapshot = history.state().snapshot().orElse(null);
-        var comparison = comparisons.visibleChanges();
+        var comparison = comparisonMatches(client) ? comparisons.visibleChanges() : java.util.List.<io.github.lumi.domain.model.BlockChange>of();
         var pendingBlocks = snapshot == null
                 ? java.util.List.<io.github.lumi.network.HistorySnapshotPayload.PendingBlock>of()
                 : zonePreviews.hasScope() ? zonePreviews.blocks(snapshot) : snapshot.pendingBlocks();
@@ -100,9 +99,24 @@ public final class LumiPendingChangeOverlay {
         }
         //? if <26.2 {
         if (!comparison.isEmpty()) {
-            compareOverlay.render(context, comparison, actionDown(client));
+            renderComparison(context, client);
         }
         //?}
+    }
+
+    private boolean comparisonMatches(Minecraft client) {
+        return client.level != null && comparisons.isInDimension(client.level.dimension().identifier().toString());
+    }
+
+    private void renderComparison(WorldRenderContext context, Minecraft client) {
+        if (client.player == null || !comparisonMatches(client)) return;
+        var visible = comparisons.visibleChanges();
+        if (visible.isEmpty()) return;
+        compareOverlay.render(context, visible, actionDown(client));
+        if (compareOverlay.isReady() && visible != announced) {
+            announced = visible;
+            LumiClient.showFeedback("luma.status.compare_ready", net.minecraft.ChatFormatting.GREEN);
+        }
     }
 
     private void renderBlock(

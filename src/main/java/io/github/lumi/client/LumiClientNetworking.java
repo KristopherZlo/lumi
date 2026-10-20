@@ -12,6 +12,7 @@ import io.github.lumi.client.state.ClientPendingStatisticsStore;
 import io.github.lumi.client.state.ClientSurvivalSettingsStore;
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.BlockAreaTarget;
 import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.WorkspaceSettings;
@@ -113,6 +114,9 @@ public final class LumiClientNetworking {
     }
 
     public void register() {
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(client ->
+                comparisons.retainDimension(client.level == null ? null : client.level.dimension().identifier().toString())
+                        .ifPresent(this::cancelCompare));
         if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom"))
             ClientPlayNetworking.registerGlobalReceiver(io.github.lumi.network.AxiomNativeReplayPayload.TYPE,
                     (payload, context) -> context.client().execute(() -> io.github.lumi.client.integration.AxiomWorldHistory.INSTANCE.executeNative(payload)));
@@ -146,8 +150,10 @@ public final class LumiClientNetworking {
         ClientPlayNetworking.registerGlobalReceiver(
                 CompareResultPayload.TYPE, (payload, context) ->
                         context.client().execute(() -> {
-                            if (comparisons.accept(payload)) {
-                                compareListener.accept(payload);
+                            if (context.client().level != null
+                                    && payload.dimensionId().equals(context.client().level.dimension().identifier().toString())
+                                    && comparisons.accept(payload)) {
+                                compareListener.accept(comparisons.result().orElse(payload));
                             }
                         }));
         ClientPlayNetworking.registerGlobalReceiver(
@@ -496,6 +502,7 @@ public final class LumiClientNetworking {
             throw new IllegalStateException("The connected server does not support Lumi history");
         }
         UUID requestId = UUID.randomUUID();
+        comparisons.pendingRequest().ifPresent(this::cancelCompare);
         comparisons.begin(
                 requestId, snapshot.dimensionId(), before, after);
         sendCommand(requestId, kind, argument, snapshot);
@@ -503,9 +510,13 @@ public final class LumiClientNetworking {
     }
 
     public UUID cancelCompare(UUID requestId) {
-        comparisons.clear();
-        return send(HistoryCommandPayload.Kind.COMPARE_CANCEL,
-                Objects.requireNonNull(requestId, "requestId").toString());
+        comparisons.cancel(Objects.requireNonNull(requestId, "requestId"));
+        UUID cancellation = UUID.randomUUID();
+        if (ClientPlayNetworking.canSend(HistoryCommandPayload.TYPE)) {
+            ClientPlayNetworking.send(new HistoryCommandPayload(cancellation, HistoryCommandPayload.Kind.COMPARE_CANCEL,
+                    requestId.toString(), new CommitId(ObjectId.hash(new byte[0])), 0));
+        }
+        return cancellation;
     }
 
     public UUID resumeRecovery() {

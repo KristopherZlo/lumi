@@ -70,10 +70,8 @@ class ClientCompareStoreTest {
         ClientCompareStore store = new ClientCompareStore();
         UUID request = UUID.randomUUID();
         store.begin(request, "minecraft:overworld", BEFORE, AFTER);
-        store.accept(batch(request, 1, false, BlockChange.Kind.REMOVED));
-        assertTrue(store.visibleChanges().isEmpty());
-
         store.accept(batch(request, 0, false, BlockChange.Kind.ADDED));
+        assertTrue(store.blockChanges().isEmpty());
         store.accept(batch(request, 1, true, BlockChange.Kind.REMOVED));
 
         assertEquals(List.of(
@@ -88,9 +86,10 @@ class ClientCompareStoreTest {
         UUID request = UUID.randomUUID();
         store.begin(request, "minecraft:overworld", BEFORE, AFTER);
         store.accept(batch(request, 0, false, BlockChange.Kind.ADDED));
-        var input = store.blockChanges();
+        assertTrue(store.blockChanges().isEmpty());
         store.accept(new CompareResultPayload(request, "minecraft:overworld", BEFORE, AFTER,
                 1, 0, List.of(), List.of(), "", 1, true, List.of(), 1));
+        var input = store.blockChanges();
         assertSame(input, store.visibleChanges());
         store.toggleVisibility();
         assertTrue(store.visibleChanges().isEmpty());
@@ -99,6 +98,68 @@ class ClientCompareStoreTest {
         assertSame(input, store.visibleChanges());
         store.clear();
         assertTrue(store.blockChanges().isEmpty());
+    }
+
+    @Test
+    void publishesOnceAfterManyBatchesAndIgnoresRepeatedCompletion() {
+        var store = new ClientCompareStore();
+        var request = UUID.randomUUID();
+        store.begin(request, "minecraft:overworld", BEFORE, AFTER);
+        for (int i = 0; i < 100; i++) {
+            assertTrue(store.accept(batch(request, i, i == 99, BlockChange.Kind.ADDED)));
+            if (i != 99) assertTrue(store.blockChanges().isEmpty());
+        }
+        var published = store.blockChanges();
+        assertEquals(100, published.size());
+        assertFalse(store.accept(batch(request, 100, true, BlockChange.Kind.ADDED)));
+        assertSame(published, store.blockChanges());
+        assertTrue(store.pendingRequest().isEmpty());
+    }
+
+    @Test
+    void failedSequenceAndServerErrorDiscardUnpublishedBlocks() {
+        var store = new ClientCompareStore();
+        var request = UUID.randomUUID();
+        store.begin(request, "minecraft:overworld", BEFORE, AFTER);
+        store.accept(batch(request, 0, false, BlockChange.Kind.ADDED));
+        assertFalse(store.accept(batch(request, 0, false, BlockChange.Kind.ADDED)));
+        assertTrue(store.accept(batch(request, 2, false, BlockChange.Kind.ADDED)));
+        assertEquals("luma.status.compare_failed", store.result().orElseThrow().error());
+        assertTrue(store.visibleChanges().isEmpty());
+        assertFalse(store.accept(batch(request, 1, true, BlockChange.Kind.REMOVED)));
+        store.begin(request, "minecraft:overworld", BEFORE, AFTER);
+        store.accept(batch(request, 0, false, BlockChange.Kind.ADDED));
+        store.accept(new CompareResultPayload(request, "minecraft:overworld", BEFORE, AFTER,
+                0, 0, List.of(), List.of(), "failed", 1, true, List.of(), 0));
+        assertTrue(store.blockChanges().isEmpty());
+    }
+
+    @Test
+    void dimensionChangeInvalidatesPendingAndCompletedResults() {
+        var store = new ClientCompareStore();
+        var request = UUID.randomUUID();
+        store.begin(request, "minecraft:overworld", BEFORE, AFTER);
+        assertEquals(request, store.retainDimension("minecraft:the_nether").orElseThrow());
+        assertFalse(store.accept(result(request, "minecraft:overworld")));
+        store.retainDimension("minecraft:overworld");
+        assertFalse(store.accept(result(request, "minecraft:overworld")));
+        store.begin(request, "minecraft:overworld", BEFORE, AFTER);
+        store.accept(batch(request, 0, true, BlockChange.Kind.ADDED));
+        assertTrue(store.retainDimension(null).isEmpty());
+        assertTrue(store.result().isEmpty());
+        assertTrue(store.blockChanges().isEmpty());
+    }
+
+    @Test
+    void staleCancellationCannotClearTheReplacement() {
+        var store = new ClientCompareStore();
+        var first = UUID.randomUUID();
+        var second = UUID.randomUUID();
+        store.begin(first, "minecraft:overworld", BEFORE, AFTER);
+        store.begin(second, "minecraft:overworld", BEFORE, AFTER);
+        store.cancel(first);
+        assertEquals(second, store.pendingRequest().orElseThrow());
+        assertTrue(store.accept(batch(second, 0, true, BlockChange.Kind.ADDED)));
     }
 
     private static CompareResultPayload result(UUID request, String dimension) {

@@ -83,7 +83,7 @@ final class LumiCompareOverlayRenderer implements AutoCloseable {
     }
 
     boolean isReady() {
-        return ready;
+        return ready && presented;
     }
 
     void setFrustum(Frustum frustum) {
