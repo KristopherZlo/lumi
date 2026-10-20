@@ -1,5 +1,7 @@
 package io.github.lumi.client;
 
+import io.github.lumi.domain.model.AxiomHistoryMode;
+import io.github.lumi.network.AxiomHistorySettingsPayload;
 import io.github.lumi.LumiMod;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientHistoryPageStore;
@@ -111,6 +113,8 @@ public final class LumiClientNetworking {
     }
 
     public void register() {
+        ClientPlayNetworking.registerGlobalReceiver(AxiomHistorySettingsPayload.TYPE,
+                (payload, context) -> context.client().execute(() -> history.accept(payload)));
         if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom")) {
             io.github.lumi.client.integration.AxiomClientWorkBarrier.register();
         }
@@ -259,6 +263,11 @@ public final class LumiClientNetworking {
     }
 
     public UUID clearWorldActions() { return sendWorldAction(HistoryCommandPayload.Kind.WORLD_ACTIONS_CLEAR); }
+
+    public UUID updateAxiomHistoryMode(AxiomHistoryMode mode) {
+        var settings = history.axiomSettings().orElseThrow();
+        return send(HistoryCommandPayload.Kind.AXIOM_HISTORY_SETTINGS, settings.revision() + ":" + mode.name());
+    }
 
     public Optional<WorldActionViewPayload> worldActions() { return history.worldActions(); }
     public boolean worldActionPending() { return history.worldActionRequest().isPresent(); }

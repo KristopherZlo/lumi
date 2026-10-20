@@ -1,4 +1,12 @@
 {
+  "lumi.axiom.mode": "Отмена Axiom",
+  "lumi.axiom.mode.native_axiom": "Родная история",
+  "lumi.axiom.mode.shared": "Общая с Lumi",
+  "lumi.axiom.mode_help.native_axiom": "Кнопки Axiom отменяют его действия. Кнопки Lumi отменяют все поддерживаемые изменения. Уже отменённое действие не применяется повторно.",
+  "lumi.axiom.mode_help.shared": "Кнопки Axiom и Lumi используют общую историю и отменяют последнее действие.",
+  "lumi.axiom.mode_restart": "Для применения откройте мир заново или перезапустите сервер.",
+  "lumi.axiom.settings_changed": "Настройка уже изменилась. Обновите настройки Lumi и повторите попытку.",
+  "lumi.axiom.settings_saved": "Режим истории Axiom сохранён. Откройте мир заново или перезапустите сервер для применения.",
   "lumi.history.action.edit": "Изменение мира",
   "lumi.history.action.restore": "Восстановление / Слияние",
   "lumi.history.action.branch_switch": "Переключение ветки",

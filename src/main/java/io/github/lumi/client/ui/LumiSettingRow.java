@@ -36,6 +36,11 @@ final class LumiSettingRow extends Button {
                 Component.empty(), 0, false, true, onPress);
     }
 
+    static LumiSettingRow value(int x, int y, int width, Component label,
+            Component description, Component value, OnPress onPress) {
+        return new LumiSettingRow(x, y, width, label, description, value, 0, false, false, onPress);
+    }
+
     static LumiSettingRow choice(
             int x, int y, int width,
             Component label, Component description,

@@ -87,6 +87,7 @@ public final class LumiServerNetworking {
 
     public static void register() {
         PayloadTypeRegistry.playS2C().register(WorldActionViewPayload.TYPE, WorldActionViewPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(AxiomHistorySettingsPayload.TYPE, AxiomHistorySettingsPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(BuilderToolBarrierPayload.TYPE, BuilderToolBarrierPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(BuilderToolBarrierPayload.TYPE, BuilderToolBarrierPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(BuilderToolBarrierPayload.TYPE, (payload, context) ->
@@ -197,6 +198,14 @@ public final class LumiServerNetworking {
                 payload.requestId(), payload.kind(), player.getUUID(),
                 dimension(runtime), payload.expectedRevision());
         try {
+            if (payload.kind() == HistoryCommandPayload.Kind.AXIOM_HISTORY_SETTINGS) {
+                String[] setting = payload.argument().split(":", -1);
+                LumiMod.serverRuntime().setAxiomMode(player,
+                        io.github.lumi.domain.model.AxiomHistoryMode.valueOf(setting[1]), Long.parseLong(setting[0]));
+                sendEvent(player, payload, runtime, OperationEventPayload.State.SUCCEEDED, "lumi.axiom.settings_saved");
+                for (ServerPlayer viewer : player.level().getServer().getPlayerList().getPlayers()) sendAxiomSettings(viewer);
+                return;
+            }
             if (payload.kind() == HistoryCommandPayload.Kind.SURVIVAL_STATUS
                     || payload.kind() == HistoryCommandPayload.Kind.SURVIVAL_SETTINGS) {
                 survivalSettings(player, payload, runtime);
@@ -852,7 +861,7 @@ public final class LumiServerNetworking {
                     "Version rename does not use the mutation queue");
             case SNAPSHOT_REFRESH -> throw new IllegalStateException(
                     "Snapshot refresh does not use the mutation queue");
-            case SURVIVAL_STATUS, SURVIVAL_SETTINGS ->
+            case SURVIVAL_STATUS, SURVIVAL_SETTINGS, AXIOM_HISTORY_SETTINGS ->
                     throw new IllegalStateException(
                             "Survival settings do not use the mutation queue");
             case RESTORE_AREA_PLAN -> throw new IllegalStateException(
@@ -1170,10 +1179,16 @@ public final class LumiServerNetworking {
 
     private static void sendWorldActions(ServerPlayer player, FabricDimensionRuntime runtime, Optional<UUID> completedRequest) {
         if (!ServerPlayNetworking.canSend(player, WorldActionViewPayload.TYPE)) return;
+        sendAxiomSettings(player);
         var view = runtime.liveActions().view(player.getUUID());
         var epoch = runtime.worldActionEpoch();
         send(player, new WorldActionViewPayload(dimension(runtime), epoch, view, completedRequest));
         WORLD_ACTION_REFRESHES.put(player.getUUID(), new WorldActionsSent(dimension(runtime), epoch, view.revision()));
+    }
+
+    private static void sendAxiomSettings(ServerPlayer player) {
+        if (ServerPlayNetworking.canSend(player, AxiomHistorySettingsPayload.TYPE))
+            send(player, LumiMod.serverRuntime().axiomSettings(player));
     }
 
     private static void broadcastSnapshot(FabricDimensionRuntime runtime) {

@@ -137,6 +137,12 @@ public record HistoryCommandPayload(
                 && !argument.equals("0") && !argument.equals("1")) {
             throw new IllegalArgumentException("Invalid Survival setting");
         }
+        if (kind == Kind.AXIOM_HISTORY_SETTINGS) {
+            String[] setting = argument.split(":", -1);
+            if (setting.length != 2 || Long.parseLong(setting[0]) < 0)
+                throw new IllegalArgumentException("Invalid Axiom history setting");
+            io.github.lumi.domain.model.AxiomHistoryMode.valueOf(setting[1]);
+        }
         if ((kind == Kind.BRANCH_SWITCH || kind == Kind.BRANCH_CREATE
                 || kind == Kind.BRANCH_DELETE)
                 && argument.isBlank()) {
@@ -175,7 +181,8 @@ public record HistoryCommandPayload(
         BRANCH_CREATE_AT(34), CLEANUP_INSPECT(35), CLEANUP_APPLY(36),
         ZONE_AMEND(37), RESTORE_AREA_PLAN(38), RESTORE_AREA_APPLY(39),
         ZONE_CELLS(40), ZONE_DELETE(41), ZONE_OVERLAY(42),
-        SURVIVAL_STATUS(43), SURVIVAL_SETTINGS(44), RESTORE_PREWARM(45), ZONE_PENDING_PREVIEW(46), WORLD_ACTIONS_CLEAR(47);
+        SURVIVAL_STATUS(43), SURVIVAL_SETTINGS(44), RESTORE_PREWARM(45), ZONE_PENDING_PREVIEW(46), WORLD_ACTIONS_CLEAR(47),
+        AXIOM_HISTORY_SETTINGS(48);
         private final int code;
         Kind(int code) { this.code = code; }
         private static Kind fromCode(int code) {

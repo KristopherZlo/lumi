@@ -1,4 +1,12 @@
 {
+  "lumi.axiom.mode": "Axiom Undo/Redo",
+  "lumi.axiom.mode.native_axiom": "Native history",
+  "lumi.axiom.mode.shared": "Shared with Lumi",
+  "lumi.axiom.mode_help.native_axiom": "Axiom shortcuts undo Axiom edits. Lumi shortcuts undo all supported edits. An edit already undone is not applied twice.",
+  "lumi.axiom.mode_help.shared": "Axiom and Lumi shortcuts use the same history and undo the latest action.",
+  "lumi.axiom.mode_restart": "Reopen the world or restart the server to apply this change.",
+  "lumi.axiom.settings_changed": "This setting changed. Refresh Lumi settings and try again.",
+  "lumi.axiom.settings_saved": "Axiom history preference saved. Reopen the world or restart the server to apply it.",
   "lumi.history.action.edit": "World edit",
   "lumi.history.action.restore": "Restore / Merge",
   "lumi.history.action.branch_switch": "Branch switch",

@@ -1,5 +1,7 @@
 package io.github.lumi.minecraft.runtime;
 
+import io.github.lumi.domain.model.AxiomHistoryMode;
+import io.github.lumi.network.AxiomHistorySettingsPayload;
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.service.PermissionDecision;
 import java.io.IOException;
@@ -52,6 +54,14 @@ public final class LumiServerRuntime {
         return requireSession().isSurvivalEnabled(player);
     }
 
+    public AxiomHistorySettingsPayload axiomSettings(ServerPlayer player) {
+        return requireSession().axiomSettings(player);
+    }
+
+    public void setAxiomMode(ServerPlayer player, AxiomHistoryMode mode, long revision) throws IOException {
+        requireSession().setAxiomMode(player, mode, revision);
+    }
+
     private synchronized void starting(MinecraftServer server) {
         if (session != null) {
             throw new IllegalStateException("A Lumi server session is already active");
@@ -59,11 +69,11 @@ public final class LumiServerRuntime {
         try {
             MinecraftHistoryStartup.run(server);
             PreModBackupService.run(server);
+            session = new FabricServerSession(server);
         } catch (IOException failed) {
             throw new IllegalStateException(
                     "Lumi startup preparation failed; no dimension runtime was opened", failed);
         }
-        session = new FabricServerSession(server);
     }
 
     private void load(MinecraftServer server, ServerLevel level) {

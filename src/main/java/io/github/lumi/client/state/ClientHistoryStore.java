@@ -1,5 +1,6 @@
 package io.github.lumi.client.state;
 
+import io.github.lumi.network.AxiomHistorySettingsPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.network.WorldActionViewPayload;
@@ -13,6 +14,10 @@ public final class ClientHistoryStore {
     private static final int MAX_EVENTS = 64;
     private HistorySnapshotPayload snapshot;
     private WorldActionViewPayload worldActions;
+    private AxiomHistorySettingsPayload axiomSettings;
+
+    public synchronized void accept(AxiomHistorySettingsPayload settings) { axiomSettings = settings; }
+    public synchronized Optional<AxiomHistorySettingsPayload> axiomSettings() { return Optional.ofNullable(axiomSettings); }
     private UUID worldActionRequest;
     private final LinkedHashMap<UUID, OperationEventPayload> events = new LinkedHashMap<>();
 
@@ -76,6 +81,7 @@ public final class ClientHistoryStore {
     public synchronized void clear() {
         snapshot = null;
         worldActions = null;
+        axiomSettings = null;
         worldActionRequest = null;
         events.clear();
     }

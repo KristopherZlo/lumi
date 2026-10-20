@@ -1,5 +1,8 @@
 package io.github.lumi.minecraft.runtime;
 
+import io.github.lumi.domain.model.AxiomHistoryMode;
+import io.github.lumi.storage.repository.AxiomHistoryModeRepository;
+import io.github.lumi.network.AxiomHistorySettingsPayload;
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.service.LumiPermissionService;
 import io.github.lumi.domain.service.PermissionDecision;
@@ -28,6 +31,9 @@ final class FabricServerSession implements AutoCloseable {
     private final MinecraftServer server;
     private final DimensionRepositoryLayout layout;
     private final LumiPermissionService permissions;
+    private final AxiomHistoryModeRepository axiomSettings;
+    private final AxiomHistoryMode axiomMode;
+    private AxiomHistoryModeRepository.State selectedAxiomMode;
     private final ExecutorService operationBackground;
     private final ExecutorService durabilityBackground;
     private final ServerTickWorkScheduler<FabricDimensionRuntime> tickWork =
@@ -35,11 +41,14 @@ final class FabricServerSession implements AutoCloseable {
     private final LoadedDimensionRegistry<ServerLevel, FabricDimensionRuntime> dimensions =
             new LoadedDimensionRegistry<>();
 
-    FabricServerSession(MinecraftServer server) {
+    FabricServerSession(MinecraftServer server) throws IOException {
         this.server = server;
         var worldRoot = server.getWorldPath(LevelResource.ROOT);
         layout = new DimensionRepositoryLayout(worldRoot);
         permissions = new LumiPermissionService(new SurvivalOptInRepository(worldRoot));
+        axiomSettings = new AxiomHistoryModeRepository(worldRoot);
+        selectedAxiomMode = axiomSettings.read();
+        axiomMode = selectedAxiomMode.mode();
         operationBackground = newBackgroundExecutor("Operation");
         durabilityBackground = newBackgroundExecutor("Durability");
     }
@@ -95,6 +104,16 @@ final class FabricServerSession implements AutoCloseable {
 
     boolean mayConfigure(ServerPlayer player) {
         return server.getPlayerList().isOp(player.nameAndId());
+    }
+
+    AxiomHistorySettingsPayload axiomSettings(ServerPlayer player) {
+        return new AxiomHistorySettingsPayload(axiomMode,
+                selectedAxiomMode.mode(), selectedAxiomMode.revision(), mayConfigure(player));
+    }
+
+    void setAxiomMode(ServerPlayer player, AxiomHistoryMode mode, long revision) throws IOException {
+        if (!mayConfigure(player)) throw new IOException("luma.status.operator_required");
+        selectedAxiomMode = axiomSettings.write(mode, revision);
     }
 
     @Override

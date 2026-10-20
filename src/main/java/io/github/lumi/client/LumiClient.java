@@ -256,7 +256,8 @@ public final class LumiClient implements ClientModInitializer {
                         NETWORKING::updateWorkspaceSettings,
                         SURVIVAL_SETTINGS,
                         NETWORKING::requestSurvivalSettings,
-                        NETWORKING::updateSurvivalSettings)),
+                        NETWORKING::updateSurvivalSettings,
+                        NETWORKING::updateAxiomHistoryMode)),
                 () -> {
                     ZONE_PREVIEWS.clear();
                     NETWORKING.refreshSnapshot();

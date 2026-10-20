@@ -1,5 +1,7 @@
 package io.github.lumi.client.ui;
 
+import io.github.lumi.domain.model.AxiomHistoryMode;
+import io.github.lumi.network.AxiomHistorySettingsPayload;
 import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.client.state.ClientDeveloperMode;
 import io.github.lumi.client.state.ClientHistoryStore;
@@ -29,6 +31,9 @@ public final class LumiSettingsScreen extends LumiPageScreen {
     private final ClientSurvivalSettingsStore survivalSettings;
     private final Runnable requestSurvivalSettings;
     private final Consumer<Boolean> updateSurvivalSettings;
+    private final Consumer<AxiomHistoryMode> updateAxiomHistory;
+    private final boolean hasAxiom = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom");
+    private long axiomRevision = -1;
     private boolean settingsLoaded;
     private boolean showZoneSaves;
     private boolean includeEntitiesOnRestore;
@@ -58,6 +63,14 @@ public final class LumiSettingsScreen extends LumiPageScreen {
             ClientSurvivalSettingsStore survivalSettings,
             Runnable requestSurvivalSettings,
             Consumer<Boolean> updateSurvivalSettings) {
+        this(parent, history, telemetry, developerMode, updateWorkspace, survivalSettings,
+                requestSurvivalSettings, updateSurvivalSettings, ignored -> { });
+    }
+
+    public LumiSettingsScreen(Screen parent, ClientHistoryStore history, TelemetryService telemetry,
+            ClientDeveloperMode developerMode, Consumer<WorkspaceSettings> updateWorkspace,
+            ClientSurvivalSettingsStore survivalSettings, Runnable requestSurvivalSettings,
+            Consumer<Boolean> updateSurvivalSettings, Consumer<AxiomHistoryMode> updateAxiomHistory) {
         super(parent, Component.translatable("luma.screen.settings.title", "Lumi"),
                 ProjectTab.SETTINGS);
         this.history = Objects.requireNonNull(history, "history");
@@ -72,6 +85,7 @@ public final class LumiSettingsScreen extends LumiPageScreen {
                 requestSurvivalSettings, "requestSurvivalSettings");
         this.updateSurvivalSettings = Objects.requireNonNull(
                 updateSurvivalSettings, "updateSurvivalSettings");
+        this.updateAxiomHistory = Objects.requireNonNull(updateAxiomHistory);
     }
 
     @Override
@@ -109,7 +123,7 @@ public final class LumiSettingsScreen extends LumiPageScreen {
                     contentY + 4 + contentOffset,
                     contentWidth,
                     Math.max(0, contentHeight - 8 - contentOffset),
-                    SETTING_COUNT, visibleSettingRows(), scroll,
+                    settingCount(), visibleSettingRows(), scroll,
                     value -> scroll = value);
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
@@ -145,16 +159,18 @@ public final class LumiSettingsScreen extends LumiPageScreen {
                 "luma.settings.survival_mode_help",
                 survival.enabled(), this::toggleSurvival);
         if (survivalRow != null) survivalRow.active = survival.configurable();
+        addAxiomSetting(x, width);
+        int offset = hasAxiom ? 1 : 0;
         boolean enabled = telemetry.settings().enabled();
-        addToggleSetting(6, x, width,
+        addToggleSetting(6 + offset, x, width,
                 "luma.settings.telemetry_enabled",
                 "luma.settings.telemetry_enabled_help",
                 enabled, this::toggleTelemetry);
-        addToggleSetting(7, x, width,
+        addToggleSetting(7 + offset, x, width,
                 "luma.settings.developer_mode",
                 "luma.settings.developer_mode_help",
                 developerMode.enabled(), this::toggleDeveloperMode);
-        addActionSetting(8, x, width,
+        addActionSetting(8 + offset, x, width,
                 Component.translatable("luma.settings.telemetry_clear_queue"),
                 Component.translatable("luma.settings.telemetry_pending",
                         telemetry.pendingEventCount()).append(" · ").append(
@@ -165,6 +181,23 @@ public final class LumiSettingsScreen extends LumiPageScreen {
                     rebuildWidgets();
                 });
         addHudModeSetting(3, x, width);
+    }
+
+    private int settingCount() { return SETTING_COUNT + (hasAxiom ? 1 : 0); }
+
+    private void addAxiomSetting(int x, int width) {
+        if (!hasAxiom || 6 < scroll || 6 >= scroll + visibleSettingRows()) return;
+        var settings = history.axiomSettings().orElse(null);
+        var mode = settings == null ? AxiomHistoryMode.NATIVE_AXIOM : settings.selected();
+        Component help = Component.translatable("lumi.axiom.mode_help." + mode.name().toLowerCase(java.util.Locale.ROOT));
+        if (settings != null && settings.selected() != settings.effective())
+            help = help.copy().append(" ").append(Component.translatable("lumi.axiom.mode_restart"));
+        var row = addRenderableWidget(LumiSettingRow.value(x, settingY(6), width,
+                Component.translatable("lumi.axiom.mode"), help,
+                Component.translatable("lumi.axiom.mode." + mode.name().toLowerCase(java.util.Locale.ROOT)),
+                ignored -> updateAxiomHistory.accept(mode == AxiomHistoryMode.NATIVE_AXIOM
+                        ? AxiomHistoryMode.SHARED : AxiomHistoryMode.NATIVE_AXIOM)));
+        row.active = settings != null && settings.configurable();
     }
 
     private void addHudModeSetting(int index, int x, int width) {
@@ -233,7 +266,7 @@ public final class LumiSettingsScreen extends LumiPageScreen {
     }
 
     private int maximumScroll() {
-        return Math.max(0, SETTING_COUNT - visibleSettingRows());
+        return Math.max(0, settingCount() - visibleSettingRows());
     }
 
     private void loadWorkspaceSettings() {
@@ -332,6 +365,8 @@ public final class LumiSettingsScreen extends LumiPageScreen {
             survivalRevision = current;
             rebuildWidgets();
         }
+        long currentAxiom = history.axiomSettings().map(AxiomHistorySettingsPayload::revision).orElse(-1L);
+        if (currentAxiom != axiomRevision) { axiomRevision = currentAxiom; rebuildWidgets(); }
     }
 
     @Override
