@@ -181,6 +181,7 @@ class LiveActionJournalTest {
     @Test void nativeReplayIntentRetainsExactStepAndSurvivesInterruptedPublication(
             @org.junit.jupiter.api.io.TempDir java.nio.file.Path root) throws Exception {
         var journal = new LiveActionJournal();
+        add(journal, 2);
         UUID action = add(journal, 1);
         var version = new WorldDataVersion(1);
         var workspace = UUID.randomUUID();
@@ -191,6 +192,9 @@ class LiveActionJournalTest {
         var plan = journal.prepareUndo(PLAYER_A).orElseThrow();
         UUID operation = UUID.randomUUID();
         history.beginNativeReplay(operation, plan);
+        var otherVersion = new WorldDataVersion(2);
+        assertThrows(java.io.IOException.class, () -> new WorldActionHistory(
+                new WorldActionHistoryRepository(root, otherVersion), otherVersion));
         var reopened = new WorldActionHistory(repository, version);
         var intent = reopened.pendingNativeReplay().orElseThrow();
         assertEquals(plan, reopened.nativeReplayPlan(intent));
@@ -208,8 +212,13 @@ class LiveActionJournalTest {
         var redo = restored.prepareRedo(PLAYER_A).orElseThrow();
         reopened.beginNativeReplay(operation, redo);
         assertEquals(redo, reopened.nativeReplayPlan(reopened.pendingNativeReplay().orElseThrow()));
+        var retainedIntent = reopened.pendingNativeReplay().orElseThrow();
+        reopened.forget(PLAYER_A);
+        repository.removeUnreferencedPayloads();
+        assertEquals(redo, reopened.nativeReplayPlan(retainedIntent));
         reopened.clearNativeReplay(operation);
         reopened.clearNativeReplay(operation);
+        repository.removeUnreferencedPayloads();
         assertTrue(reopened.pendingNativeReplay().isEmpty());
     }
 

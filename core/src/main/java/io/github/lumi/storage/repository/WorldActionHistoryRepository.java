@@ -24,12 +24,14 @@ public final class WorldActionHistoryRepository {
     private static final int MAX_INDEX_BYTES = 32 * 1024 * 1024;
     private static final long MAX_PAYLOAD_FILE_BYTES = 128L * 1024 * 1024;
     private final Path root;
+    private final Path nativeReplayFile;
     private final RepositoryMaintenance maintenance;
     private final WorldActionIndexCodec indexes = new WorldActionIndexCodec();
     private final WorldActionPayloadCodec payloads;
 
     public WorldActionHistoryRepository(Path dimensionRepository) {
         root = dimensionRepository.resolve("actions");
+        nativeReplayFile = dimensionRepository.resolve("operations/native-action.bin.gz");
         maintenance = RepositoryMaintenance.forRepository(dimensionRepository);
         payloads = new WorldActionPayloadCodec();
     }
@@ -41,6 +43,7 @@ public final class WorldActionHistoryRepository {
 
     public WorldActionHistoryRepository(Path dimensionRepository, WorldDataVersion version, NbtSpool spool) {
         root = dimensionRepository.resolve("actions").resolve(Integer.toString(version.value()));
+        nativeReplayFile = dimensionRepository.resolve("operations/native-action.bin.gz");
         maintenance = RepositoryMaintenance.forRepository(dimensionRepository);
         payloads = new WorldActionPayloadCodec(spool);
     }
@@ -64,14 +67,14 @@ public final class WorldActionHistoryRepository {
 
     /** Small write-ahead intent; immutable action payloads already contain both native endpoints. */
     public Optional<WorldActionIndexCodec.State> readNativeReplay() throws IOException {
-        return readState(root.resolve("native-replay.bin.gz"));
+        return readState(nativeReplayFile);
     }
 
     public void writeNativeReplay(WorldActionIndexCodec.State state) throws IOException {
         if (state.publication().isEmpty()) throw new IllegalArgumentException("Native replay needs an operation marker");
         try (var publication = beginPublication()) {
             if (readNativeReplay().isPresent()) throw new IOException("A native replay is already pending");
-            writeCompressed(root.resolve("native-replay.bin.gz"), output -> indexes.encode(state, output));
+            writeCompressed(nativeReplayFile, output -> indexes.encode(state, output));
         }
     }
 
@@ -81,7 +84,7 @@ public final class WorldActionHistoryRepository {
         if (!pending.orElseThrow().publication().orElseThrow().operation().equals(operation)) {
             throw new IOException("Native replay belongs to another operation");
         }
-        Files.delete(root.resolve("native-replay.bin.gz"));
+        Files.delete(nativeReplayFile);
     }
 
     /** History pointer candidates owned by the existing world-operation journal. */

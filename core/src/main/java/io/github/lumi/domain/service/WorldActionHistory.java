@@ -28,6 +28,10 @@ public final class WorldActionHistory {
         this.repository = repository;
         this.version = version;
         persisted = repository.readIndex().orElse(null);
+        var nativeIntent = repository.readNativeReplay();
+        if (nativeIntent.isPresent() && !nativeIntent.orElseThrow().dataVersion().equals(version)) {
+            throw new IOException("Recover interrupted Axiom Undo/Redo with Minecraft data version " + nativeIntent.orElseThrow().dataVersion().value() + " before upgrading");
+        }
         if (persisted != null && !persisted.dataVersion().equals(version)) {
             throw new IOException("Undo history requires its original Minecraft data version");
         }
@@ -140,10 +144,20 @@ public final class WorldActionHistory {
 
     public synchronized LiveActionJournal.Plan nativeReplayPlan(WorldActionIndexCodec.State intent) throws IOException {
         if (!intent.epoch().equals(epoch) || !intent.dataVersion().equals(version)) throw new IOException("Native replay context changed");
-        var journal = new LiveActionJournal();
-        journal.restore(intent.index(), metadata -> readRecord(intent, metadata));
         var marker = intent.publication().orElseThrow();
         var step = marker.step();
+        var index = intent.index();
+        index.move(step, !step.undo());
+        var selected = index.actions().stream().filter(action -> action.id().equals(step.action()) && action.actor().equals(step.actor()))
+                .findFirst().orElseThrow(() -> new IOException("Native replay action is missing"));
+        var group = index.actions().stream().filter(action -> action.group().equals(selected.group())).toList();
+        var ids = group.stream().map(WorldActionRecord.Metadata::id).collect(java.util.stream.Collectors.toSet());
+        var stacks = index.players().get(step.actor());
+        var replayIndex = new WorldActionIndex(index.revision(), index.nextSequence(), index.unsafeBeforeSequence(), group,
+                Map.of(step.actor(), new WorldActionIndex.Stacks(stacks.undo().stream().filter(ids::contains).toList(),
+                        stacks.redo().stream().filter(ids::contains).toList())));
+        var journal = new LiveActionJournal();
+        journal.restore(replayIndex, metadata -> readRecord(intent, metadata));
         var plan = (step.undo() ? journal.prepareUndo(step.actor()) : journal.prepareRedo(step.actor()))
                 .orElseThrow(() -> new IOException("Native replay action is missing"));
         if (!plan.actionId().equals(step.action())) throw new IOException("Native replay cursor changed");
