@@ -80,10 +80,10 @@ final class LumiCommitCard {
         int badgeWidth = badge.isEmpty() ? 0 : badgeWidth(layout.textWidth(), font.width(badge));
         if (badgeWidth > 0) {
             int badgeX = layout.textX() + layout.textWidth() - badgeWidth;
-            graphics.fill(badgeX, layout.messageY() - 2,
-                    badgeX + badgeWidth, layout.messageY() + 10, LumiTheme.STATUS);
+            graphics.fill(badgeX, layout.messageY() + 3,
+                    badgeX + 2, layout.messageY() + 5, accentColor);
             graphics.drawString(font, font.plainSubstrByWidth(badge, badgeWidth - 8),
-                    badgeX + 4, layout.messageY(), accentColor, false);
+                    badgeX + 6, layout.messageY(), LumiTheme.MUTED, false);
         }
         drawMarquee(
                 graphics, VersionText.name(version),

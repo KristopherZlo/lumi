@@ -17,6 +17,7 @@ abstract class LumiPageScreen extends LumiScreen {
     private static final int SUPPORT_CREDIT_OFFSET = 23;
     private static final int SIDEBAR_BUTTON_STRIDE = 19;
     private static final int ICON_BUTTON_WIDTH = 26;
+    private static final int SIDEBAR_TEXT_INSET = 14;
     private static final java.net.URI COFFEE_URI =
             java.net.URI.create("https://buymeacoffee.com/zl0yxp");
     private static final java.net.URI PAYPAL_URI = java.net.URI.create(
@@ -234,11 +235,12 @@ abstract class LumiPageScreen extends LumiScreen {
         int headerBottom = y + shellLayout.titleHeight();
         graphics.fill(shellLayout.contentX() + 1, headerBottom - 1,
                 right - 1, headerBottom, LumiTheme.PANEL_BORDER);
-        graphics.drawString(font, "Lumi", x + 14, y + 18,
+        int textX = x + SIDEBAR_TEXT_INSET;
+        graphics.drawString(font, "Lumi", textX, y + 18,
                 LumiTheme.TEXT, false);
         if (!tinySidebar(shellLayout)) {
             pageSession.snapshot().ifPresent(snapshot -> graphics.drawString(
-                    font, projectContext(snapshot), x + 14, y + 43,
+                    font, projectContext(snapshot), textX, y + 43,
                     LumiTheme.MUTED, false));
         }
         int supportY = supportTop(shellLayout);
@@ -249,16 +251,16 @@ abstract class LumiPageScreen extends LumiScreen {
                 LumiTheme.PANEL, LumiTheme.PANEL_BORDER);
         graphics.drawString(font, Component.translatable("luma.window.support"),
                 x + 16, supportY + 7, LumiTheme.MUTED, false);
-        int footerWidth = Math.max(1, shellLayout.sidebarWidth() - 32);
+        int footerWidth = Math.max(1, shellLayout.sidebarWidth() - SIDEBAR_TEXT_INSET * 2);
         graphics.drawString(font, font.plainSubstrByWidth(
                         Component.translatable("luma.window.credit").getString(),
                         footerWidth),
-                x + 16, creditY, LumiTheme.MUTED, false);
+                textX, creditY, LumiTheme.MUTED, false);
         graphics.drawString(font, font.plainSubstrByWidth(
                         Component.translatable(
                                 "luma.window.mod_version", modVersion).getString(),
                         footerWidth),
-                x + 16, creditY + 11, LumiTheme.MUTED, false);
+                textX, creditY + 11, LumiTheme.MUTED, false);
     }
 
     private void drawProject(
