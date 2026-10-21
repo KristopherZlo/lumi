@@ -5,6 +5,9 @@ import com.moulberry.axiom.editor.EditorUI;
 import com.moulberry.axiom.ContextMenuManager;
 import com.moulberry.axiom.screen.SwitchBuilderToolScreen;
 import com.moulberry.axiom.screen.SwitchHotbarScreen;
+import io.github.lumi.client.LumiClient;
+import io.github.lumi.client.state.ClientAccentRepository;
+import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.client.LumiCompareRenderClientGameTest;
 import io.github.lumi.client.ui.LumiHotkeyScreen;
 import io.github.lumi.client.ui.LumiUiScale;
@@ -41,6 +44,7 @@ public final class LumiAxiomEditorClientGameTest implements FabricClientGameTest
         boolean previousEditor = context.computeOnClient(client -> EditorUI.isEnabled());
         try {
             verifySelectionMenus(context);
+            verifyLiveHud(context, world, report);
             for (boolean editor : new boolean[] {false, true}) {
                 context.runOnClient(client -> { if (editor) EditorUI.enable(); else EditorUI.disable(); });
                 context.waitFor(client -> EditorUI.isActive() == editor, 1200);
@@ -131,6 +135,64 @@ public final class LumiAxiomEditorClientGameTest implements FabricClientGameTest
         return screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast)
                 .filter(button -> button.active && button.visible && button.getMessage().getString().equals(label))
                 .findFirst().orElseThrow(() -> new AssertionError("Missing visible close control"));
+    }
+
+    private static void verifyLiveHud(ClientGameTestContext context, TestSingleplayerContext world,
+            LumiBehaviorReport report) {
+        var preferences = new ClientAccentRepository(
+                FabricLoader.getInstance().getConfigDir().resolve("lumi-accent"));
+        int previous = preferences.load();
+        try {
+            context.runOnClient(client -> {
+                EditorUI.disable();
+                client.getConnection().sendCommand("lumi accent #8ECFFF");
+            });
+            if (preferences.load() != 0xff8ecfff) throw new AssertionError("Accent command did not persist HEX color");
+            context.waitFor(client -> LumiClient.history().state().snapshot().isPresent(), 1200);
+            var actions = new LumiBehaviorActions(world.getServer(), report);
+            var position = world.getServer().computeOnServer(server ->
+                    server.getPlayerList().getPlayers().getFirst().blockPosition().east(2));
+            actions.placeBlocks("hud_fixture", Items.STONE,
+                    List.of(actions.surfacePosition(position.getX(), position.getZ())));
+            var save = context.computeOnClient(client -> LumiClient.networking().save("HUD courtyard"));
+            waitForSuccess(context, save);
+            context.waitTicks(10);
+            context.takeScreenshot("lumi-hud-real-save-blue");
+            context.runOnClient(client -> client.getConnection().sendCommand("lumi accent default"));
+            if (preferences.load() != ClientAccentRepository.DEFAULT)
+                throw new AssertionError("Accent command did not restore default color");
+            String originalBranch = context.computeOnClient(client ->
+                    LumiClient.history().state().snapshot().orElseThrow().branchName());
+            var branch = context.computeOnClient(client -> LumiClient.networking().createBranch("hud-study"));
+            waitForSuccess(context, branch);
+            context.waitFor(client -> !LumiClient.history().state().snapshot().orElseThrow()
+                    .branchName().equals(originalBranch), 1200);
+            var switched = context.computeOnClient(client -> LumiClient.networking().switchBranch(originalBranch));
+            waitForSuccess(context, switched);
+            context.waitTicks(10);
+            context.takeScreenshot("lumi-hud-real-branch-gold");
+            context.runOnClient(client -> client.getConnection().sendCommand("lumi branch create hud-forwarded"));
+            context.waitTicks(20);
+            context.runOnClient(client -> LumiClient.networking().refreshSnapshot());
+            context.waitFor(client -> LumiClient.history().state().snapshot().orElseThrow().branches().stream()
+                    .anyMatch(value -> value.name().endsWith("/hud-forwarded")), 1200);
+            report.event("gate", "production_hud", "succeeded", 0, 0,
+                    "real Save and branch switch;HEX/default commands;server-command forwarding;production screenshots");
+        } finally {
+            context.runOnClient(client -> client.getConnection().sendCommand(
+                    "lumi accent " + ClientAccentRepository.hex(previous)));
+        }
+    }
+
+    private static void waitForSuccess(ClientGameTestContext context, java.util.UUID request) {
+        context.waitFor(client -> {
+            var event = LumiClient.history().state().events().get(request);
+            if (event == null || event.state() == OperationEventPayload.State.ACCEPTED
+                    || event.state() == OperationEventPayload.State.PROGRESS) return false;
+            if (event.state() != OperationEventPayload.State.SUCCEEDED)
+                throw new AssertionError("HUD operation failed: " + event.message());
+            return true;
+        }, 1200);
     }
 
     private static void verifySelectionMenus(ClientGameTestContext context) {
