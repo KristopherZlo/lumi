@@ -138,6 +138,11 @@ public final class LumiAxiomEditorClientGameTest implements FabricClientGameTest
         context.setScreen(() -> new LumiHotkeyScreen(null, List.of()));
         context.waitTicks(6);
         context.takeScreenshot("lumi-hotkey-secret-code");
+        context.getInput().pressKey(InputConstants.KEY_UP);
+        context.getInput().pressKey(InputConstants.KEY_UP);
+        context.takeScreenshot("lumi-secret-code-progress");
+        context.getInput().pressKey(InputConstants.KEY_LEFT);
+        context.takeScreenshot("lumi-secret-code-reset");
         for (int key : new int[]{InputConstants.KEY_UP, InputConstants.KEY_UP,
                 InputConstants.KEY_DOWN, InputConstants.KEY_DOWN, InputConstants.KEY_LEFT, InputConstants.KEY_RIGHT,
                 InputConstants.KEY_LEFT, InputConstants.KEY_RIGHT, InputConstants.KEY_B, InputConstants.KEY_A}) {
@@ -147,6 +152,7 @@ public final class LumiAxiomEditorClientGameTest implements FabricClientGameTest
                 && client.screen.getClass().getSimpleName().equals("LumiAstroInvadersScreen"), 100);
         context.getInput().holdKeyFor(InputConstants.KEY_SPACE, 25);
         context.getInput().holdKeyFor(InputConstants.KEY_LEFT, 5);
+        context.takeScreenshot("lumi-alien-invaders-playing");
         context.getInput().pressKey(InputConstants.KEY_P);
         context.waitTicks(3);
         context.takeScreenshot("lumi-astro-invaders");
@@ -155,7 +161,7 @@ public final class LumiAxiomEditorClientGameTest implements FabricClientGameTest
         context.getInput().pressKey(InputConstants.KEY_ESCAPE);
         context.waitForScreen(null);
         report.event("gate", "astro_invaders", "succeeded", 0, 0,
-                "actual Konami input;shoot/move/pause;Escape returns to shortcut guide;screenshots");
+                "incremental Konami input and reset;alien arcade shoot/move/pause;Escape;screenshots");
     }
 
     private static Button closeButton(Screen screen) {

@@ -391,6 +391,10 @@ final class LumiUiTestDriver {
     void closeScreen(
             Class<? extends Screen> current, Class<? extends Screen> next) {
         requireScreen(current);
+        // Wake an idle screen without clicking a hidden control.
+        context.getInput().setCursorPos(0, 0);
+        context.waitTick();
+        context.getInput().setCursorPos(1, 0);
         context.waitTick();
         context.getInput().pressKey(InputConstants.KEY_ESCAPE);
         context.waitForScreen(next);
