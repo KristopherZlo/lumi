@@ -5,7 +5,7 @@ import net.minecraft.client.gui.GuiGraphics;
 
 /** One idle-only label; input dismisses it without changing the underlying screen. */
 final class LumiDvdScreensaver {
-    private static final long IDLE_MILLIS = 10 * 60 * 1_000L;
+    private static final long IDLE_MILLIS = 5_000L;
     private static final int[] COLORS = {0xff8ecfff, 0xffffa4cb, 0xffb6eba2, 0xffffd480, 0xffbea7ff};
     private long lastActivity = Long.MIN_VALUE, lastFrame;
     private int mouseX = Integer.MIN_VALUE, mouseY = Integer.MIN_VALUE, color;

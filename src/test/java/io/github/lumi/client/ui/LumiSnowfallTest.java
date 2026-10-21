@@ -51,23 +51,23 @@ class LumiSnowfallTest {
     void screensaverWaitsForIdleBouncesAndDismissesOnInput() {
         var dvd = new LumiDvdScreensaver();
         assertFalse(dvd.advance(0, 40, 40, 160, 100, 48, 18, true));
-        assertFalse(dvd.advance(599_999, 40, 40, 160, 100, 48, 18, true));
-        assertTrue(dvd.advance(600_000, 40, 40, 160, 100, 48, 18, true));
+        assertFalse(dvd.advance(4_999, 40, 40, 160, 100, 48, 18, true));
+        assertTrue(dvd.advance(5_000, 40, 40, 160, 100, 48, 18, true));
         int color = dvd.color();
         boolean changed = false;
-        for (long now = 600_100; now < 605_000; now += 100) {
+        for (long now = 5_100; now < 10_000; now += 100) {
             assertTrue(dvd.advance(now, 40, 40, 160, 100, 48, 18, true));
             assertTrue(dvd.x() >= 8 && dvd.x() <= 104);
             assertTrue(dvd.y() >= 8 && dvd.y() <= 74);
             changed |= dvd.color() != color;
         }
         assertTrue(changed);
-        assertFalse(dvd.allowInput(604_999));
-        assertTrue(dvd.allowInput(605_000));
-        assertTrue(dvd.advance(1_205_000, 40, 40, 160, 100, 48, 18, true));
-        assertFalse(dvd.advance(1_205_001, 41, 40, 160, 100, 48, 18, true));
-        dvd.activity(1_800_000);
-        assertFalse(dvd.advance(1_800_001, 41, 40, 160, 100, 48, 18, true));
-        assertFalse(dvd.advance(2_500_000, 41, 40, 160, 100, 48, 18, false));
+        assertFalse(dvd.allowInput(9_999));
+        assertTrue(dvd.allowInput(10_000));
+        assertTrue(dvd.advance(15_000, 40, 40, 160, 100, 48, 18, true));
+        assertFalse(dvd.advance(15_001, 41, 40, 160, 100, 48, 18, true));
+        dvd.activity(20_000);
+        assertFalse(dvd.advance(20_001, 41, 40, 160, 100, 48, 18, true));
+        assertFalse(dvd.advance(30_000, 41, 40, 160, 100, 48, 18, false));
     }
 }
