@@ -74,20 +74,9 @@ final class LumiCommitCard {
             drawPreview(graphics, version, layout.previewX(), layout.previewY());
         }
         if (layout.textWidth() <= 0) return;
-        String badge = !head && featured
-                ? Component.translatable("luma.dashboard.latest_badge").getString() : "";
-        int badgeWidth = badge.isEmpty() ? 0 : badgeWidth(layout.textWidth(), font.width(badge));
-        if (badgeWidth > 0) {
-            int badgeX = layout.textX() + layout.textWidth() - badgeWidth;
-            graphics.fill(badgeX, layout.messageY() + 3,
-                    badgeX + 2, layout.messageY() + 5, accentColor);
-            graphics.drawString(font, font.plainSubstrByWidth(badge, badgeWidth - 8),
-                    badgeX + 6, layout.messageY(), LumiTheme.MUTED, false);
-        }
         drawMarquee(
                 graphics, VersionText.name(version),
-                layout.textX(), layout.messageY(), Math.max(0, layout.textWidth() - badgeWidth
-                        - (badgeWidth > 0 ? CONTENT_GAP : 0)),
+                layout.textX(), layout.messageY(), layout.textWidth(),
                 LumiTheme.TEXT, hovered, elapsedNanos);
         if (!layout.showMeta()) return;
         String tagText = tagText(tags);
@@ -104,10 +93,6 @@ final class LumiCommitCard {
                 graphics, tagText, layout.textX() + layout.textWidth() - tagWidth,
                 layout.metaY(), tagWidth,
                 LumiTheme.MUTED, hovered, elapsedNanos);
-    }
-
-    static int badgeWidth(int textWidth, int labelWidth) {
-        return textWidth < 100 ? 0 : Math.min(labelWidth + 8, textWidth / 2);
     }
 
     private void drawMarquee(

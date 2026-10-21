@@ -151,6 +151,7 @@ public final class LumiClient implements ClientModInitializer {
         NETWORKING.register();
         PREVIEW_CAPTURE.register();
         FALLING_PLAYER.register();
+        io.github.lumi.client.ui.LumiScreen.registerActivityTracking();
         LumiHotkeys hotkeys = new LumiHotkeys(new HotkeyActionDispatcher(
                 new HotkeyActionDispatcher.Actions() {
                     @Override public void openDashboard() {

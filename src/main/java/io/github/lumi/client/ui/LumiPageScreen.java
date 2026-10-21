@@ -263,6 +263,14 @@ abstract class LumiPageScreen extends LumiScreen {
                 textX, creditY + 11, LumiTheme.MUTED, false);
     }
 
+    @Override
+    protected boolean snowfallHovered(int mouseX, int mouseY) {
+        int x = shellLayout.windowX() + SIDEBAR_TEXT_INSET;
+        int y = shellLayout.windowY() + 18;
+        return mouseX >= x && mouseX < x + font.width("Lumi")
+                && mouseY >= y && mouseY < y + font.lineHeight;
+    }
+
     private void drawProject(
             GuiGraphics graphics, HistorySnapshotPayload snapshot) {
         int x = shellLayout.windowX();

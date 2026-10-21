@@ -61,7 +61,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     private final HistoryViewController historyView =
             new HistoryViewController(new HistoryScope.Workspace());
     private final HistoryGraphLayout graphLayout = new HistoryGraphLayout();
-    private final LumiSnowfall snowfall = new LumiSnowfall();
     private final LumiStarWarsCrawl starWars = new LumiStarWarsCrawl();
     private HistorySnapshotPayload snapshot;
     private LumiPageLayout layout;
@@ -535,12 +534,14 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         if (graphView != null) {
             graphView.renderHover(graphics, font, render.mouseX(), render.mouseY());
         }
-        snowfall.render(
-                graphics, lumiSaveHovered(render.mouseX(), render.mouseY()),
-                width, height, System.currentTimeMillis());
         } finally {
             endScaledRender(graphics, render, partialTick);
         }
+    }
+
+    @Override
+    protected boolean snowfallHovered(int mouseX, int mouseY) {
+        return super.snowfallHovered(mouseX, mouseY) || lumiSaveHovered(mouseX, mouseY);
     }
 
     private boolean lumiSaveHovered(int mouseX, int mouseY) {

@@ -13,6 +13,9 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenKeyboardEvents;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
 import net.minecraft.network.chat.Component;
 //? if <26.3
 import org.lwjgl.glfw.GLFW;
@@ -34,6 +37,8 @@ public abstract class LumiScreen extends Screen {
     private LumiUiScale uiScale = new LumiUiScale(2);
     private boolean screenInitialized;
     private final LumiMotion opening = new LumiMotion();
+    private final LumiSnowfall snowfall = new LumiSnowfall();
+    private final LumiDvdScreensaver screensaver = new LumiDvdScreensaver();
     private boolean openingStarted;
     private boolean centeredOpening;
     private float openingValue = 1.0F;
@@ -59,6 +64,19 @@ public abstract class LumiScreen extends Screen {
 
     protected LumiScreen(Component title) {
         super(title);
+    }
+
+    public static void registerActivityTracking() {
+        ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
+            if (!(screen instanceof LumiScreen lumi)) return;
+            lumi.screensaver.activity(System.currentTimeMillis());
+            ScreenKeyboardEvents.beforeKeyPress(screen).register((current, event) ->
+                    lumi.screensaver.activity(System.currentTimeMillis()));
+            ScreenMouseEvents.beforeMouseClick(screen).register((current, event) ->
+                    lumi.screensaver.activity(System.currentTimeMillis()));
+            ScreenMouseEvents.beforeMouseScroll(screen).register((current, x, y, horizontal, vertical) ->
+                    lumi.screensaver.activity(System.currentTimeMillis()));
+        });
     }
 
     protected final LumiButton addButton(
@@ -489,6 +507,13 @@ public abstract class LumiScreen extends Screen {
                     LumiTheme.withOpacity(
                             LumiTheme.BACKDROP, 1.0F - openingValue));
         }
+        if (minecraft.screen == this) {
+            snowfall.render(graphics, snowfallHovered(pointer.mouseX(), pointer.mouseY()),
+                    width, height, System.currentTimeMillis());
+            if (!(this instanceof LumiRecoveryScreen)) {
+                screensaver.render(graphics, font, width, height, pointer.mouseX(), pointer.mouseY());
+            }
+        }
         //? if >=26.1 {
         /*graphics.extractDeferredElements(pointer.mouseX(), pointer.mouseY(), partialTick);
         *///?} else {
@@ -498,6 +523,10 @@ public abstract class LumiScreen extends Screen {
     }
 
     protected void endScaledContent(GuiGraphics graphics) {
+    }
+
+    protected boolean snowfallHovered(int mouseX, int mouseY) {
+        return false;
     }
 
     protected final void animationFrame(
