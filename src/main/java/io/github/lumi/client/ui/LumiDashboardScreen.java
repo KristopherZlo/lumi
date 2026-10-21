@@ -549,12 +549,12 @@ public final class LumiDashboardScreen extends LumiPageScreen {
             return graphView.nodeAt(mouseX, mouseY)
                     .map(HistoryGraphLayout.Node::version)
                     .map(VersionText::name)
-                    .filter("Lumi"::equals)
+                    .filter("Lumi"::equalsIgnoreCase)
                     .isPresent();
         }
         if (dashboardGeometry.latestVisible()) {
             var latest = latestCreated().orElse(null);
-            if (latest != null && "Lumi".equals(VersionText.name(latest))
+            if (latest != null && "Lumi".equalsIgnoreCase(VersionText.name(latest))
                     && contains(
                             versionCardLayout(
                                     layout.bodyX(), layout.bodyWidth(),
@@ -569,7 +569,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         List<HistorySnapshotPayload.Version> visible = versions.stream()
                 .skip(historyScroll).limit(rows).toList();
         for (int index = 0; index < visible.size(); index++) {
-            if ("Lumi".equals(VersionText.name(visible.get(index)))
+            if ("Lumi".equalsIgnoreCase(VersionText.name(visible.get(index)))
                     && contains(versionCardLayout(
                             layout.bodyX(), layout.bodyWidth(),
                             historyY + HISTORY_FIRST_ROW_OFFSET
