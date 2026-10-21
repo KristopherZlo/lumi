@@ -19,6 +19,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -70,6 +71,48 @@ class RestorePlanReaderTest {
         reader.close();
 
         assertThrows(IOException.class, () -> reader.readSection(id));
+    }
+
+    @Test
+    void concurrentPlanConsumersShareOneSerializedSession() throws Exception {
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var secondStarted = new CountDownLatch(1);
+        var reads = new AtomicInteger();
+        SectionBlob expected = section(0);
+        try (var reader = new RestorePlanReader(id -> {
+            if (reads.incrementAndGet() == 1) {
+                entered.countDown();
+                try {
+                    if (!release.await(5, TimeUnit.SECONDS)) {
+                        throw new IOException("Timed out waiting for concurrent consumer");
+                    }
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException(interrupted);
+                }
+            }
+            return expected;
+        }, () -> { }); var executor = Executors.newFixedThreadPool(2)) {
+            ObjectId id = new ObjectId("0".repeat(64));
+            var first = executor.submit(() -> reader.readSection(id));
+            try {
+                assertTrue(entered.await(1, TimeUnit.SECONDS));
+                var second = executor.submit(() -> {
+                    secondStarted.countDown();
+                    return reader.readSection(id);
+                });
+                assertTrue(secondStarted.await(1, TimeUnit.SECONDS));
+                assertThrows(java.util.concurrent.TimeoutException.class,
+                        () -> second.get(100, TimeUnit.MILLISECONDS));
+                release.countDown();
+                assertSame(expected, first.get(1, TimeUnit.SECONDS));
+                assertSame(expected, second.get(1, TimeUnit.SECONDS));
+                assertEquals(1, reads.get());
+            } finally {
+                release.countDown();
+            }
+        }
     }
 
     @Test

@@ -14,6 +14,7 @@ final class RestorePlanReader implements Closeable {
 
     private final RestorePlanMap.Reader<ObjectId, SectionBlob> sectionReader;
     private final Closeable resource;
+    private final Object readLock = new Object();
     private final LinkedHashMap<ObjectId, SectionBlob> cache =
             new LinkedHashMap<>(MAX_CACHED_SECTIONS, 0.75F, true);
     private boolean reading;
@@ -36,6 +37,13 @@ final class RestorePlanReader implements Closeable {
     }
 
     SectionBlob readSection(ObjectId id) throws IOException {
+        // Prewarmed apply batches and history publication share this bounded session.
+        synchronized (readLock) {
+            return readSectionSerially(id);
+        }
+    }
+
+    private SectionBlob readSectionSerially(ObjectId id) throws IOException {
         Objects.requireNonNull(id, "id");
         synchronized (this) {
             requireOpen();
@@ -62,7 +70,7 @@ final class RestorePlanReader implements Closeable {
             ObjectId id, RestorePlanMap.Reader<ObjectId, T> reader) throws IOException {
         synchronized (this) {
             requireOpen();
-            beginRead();
+            reading = true;
         }
         Throwable failure = null;
         try {
@@ -96,13 +104,6 @@ final class RestorePlanReader implements Closeable {
         if (closeNow) {
             resource.close();
         }
-    }
-
-    private void beginRead() throws IOException {
-        if (reading) {
-            throw new IOException("Concurrent Restore plan reads are not supported");
-        }
-        reading = true;
     }
 
     private void finishRead(Throwable failure) throws IOException {
