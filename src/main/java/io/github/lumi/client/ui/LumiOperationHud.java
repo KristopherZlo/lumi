@@ -7,7 +7,10 @@ import io.github.lumi.client.state.ClientNotificationStore;
 import io.github.lumi.client.state.ClientPendingStatisticsStore;
 import io.github.lumi.client.state.HighlightPreparationProgress;
 import io.github.lumi.domain.model.HudDisplayMode;
+import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.OperationEventPayload;
+import java.util.List;
+import java.util.OptionalDouble;
 import java.util.function.Supplier;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
@@ -15,6 +18,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
@@ -27,6 +31,8 @@ public final class LumiOperationHud {
     private final ClientPendingStatisticsStore pendingStatistics;
     private final ClientNotificationStore notifications;
     private final Supplier<HighlightPreparationProgress> highlightProgress;
+    private final LumiHudPanel panel = new LumiHudPanel();
+    private ClientLevel world;
 
     public LumiOperationHud(
             ClientHistoryStore history,
@@ -56,163 +62,144 @@ public final class LumiOperationHud {
             }
         });
         ClientPlayConnectionEvents.DISCONNECT.register(
-                (handler, client) -> notifications.clear());
+                (handler, client) -> {
+                    notifications.clear();
+                    panel.clear();
+                    world = null;
+                });
     }
 
     private void render(GuiGraphics graphics, net.minecraft.client.DeltaTracker ignored) {
         if (!usesGui() || Minecraft.getInstance().screen instanceof LumiScreen) return;
-        int y = renderWorkspace(graphics);
-        y = renderOperation(graphics, y);
-        y = renderHighlightProgress(graphics, y);
-        renderNotifications(graphics, y);
+        renderPanel(graphics, 10, true);
     }
 
     private void renderScreenOverlay(GuiGraphics graphics) {
         if (!usesGui()) return;
-        int y = renderOperation(graphics, SCREEN_TOP);
-        y = renderHighlightProgress(graphics, y);
-        renderNotifications(graphics, y);
+        renderPanel(graphics, SCREEN_TOP, false);
     }
 
-    private int renderHighlightProgress(GuiGraphics graphics, int y) {
-        HighlightPreparationProgress progress = highlightProgress.get();
-        if (!progress.preparing()) return y;
-        String text = Component.translatable(
-                "luma.status.highlight_preparing", progress.percent()).getString();
-        int width = compactPanelWidth(graphics, text);
-        int x = graphics.guiWidth() - width - 10;
-        graphics.fill(x, y, x + width, y + 28, 0xd9111419);
-        drawClipped(graphics, text, x + 8, y + 6, width - 16, 0xfff0f3f6);
-        int barWidth = width - 16;
-        graphics.fill(x + 8, y + 20, x + 8 + barWidth, y + 23, 0xff343a43);
-        graphics.fill(x + 8, y + 20,
-                x + 8 + (int) Math.round(barWidth * progress.fraction()), y + 23,
-                0xff70d6a5);
-        return nextPanelY(y, 28);
-    }
-
-    private int renderOperation(GuiGraphics graphics, int y) {
-        OperationEventPayload event = history.state().activeOperation().orElse(null);
-        if (event == null || history.isNativeWorldAction(event.requestId())) return y;
-        String text = event.queuePosition() > 0
-                ? event.message() : event.progress().map(value -> value.phase())
-                        .orElse(event.message());
-        int width = compactPanelWidth(graphics, text);
-        int x = graphics.guiWidth() - width - 10;
-        graphics.fill(x, y, x + width, y + 28, 0xd9111419);
-        drawClipped(graphics, text, x + 8, y + 6, width - 16, 0xfff0f3f6);
-        event.progress().ifPresent(progress -> {
-            int barWidth = width - 16;
-            graphics.fill(x + 8, y + 20, x + 8 + barWidth, y + 23, 0xff343a43);
-            if (progress.fraction().isPresent()) {
-                double fraction = progress.fraction().orElseThrow();
-                graphics.fill(x + 8, y + 20,
-                        x + 8 + (int) Math.round(barWidth * fraction), y + 23,
-                        0xff70d6a5);
-                return;
-            }
-            int segmentWidth = Math.max(12, barWidth / 4);
-            int offset = indeterminateOffset(
-                    System.currentTimeMillis(), barWidth - segmentWidth);
-            graphics.fill(x + 8 + offset, y + 20,
-                    x + 8 + offset + segmentWidth, y + 23, 0xff70d6a5);
-        });
-        return nextPanelY(y, 28);
-    }
-
-    private void renderNotifications(GuiGraphics graphics, int startY) {
-        int y = startY;
-        for (ClientNotificationStore.Notification notification
-                : notifications.visible()) {
-            String text = notification.message().getString();
-            int width = compactPanelWidth(graphics, text);
-            int x = graphics.guiWidth() - width - 10;
-            graphics.fill(x, y, x + width, y + 20, 0xd9111419);
-            drawClipped(
-                    graphics, text, x + 8, y + 6, width - 16,
-                    notification.argb());
-            y = nextPanelY(y, 20);
-        }
-    }
-
-    private int renderWorkspace(GuiGraphics graphics) {
-        var snapshot = history.state().snapshot().orElse(null);
+    private void renderPanel(GuiGraphics graphics, int y, boolean inWorld) {
         var client = Minecraft.getInstance();
-        if (snapshot == null || client.player == null) return 10;
-        boolean expanded = LumiHotkeys.actionModifierDown(
-                client.options.keyMappings);
-        String branch = snapshot.branchName();
-        int slash = branch.lastIndexOf('/');
-        if (slash >= 0) branch = branch.substring(slash + 1);
-        String pending = pendingStatistics.result(snapshot)
-                .filter(result -> result.error().isEmpty())
-                .map(result -> Long.toString(result.workspace().total()))
-                .orElseGet(() -> Integer.toString(snapshot.pendingKeys()));
-        String title = snapshot.workspaceName() + " · " + branch
-                + " · " + pending + " pending";
-        int height = expanded ? 68 : 22;
-        int width = Math.min(Math.max(1, graphics.guiWidth() - 20),
-                expanded ? 270
-                        : Math.min(270,
-                                Math.max(150, client.font.width(title) + 16)));
-        int x = graphics.guiWidth() - width - 10;
-        graphics.fill(x, 10, x + width, 10 + height, 0xd9111419);
-        drawClipped(graphics, title, x + 6, 17, width - 12,
-                snapshot.pendingKeys() == 0 ? 0xffaeb6c2 : 0xffffd166);
-        if (expanded) {
-            String action = binding(client, "key.lumi.action_modifier");
-            drawClipped(graphics,
-                    action + "+" + binding(client, "key.lumi.quick_save")
-                            + " save · " + action + "+"
-                            + binding(client, "key.lumi.undo") + "/"
-                            + binding(client, "key.lumi.redo") + " undo/redo",
-                    x + 6, 35, width - 12, 0xfff0f3f6);
-            drawClipped(graphics,
-                    action + "+" + binding(client, "key.lumi.open_dashboard")
-                            + " history · "
-                            + action + "+" + binding(client, "key.lumi.quick_rollback")
-                            + " rollback",
-                    x + 6, 48, width - 12, 0xfff0f3f6);
-            drawClipped(graphics,
-                    action + "+1..0 switch branch",
-                    x + 6, 61, width - 12, 0xff8f9aa8);
+        if (client.options.hideGui || client.player == null || client.level == null) return;
+        if (world != client.level) {
+            world = client.level;
+            panel.clear();
         }
-        return nextPanelY(10, height);
+        var state = history.state();
+        var snapshot = state.snapshot().orElse(null);
+        var feedback = notifications.visible();
+        var error = feedback.stream().filter(ClientNotificationStore.Notification::error)
+                .reduce((first, last) -> last).orElse(null);
+        var operation = state.activeOperation()
+                .filter(event -> !history.isNativeWorldAction(event.requestId())).orElse(null);
+        var local = highlightProgress.get();
+        var shortcuts = inWorld ? shortcuts(client) : List.<String>of();
+        LumiHudPanel.Content content;
+        if (error != null) content = feedback(error, shortcuts);
+        else if (operation != null) content = operation(operation, shortcuts);
+        else if (local.preparing()) content = new LumiHudPanel.Content("highlight",
+                translated("luma.status.highlight_preparing", local.percent()),
+                snapshot == null ? "" : snapshot.workspaceName(), false, false, false,
+                true, OptionalDouble.of(local.fraction()), shortcuts, LumiTheme.accent());
+        else if (!feedback.isEmpty()) content = feedback(feedback.getLast(), shortcuts);
+        else if (inWorld && snapshot != null) content = workspace(snapshot, shortcuts);
+        else {
+            panel.clear();
+            return;
+        }
+        panel.render(graphics, content, y);
+    }
+
+    LumiHudPanel.Content operation(OperationEventPayload event, List<String> shortcuts) {
+        var request = history.request(event.requestId()).orElse(null);
+        String title = translated("lumi.hud.working");
+        if (request != null) {
+            title = request.undo() ? translated("lumi.hud.undoing")
+                    : request.redo() ? translated("lumi.hud.redoing") : switch (request.kind()) {
+                        case SAVE, AMEND, ZONE_SAVE, ZONE_AMEND -> translated("lumi.hud.saving");
+                        case BRANCH_SWITCH -> translated("lumi.hud.switching");
+                        case RESTORE, RESTORE_NO_ENTITIES, RESTORE_AREA, RESTORE_AREA_APPLY,
+                                ZONE_RESTORE, QUICK_ROLLBACK, RECOVER_RESUME, RECOVER_RETURN -> translated("lumi.hud.restoring");
+                        default -> title;
+                    };
+        }
+        String detail = event.queuePosition() > 0 ? translated(event.message())
+                : event.progress().map(value -> translated(value.phase())).orElseGet(() -> translated(event.message()));
+        return new LumiHudPanel.Content(event.requestId(), title, detail, false, false, false,
+                true, event.progress().map(value -> value.fraction()).orElse(OptionalDouble.empty()),
+                shortcuts, LumiTheme.accent());
+    }
+
+    LumiHudPanel.Content feedback(ClientNotificationStore.Notification notification, List<String> shortcuts) {
+        var request = notification.request().orElse(null);
+        String title = notification.error() ? translated("lumi.hud.blocked") : "Lumi";
+        String detail = notification.message().getString();
+        boolean saved = false;
+        Object identity = notification.expiresAtNanos();
+        if (!notification.error() && request != null) {
+            if (request.undo() || request.redo()) {
+                title = translated(request.undo() ? "lumi.hud.undone" : "lumi.hud.redone");
+                detail = history.state().snapshot().map(snapshot -> snapshot.workspaceName()
+                        + " · " + shortBranch(snapshot.branchName())).orElse(detail);
+                if (notification.repetitions() > 1) title += " × " + notification.repetitions();
+                identity = request.kind();
+            } else switch (request.kind()) {
+                case SAVE, AMEND, ZONE_SAVE, ZONE_AMEND -> {
+                    saved = true;
+                    title = translated("lumi.hud.saved");
+                    detail = request.detail();
+                }
+                case BRANCH_SWITCH, BRANCH_CREATE -> {
+                    title = shortBranch(request.detail());
+                    detail = translated(request.kind() == io.github.lumi.network.HistoryCommandPayload.Kind.BRANCH_CREATE
+                            ? "luma.status.variant_created" : "luma.status.variant_switched");
+                }
+                default -> { }
+            }
+        }
+        return new LumiHudPanel.Content(identity, title, detail, false, saved, notification.error(),
+                false, OptionalDouble.empty(), shortcuts, request == null ? notification.argb() : LumiTheme.accent());
+    }
+
+    private LumiHudPanel.Content workspace(HistorySnapshotPayload snapshot, List<String> shortcuts) {
+        String pending = snapshot.pendingKeys() == 0 ? translated("lumi.hud.all_saved")
+                : pendingStatistics.result(snapshot).filter(result -> result.error().isEmpty())
+                        .map(result -> translated("lumi.hud.pending_changes", result.workspace().total()))
+                        .orElseGet(() -> translated("lumi.hud.pending_areas", Integer.toString(snapshot.pendingKeys())));
+        return new LumiHudPanel.Content(snapshot.workspaceId(),
+                snapshot.workspaceName() + " · " + shortBranch(snapshot.branchName()), pending,
+                true, false, false, false, OptionalDouble.empty(), shortcuts, LumiTheme.accent());
+    }
+
+    private static List<String> shortcuts(Minecraft client) {
+        if (!LumiHotkeys.actionModifierDown(client.options.keyMappings)) return List.of();
+        String action = binding(client, "key.lumi.action_modifier");
+        return List.of(
+                action + "+" + binding(client, "key.lumi.quick_save") + " save · " + action + "+"
+                        + binding(client, "key.lumi.undo") + "/" + binding(client, "key.lumi.redo") + " undo/redo",
+                action + "+" + binding(client, "key.lumi.open_dashboard") + " history · " + action + "+"
+                        + binding(client, "key.lumi.quick_rollback") + " rollback",
+                action + "+1..0 switch branch");
+    }
+
+    private static String shortBranch(String name) {
+        return name.substring(name.lastIndexOf('/') + 1);
+    }
+
+    private static String translated(String value, Object... arguments) {
+        return value.startsWith("luma.") || value.startsWith("lumi.")
+                ? Component.translatable(value, arguments).getString() : value;
     }
 
     private boolean usesGui() {
-        return history.state().snapshot().stream()
-                .flatMap(snapshot -> snapshot.workspaces().stream())
-                .filter(io.github.lumi.network.HistorySnapshotPayload.WorkspaceView::active)
-                .findFirst()
-                .map(workspace -> workspace.hudDisplayMode() == HudDisplayMode.GUI)
-                .orElse(true);
-    }
-
-    static int nextPanelY(int top, int height) {
-        return top + height + 6;
+        return history.state().hudDisplayMode() == HudDisplayMode.GUI;
     }
 
     static int indeterminateOffset(long millis, int travelWidth) {
         long position = Math.floorMod(millis / 20, travelWidth * 2L);
         return (int) (position <= travelWidth
                 ? position : travelWidth * 2L - position);
-    }
-
-    private static int compactPanelWidth(
-            GuiGraphics graphics, String text) {
-        return Math.min(Math.max(1, graphics.guiWidth() - 20),
-                Math.min(240, Math.max(120,
-                        Minecraft.getInstance().font.width(text) + 20)));
-    }
-
-    private static void drawClipped(
-            GuiGraphics graphics, String text, int x, int y,
-            int width, int color) {
-        var font = Minecraft.getInstance().font;
-        graphics.drawString(font,
-                font.plainSubstrByWidth(text, Math.max(0, width)),
-                x, y, color, false);
     }
 
     private static String binding(Minecraft client, String name) {

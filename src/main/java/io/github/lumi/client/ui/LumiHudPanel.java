@@ -11,7 +11,7 @@ import net.minecraft.network.chat.Component;
 final class LumiHudPanel {
     record Content(Object identity, String title, String detail, boolean compact,
             boolean saved, boolean error, boolean busy, OptionalDouble progress,
-            List<String> shortcuts) {
+            List<String> shortcuts, int detailColor) {
         Content {
             shortcuts = List.copyOf(shortcuts.subList(0, Math.min(3, shortcuts.size())));
         }
@@ -69,7 +69,7 @@ final class LumiHudPanel {
 
     private void draw(GuiGraphics graphics, Content content, int x, int y, int width, float alpha, int shift) {
         if (alpha < .04F) return;
-        int color = content.error() ? LumiTheme.DANGER : LumiTheme.accent();
+        int color = content.error() ? LumiTheme.DANGER : content.detailColor();
         var font = Minecraft.getInstance().font;
         int detailWidth = content.compact()
                 ? Math.min(font.width(content.detail()), Math.max(0, (width - 20) / 2)) : 0;
@@ -91,11 +91,14 @@ final class LumiHudPanel {
             bottom = y + 42;
         }
         if (content.busy()) {
-            float barAlpha = alpha * Math.clamp((System.nanoTime() - entered - 450_000_000L) / 300_000_000F, 0, 1);
+            float barAlpha = alpha * (LumiMotion.enabled()
+                    ? Math.clamp((System.nanoTime() - entered - 450_000_000L) / 300_000_000F, 0, 1) : 1);
             int barWidth = width - 20;
             graphics.fill(x + 10, bottom, x + width - 10, bottom + 2, LumiTheme.withOpacity(LumiTheme.CHIP, barAlpha));
             int segment = Math.max(1, barWidth / 4);
-            int offset = content.progress().isPresent() ? 0 : LumiOperationHud.indeterminateOffset(System.currentTimeMillis(), barWidth - segment);
+            int offset = content.progress().isPresent() ? 0 : LumiMotion.enabled()
+                    ? LumiOperationHud.indeterminateOffset(System.currentTimeMillis(), barWidth - segment)
+                    : (barWidth - segment) / 2;
             int length = content.progress().isPresent()
                     ? (int) Math.round(barWidth * content.progress().getAsDouble()) : segment;
             graphics.fill(x + 10 + offset, bottom, x + 10 + offset + length, bottom + 2,
