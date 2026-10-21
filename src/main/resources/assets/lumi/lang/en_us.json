@@ -1185,6 +1185,8 @@
   "lumi.astro.controls": "←/→ or A/D: move · Space: fire · P: pause · Esc: back",
   "lumi.astro.score": "Score %s",
   "lumi.astro.wave": "Wave %s",
+  "lumi.astro.level_clear": "Level cleared",
+  "lumi.astro.next_level": "Enter: next level",
   "lumi.astro.game_over": "Game over",
   "lumi.astro.paused": "Paused",
   "lumi.astro.restart": "Enter: restart after game over · P: resume"

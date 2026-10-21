@@ -1149,6 +1149,8 @@
   "lumi.astro.controls": "←/→ или A/D: движение · Пробел: огонь · P: пауза · Esc: назад",
   "lumi.astro.score": "Счёт %s",
   "lumi.astro.wave": "Волна %s",
+  "lumi.astro.level_clear": "Уровень пройден",
+  "lumi.astro.next_level": "Enter: следующий уровень",
   "lumi.astro.game_over": "Игра окончена",
   "lumi.astro.paused": "Пауза",
   "lumi.astro.restart": "Enter: новая игра после проигрыша · P: продолжить"

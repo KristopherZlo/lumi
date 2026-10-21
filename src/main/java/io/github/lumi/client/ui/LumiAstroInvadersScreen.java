@@ -4,7 +4,9 @@ import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
+import net.minecraft.sounds.SoundEvents;
 
 /** Pixel arcade launched only from the shortcut guide's secret code. */
 final class LumiAstroInvadersScreen extends LumiModalScreen {
@@ -12,7 +14,7 @@ final class LumiAstroInvadersScreen extends LumiModalScreen {
     private static final int[] SHIP = {0b0001000, 0b0011100, 0b0111110, 0b1111111, 0b1100011};
     private static final int[] COLORS = {0xffbea7ff, 0xff8ecfff, 0xffb6eba2};
     private final Screen parent;
-    private final LumiAstroInvadersGame game = new LumiAstroInvadersGame();
+    private final LumiAstroInvadersGame game = new LumiAstroInvadersGame(this::playSound);
     private boolean left, right, firing, pauseHeld;
     private long lastFrame;
 
@@ -65,7 +67,7 @@ final class LumiAstroInvadersScreen extends LumiModalScreen {
             graphics.fill(x, y, x + 1, y + 1, 0xff353e50);
         }
         graphics.drawString(font, Component.translatable("lumi.astro.score", game.score()), 7, 5, LumiTheme.TEXT, false);
-        graphics.drawString(font, Component.translatable("lumi.astro.wave", game.wave()), 126, 5, LumiTheme.MUTED, false);
+        graphics.drawString(font, Component.translatable("lumi.astro.wave", game.level()), 126, 5, LumiTheme.MUTED, false);
         graphics.drawString(font, "♥ ".repeat(game.lives()), 271, 5, LumiTheme.DANGER, false);
         for (var alien : game.invaders()) sprite(graphics, ALIEN, (int) alien.x() - 7,
                 (int) alien.y() - 5, COLORS[alien.row()]);
@@ -75,11 +77,11 @@ final class LumiAstroInvadersScreen extends LumiModalScreen {
             sprite(graphics, SHIP, (int) game.shipX() - 7, LumiAstroInvadersGame.SHIP_Y - 5, LumiTheme.accent());
         }
         graphics.fill(7, 193, 313, 194, 0xff353e50);
-        if (game.paused() || game.gameOver()) {
+        if (game.paused() || game.gameOver() || game.levelCleared()) {
             graphics.fill(0, 20, 320, 190, 0xc0090d15);
             graphics.drawCenteredString(font, Component.translatable(game.gameOver()
-                    ? "lumi.astro.game_over" : "lumi.astro.paused"), 160, 83, LumiTheme.TEXT);
-            graphics.drawCenteredString(font, Component.translatable("lumi.astro.restart"), 160, 101, LumiTheme.MUTED);
+                    ? "lumi.astro.game_over" : game.levelCleared() ? "lumi.astro.level_clear" : "lumi.astro.paused"), 160, 83, LumiTheme.TEXT);
+            graphics.drawCenteredString(font, Component.translatable(game.levelCleared() ? "lumi.astro.next_level" : "lumi.astro.restart"), 160, 101, LumiTheme.MUTED);
         }
     }
 
@@ -90,13 +92,34 @@ final class LumiAstroInvadersScreen extends LumiModalScreen {
         }
     }
 
+    private void playSound(LumiAstroInvadersGame.Event event) {
+        var sound = switch (event) {
+            case SHOT -> SoundEvents.NOTE_BLOCK_HAT;
+            case HIT -> SoundEvents.NOTE_BLOCK_PLING;
+            case DAMAGE -> SoundEvents.NOTE_BLOCK_BASEDRUM;
+            case LEVEL_CLEAR -> SoundEvents.NOTE_BLOCK_CHIME;
+            case GAME_OVER -> SoundEvents.NOTE_BLOCK_BASS;
+        };
+        float pitch = switch (event) {
+            case SHOT, LEVEL_CLEAR -> 1.5F;
+            case HIT -> 1.25F;
+            case DAMAGE -> .75F;
+            case GAME_OVER -> .5F;
+        };
+        minecraft.getSoundManager().play(SimpleSoundInstance.forUI(sound.value(), pitch,
+                event == LumiAstroInvadersGame.Event.SHOT ? .08F : .16F));
+    }
+
     @Override public boolean keyPressed(KeyEvent event) {
         switch (event.key()) {
             case InputConstants.KEY_LEFT, InputConstants.KEY_A -> left = true;
             case InputConstants.KEY_RIGHT, InputConstants.KEY_D -> right = true;
             case InputConstants.KEY_SPACE -> firing = true;
             case InputConstants.KEY_P -> { if (!pauseHeld) game.togglePause(); pauseHeld = true; }
-            case InputConstants.KEY_RETURN -> { if (game.gameOver()) game.restart(); }
+            case InputConstants.KEY_RETURN -> {
+                if (game.gameOver()) game.restart();
+                else if (game.levelCleared()) game.nextLevel();
+            }
             default -> { return super.keyPressed(event); }
         }
         return true;
