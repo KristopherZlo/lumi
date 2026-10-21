@@ -510,9 +510,6 @@ public abstract class LumiScreen extends Screen {
         if (minecraft.screen == this) {
             snowfall.render(graphics, snowfallHovered(pointer.mouseX(), pointer.mouseY()),
                     width, height, System.currentTimeMillis());
-            if (!(this instanceof LumiRecoveryScreen)) {
-                screensaver.render(graphics, font, width, height, pointer.mouseX(), pointer.mouseY());
-            }
         }
         //? if >=26.1 {
         /*graphics.extractDeferredElements(pointer.mouseX(), pointer.mouseY(), partialTick);
@@ -520,6 +517,10 @@ public abstract class LumiScreen extends Screen {
         graphics.renderDeferredElements();
         //?}
         graphics.pose().popMatrix();
+        if (minecraft.screen == this && !(this instanceof LumiRecoveryScreen)) {
+            screensaver.render(graphics, font, graphics.guiWidth(), graphics.guiHeight(),
+                    Math.round(pointer.mouseX() * renderScale()), Math.round(pointer.mouseY() * renderScale()));
+        }
     }
 
     protected void endScaledContent(GuiGraphics graphics) {

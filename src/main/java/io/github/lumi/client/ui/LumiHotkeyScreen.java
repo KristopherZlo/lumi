@@ -2,7 +2,6 @@ package io.github.lumi.client.ui;
 
 import io.github.lumi.client.LumiHotkeys;
 import com.mojang.blaze3d.platform.InputConstants;
-import java.util.Arrays;
 import java.util.List;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -70,8 +69,13 @@ public final class LumiHotkeyScreen extends LumiModalScreen {
                 shortcuts.size(), visibleRows(), scroll,
                 value -> scroll = value);
         if (scroll + count == shortcuts.size()) {
-            graphics.drawCenteredString(font, "↑ ↑ ↓ ↓ ← → ← → B A",
-                    panelX + panelWidth / 2, panelY + panelHeight - 17, 0x995c6068);
+            int x = panelX + (panelWidth - font.width(String.join(" ", SecretCode.SYMBOLS))) / 2;
+            for (int index = 0; index < SecretCode.SYMBOLS.length; index++) {
+                String symbol = SecretCode.SYMBOLS[index];
+                graphics.drawString(font, symbol, x, panelY + panelHeight - 17,
+                        index < secretCode.progress() ? 0xffffffff : 0x995c6068, false);
+                x += font.width(symbol + " ");
+            }
         }
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
@@ -126,20 +130,20 @@ public final class LumiHotkeyScreen extends LumiModalScreen {
     }
 
     static final class SecretCode {
+        private static final String[] SYMBOLS = {"↑", "↑", "↓", "↓", "←", "→", "←", "→", "B", "A"};
         private static final int[] CODE = {InputConstants.KEY_UP, InputConstants.KEY_UP,
                 InputConstants.KEY_DOWN, InputConstants.KEY_DOWN, InputConstants.KEY_LEFT, InputConstants.KEY_RIGHT,
                 InputConstants.KEY_LEFT, InputConstants.KEY_RIGHT, InputConstants.KEY_B, InputConstants.KEY_A};
-        private final int[] entered = new int[CODE.length];
         private int length;
 
         boolean press(int key) {
-            if (length == entered.length) System.arraycopy(entered, 1, entered, 0, entered.length - 1);
-            else length++;
-            entered[length - 1] = key;
-            boolean matched = length == CODE.length && Arrays.equals(entered, CODE);
+            if (key != CODE[length]) { length = 0; return false; }
+            boolean matched = ++length == CODE.length;
             if (matched) length = 0;
             return matched;
         }
+
+        int progress() { return length; }
     }
 
     @Override public boolean isPauseScreen() { return false; }

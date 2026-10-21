@@ -33,8 +33,17 @@ class LumiHotkeyScreenTest {
                 InputConstants.KEY_LEFT, InputConstants.KEY_RIGHT, InputConstants.KEY_B, InputConstants.KEY_A};
         assertFalse(code.press(InputConstants.KEY_A));
         assertFalse(code.press(InputConstants.KEY_UP));
-        for (int index = 0; index < sequence.length - 1; index++) assertFalse(code.press(sequence[index]));
+        assertEquals(1, code.progress());
+        assertFalse(code.press(InputConstants.KEY_UP));
+        assertEquals(2, code.progress());
+        assertFalse(code.press(InputConstants.KEY_UP));
+        assertEquals(0, code.progress(), "A wrong key clears all highlighted symbols");
+        for (int index = 0; index < sequence.length - 1; index++) {
+            assertFalse(code.press(sequence[index]));
+            assertEquals(index + 1, code.progress());
+        }
         assertTrue(code.press(sequence[sequence.length - 1]));
+        assertEquals(0, code.progress());
         assertFalse(code.press(InputConstants.KEY_A));
     }
 }
