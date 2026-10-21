@@ -293,6 +293,11 @@ public final class LumiClient implements ClientModInitializer {
     }
 
     static void showFeedback(String value, ChatFormatting color) {
+        showFeedback(value, color, Optional.empty());
+    }
+
+    private static void showFeedback(String value, ChatFormatting color,
+            Optional<ClientHistoryStore.Request> request) {
         var player = Minecraft.getInstance().player;
         if (player == null) {
             return;
@@ -307,7 +312,8 @@ public final class LumiClient implements ClientModInitializer {
         Integer rgb = color.getColor();
         //?}
         NOTIFICATIONS.add(styled,
-                0xff000000 | (rgb == null ? 0xf0f3f6 : rgb));
+                0xff000000 | (rgb == null ? 0xf0f3f6 : rgb), request,
+                color == ChatFormatting.RED || color == ChatFormatting.DARK_RED);
         MinecraftPlayerMessages.overlay(player, styled);
     }
 
@@ -330,7 +336,12 @@ public final class LumiClient implements ClientModInitializer {
             acceptOnboardingEvent(new OnboardingEvent.OperationCompleted(
                     event.requestId(),
                     event.state() == OperationEventPayload.State.SUCCEEDED));
-            showFeedback(event.message(), eventColor(event.state(), event.message()));
+            if (!HISTORY.isNativeWorldAction(event.requestId())
+                    || event.state() != OperationEventPayload.State.SUCCEEDED) {
+                showFeedback(event.message(), eventColor(event.state(), event.message()),
+                        event.state() == OperationEventPayload.State.SUCCEEDED
+                                ? HISTORY.request(event.requestId()) : Optional.empty());
+            }
         }
     }
 

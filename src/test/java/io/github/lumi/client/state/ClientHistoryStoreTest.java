@@ -14,6 +14,20 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class ClientHistoryStoreTest {
+    @Test void boundsLocalRequestLabelsAndClearsThemWithTheDimension() {
+        var store = new ClientHistoryStore();
+        store.accept(new HistorySnapshotPayload("minecraft:overworld", id('1'), 0, 0, false));
+        UUID first = UUID.randomUUID(), last = UUID.randomUUID();
+        var kind = io.github.lumi.network.HistoryCommandPayload.Kind.SAVE;
+        store.requested(first, kind, "First");
+        for (int index = 0; index < 64; index++) store.requested(UUID.randomUUID(), kind, "Save");
+        store.requested(last, kind, "Courtyard");
+        assertFalse(store.request(first).isPresent());
+        assertEquals("Courtyard", store.request(last).orElseThrow().detail());
+        store.accept(new HistorySnapshotPayload("minecraft:the_nether", id('1'), 0, 0, false));
+        assertFalse(store.request(last).isPresent());
+    }
+
     @Test void worldCursorWaitsForItsOwnConfirmationRatherThanAnotherBuildersRevision() {
         var store = new ClientHistoryStore();
         UUID epoch = UUID.randomUUID(), request = UUID.randomUUID();

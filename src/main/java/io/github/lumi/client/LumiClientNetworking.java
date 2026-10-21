@@ -706,6 +706,13 @@ public final class LumiClientNetworking {
             throw new IllegalStateException("The connected server does not support Lumi history");
         }
         UUID requestId = UUID.randomUUID();
+        String detail = switch (kind) {
+            case SAVE, AMEND -> SaveArgument.parse(argument).message();
+            case ZONE_SAVE, ZONE_AMEND -> ZoneSaveArgument.parse(argument).message();
+            case BRANCH_SWITCH, BRANCH_CREATE -> argument;
+            default -> "";
+        };
+        history.requested(requestId, kind, detail);
         sendCommand(requestId, kind, argument, snapshot);
         return requestId;
     }

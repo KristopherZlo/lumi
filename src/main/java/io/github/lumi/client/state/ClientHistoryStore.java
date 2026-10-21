@@ -2,6 +2,7 @@ package io.github.lumi.client.state;
 
 import io.github.lumi.network.AxiomHistorySettingsPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
+import io.github.lumi.network.HistoryCommandPayload;
 import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.network.WorldActionViewPayload;
 import java.util.LinkedHashMap;
@@ -21,11 +22,39 @@ public final class ClientHistoryStore {
     private UUID worldActionRequest;
     private UUID nativeActionRequest;
     private final LinkedHashMap<UUID, OperationEventPayload> events = new LinkedHashMap<>();
+    private final LinkedHashMap<UUID, Request> requests = new LinkedHashMap<>();
+
+    public synchronized void requested(UUID id, HistoryCommandPayload.Kind kind, String detail) {
+        requests.put(id, new Request(kind, detail));
+        while (requests.size() > MAX_EVENTS) requests.remove(requests.keySet().iterator().next());
+    }
+
+    public synchronized Optional<Request> request(UUID id) {
+        return Optional.ofNullable(requests.get(id));
+    }
+
+    public record Request(HistoryCommandPayload.Kind kind, String detail) {
+        public Request {
+            Objects.requireNonNull(kind, "kind");
+            Objects.requireNonNull(detail, "detail");
+        }
+
+        public boolean undo() {
+            return kind == HistoryCommandPayload.Kind.UNDO || kind == HistoryCommandPayload.Kind.AXIOM_UNDO
+                    || kind == HistoryCommandPayload.Kind.AXIOM_LUMI_UNDO;
+        }
+
+        public boolean redo() {
+            return kind == HistoryCommandPayload.Kind.REDO || kind == HistoryCommandPayload.Kind.AXIOM_REDO
+                    || kind == HistoryCommandPayload.Kind.AXIOM_LUMI_REDO;
+        }
+    }
 
     public synchronized void accept(HistorySnapshotPayload update) {
         Objects.requireNonNull(update, "update");
         if (snapshot == null || !snapshot.dimensionId().equals(update.dimensionId())) {
             events.clear();
+            requests.clear();
         }
         snapshot = update;
     }
@@ -94,5 +123,6 @@ public final class ClientHistoryStore {
         worldActionRequest = null;
         nativeActionRequest = null;
         events.clear();
+        requests.clear();
     }
 }
