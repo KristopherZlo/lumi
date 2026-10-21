@@ -46,6 +46,7 @@ public final class LumiAxiomEditorClientGameTest implements FabricClientGameTest
         boolean previousEditor = context.computeOnClient(client -> EditorUI.isEnabled());
         try {
             verifySelectionMenus(context);
+            verifyArcade(context, report);
             verifyLiveHud(context, world, report);
             for (boolean editor : new boolean[] {false, true}) {
                 context.runOnClient(client -> { if (editor) EditorUI.enable(); else EditorUI.disable(); });
@@ -130,6 +131,31 @@ public final class LumiAxiomEditorClientGameTest implements FabricClientGameTest
             });
             context.getInput().resizeWindow(previousSize[0], previousSize[1]);
         }
+    }
+
+    private static void verifyArcade(ClientGameTestContext context, LumiBehaviorReport report) {
+        context.runOnClient(client -> { EditorUI.disable(); ContextMenuManager.getInstance().close(); });
+        context.setScreen(() -> new LumiHotkeyScreen(null, List.of()));
+        context.waitTicks(6);
+        context.takeScreenshot("lumi-hotkey-secret-code");
+        for (int key : new int[]{InputConstants.KEY_UP, InputConstants.KEY_UP,
+                InputConstants.KEY_DOWN, InputConstants.KEY_DOWN, InputConstants.KEY_LEFT, InputConstants.KEY_RIGHT,
+                InputConstants.KEY_LEFT, InputConstants.KEY_RIGHT, InputConstants.KEY_B, InputConstants.KEY_A}) {
+            context.getInput().pressKey(key);
+        }
+        context.waitFor(client -> client.screen != null
+                && client.screen.getClass().getSimpleName().equals("LumiAstroInvadersScreen"), 100);
+        context.getInput().holdKeyFor(InputConstants.KEY_SPACE, 25);
+        context.getInput().holdKeyFor(InputConstants.KEY_LEFT, 5);
+        context.getInput().pressKey(InputConstants.KEY_P);
+        context.waitTicks(3);
+        context.takeScreenshot("lumi-astro-invaders");
+        context.getInput().pressKey(InputConstants.KEY_ESCAPE);
+        context.waitForScreen(LumiHotkeyScreen.class);
+        context.getInput().pressKey(InputConstants.KEY_ESCAPE);
+        context.waitForScreen(null);
+        report.event("gate", "astro_invaders", "succeeded", 0, 0,
+                "actual Konami input;shoot/move/pause;Escape returns to shortcut guide;screenshots");
     }
 
     private static Button closeButton(Screen screen) {

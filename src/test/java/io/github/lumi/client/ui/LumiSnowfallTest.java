@@ -62,9 +62,12 @@ class LumiSnowfallTest {
             changed |= dvd.color() != color;
         }
         assertTrue(changed);
-        assertFalse(dvd.advance(605_000, 41, 40, 160, 100, 48, 18, true));
-        dvd.activity(1_200_000);
-        assertFalse(dvd.advance(1_200_001, 41, 40, 160, 100, 48, 18, true));
-        assertFalse(dvd.advance(1_900_000, 41, 40, 160, 100, 48, 18, false));
+        assertFalse(dvd.allowInput(604_999));
+        assertTrue(dvd.allowInput(605_000));
+        assertTrue(dvd.advance(1_205_000, 40, 40, 160, 100, 48, 18, true));
+        assertFalse(dvd.advance(1_205_001, 41, 40, 160, 100, 48, 18, true));
+        dvd.activity(1_800_000);
+        assertFalse(dvd.advance(1_800_001, 41, 40, 160, 100, 48, 18, true));
+        assertFalse(dvd.advance(2_500_000, 41, 40, 160, 100, 48, 18, false));
     }
 }

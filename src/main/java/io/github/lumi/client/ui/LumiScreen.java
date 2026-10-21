@@ -70,12 +70,12 @@ public abstract class LumiScreen extends Screen {
         ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
             if (!(screen instanceof LumiScreen lumi)) return;
             lumi.screensaver.activity(System.currentTimeMillis());
-            ScreenKeyboardEvents.beforeKeyPress(screen).register((current, event) ->
-                    lumi.screensaver.activity(System.currentTimeMillis()));
-            ScreenMouseEvents.beforeMouseClick(screen).register((current, event) ->
-                    lumi.screensaver.activity(System.currentTimeMillis()));
-            ScreenMouseEvents.beforeMouseScroll(screen).register((current, x, y, horizontal, vertical) ->
-                    lumi.screensaver.activity(System.currentTimeMillis()));
+            ScreenKeyboardEvents.allowKeyPress(screen).register((current, event) ->
+                    lumi.screensaver.allowInput(System.currentTimeMillis()));
+            ScreenMouseEvents.allowMouseClick(screen).register((current, event) ->
+                    lumi.screensaver.allowInput(System.currentTimeMillis()));
+            ScreenMouseEvents.allowMouseScroll(screen).register((current, x, y, horizontal, vertical) ->
+                    lumi.screensaver.allowInput(System.currentTimeMillis()));
         });
     }
 

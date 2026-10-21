@@ -1,9 +1,12 @@
 package io.github.lumi.client.ui;
 
 import io.github.lumi.client.LumiHotkeys;
+import com.mojang.blaze3d.platform.InputConstants;
+import java.util.Arrays;
 import java.util.List;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
 /** Read-only table of the actual registered Lumi shortcuts. */
@@ -15,6 +18,8 @@ public final class LumiHotkeyScreen extends LumiModalScreen {
     private int panelWidth;
     private int panelHeight;
     private int scroll;
+    private final SecretCode secretCode = new SecretCode();
+    private int lastCodeKey = -1;
 
     public LumiHotkeyScreen(Screen parent, List<LumiHotkeys.Shortcut> shortcuts) {
         super(Component.translatable("luma.screen.hotkeys.title"));
@@ -61,9 +66,13 @@ public final class LumiHotkeyScreen extends LumiModalScreen {
         }
         renderScrollbar(
                 graphics, panelX + 8, panelY + 57, panelWidth - 14,
-                Math.max(0, panelHeight - 69),
+                Math.max(0, panelHeight - 85),
                 shortcuts.size(), visibleRows(), scroll,
                 value -> scroll = value);
+        if (scroll + count == shortcuts.size()) {
+            graphics.drawCenteredString(font, "↑ ↑ ↓ ↓ ← → ← → B A",
+                    panelX + panelWidth / 2, panelY + panelHeight - 17, 0x995c6068);
+        }
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
             endScaledRender(graphics, render, partialTick);
@@ -93,11 +102,44 @@ public final class LumiHotkeyScreen extends LumiModalScreen {
     }
 
     static int fittedPanelHeight(int screenHeight, int shortcutCount) {
-        return Math.min(76 + shortcutCount * 34, Math.max(1, screenHeight - 24));
+        return Math.min(80 + shortcutCount * 34, Math.max(1, screenHeight - 24));
     }
 
     static int visibleShortcutRows(int panelHeight, int shortcutCount) {
-        return Math.min(shortcutCount, Math.max(0, (panelHeight - 54) / 34));
+        return Math.min(shortcutCount, Math.max(0, (panelHeight - 80) / 34));
+    }
+
+    @Override public boolean keyPressed(KeyEvent event) {
+        if (event.key() == lastCodeKey) return true;
+        lastCodeKey = event.key();
+        if (secretCode.press(event.key())) {
+            lastCodeKey = -1;
+            minecraft.setScreen(new LumiAstroInvadersScreen(this));
+            return true;
+        }
+        return super.keyPressed(event);
+    }
+
+    @Override public boolean keyReleased(KeyEvent event) {
+        if (lastCodeKey == event.key()) lastCodeKey = -1;
+        return super.keyReleased(event);
+    }
+
+    static final class SecretCode {
+        private static final int[] CODE = {InputConstants.KEY_UP, InputConstants.KEY_UP,
+                InputConstants.KEY_DOWN, InputConstants.KEY_DOWN, InputConstants.KEY_LEFT, InputConstants.KEY_RIGHT,
+                InputConstants.KEY_LEFT, InputConstants.KEY_RIGHT, InputConstants.KEY_B, InputConstants.KEY_A};
+        private final int[] entered = new int[CODE.length];
+        private int length;
+
+        boolean press(int key) {
+            if (length == entered.length) System.arraycopy(entered, 1, entered, 0, entered.length - 1);
+            else length++;
+            entered[length - 1] = key;
+            boolean matched = length == CODE.length && Arrays.equals(entered, CODE);
+            if (matched) length = 0;
+            return matched;
+        }
     }
 
     @Override public boolean isPauseScreen() { return false; }

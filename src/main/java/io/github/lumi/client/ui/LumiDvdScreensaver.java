@@ -17,6 +17,12 @@ final class LumiDvdScreensaver {
         visible = false;
     }
 
+    boolean allowInput(long now) {
+        boolean allowed = !visible;
+        activity(now);
+        return allowed;
+    }
+
     void render(GuiGraphics graphics, Font font, int width, int height, int pointerX, int pointerY) {
         if (!advance(System.currentTimeMillis(), pointerX, pointerY, width, height,
                 font.width("Lumi") * 2, font.lineHeight * 2, LumiMotion.enabled())) return;
