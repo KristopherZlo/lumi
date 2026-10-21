@@ -297,7 +297,7 @@ public final class LumiPackageScreen extends LumiPageScreen {
                 graphics.drawString(font,
                         font.plainSubstrByWidth(status, panelWidth - 32),
                         panelX + 16, panelY + geometry.statusY(),
-                        failed ? LumiTheme.DANGER : LumiTheme.ACCENT,
+                        failed ? LumiTheme.DANGER : LumiTheme.accent(),
                         false);
             }
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);

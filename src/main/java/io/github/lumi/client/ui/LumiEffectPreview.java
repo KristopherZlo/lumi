@@ -113,7 +113,7 @@ public final class LumiEffectPreview {
         graphics.disableScissor();
         if (frame.state == State.SAVE) {
             int inset = motion.animated ? (int) (5*(1-frame.mix)) : 0;
-            int color = LumiTheme.withOpacity(LumiTheme.ACCENT, (float) (frame.opacity*.8));
+            int color = LumiTheme.withOpacity(LumiTheme.accent(), (float) (frame.opacity*.8));
             for (int side = 0; side < 2; side++) {
                 int edge = side == 0 ? x+inset : x+width-inset-1;
                 int left = side == 0 ? edge : edge-7;
@@ -127,7 +127,7 @@ public final class LumiEffectPreview {
     private static void drawState(GuiGraphics graphics, State state, int repetitions, int x, int y, int width,
             double opacity, int shift, double progress) {
         if (opacity < .04) return;
-        int accent = state == State.ERROR ? LumiTheme.DANGER : state == State.IDLE ? LumiTheme.MUTED : LumiTheme.ACCENT;
+        int accent = state == State.ERROR ? LumiTheme.DANGER : state == State.IDLE ? LumiTheme.MUTED : LumiTheme.accent();
         int detailWidth = state.height == 24
                 ? Math.min(Minecraft.getInstance().font.width(state.detail), Math.max(0, (width-20)/2)) : 0;
         String title = repetitions > 1 && (state == State.UNDO || state == State.REDO)

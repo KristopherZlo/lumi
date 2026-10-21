@@ -404,7 +404,7 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
                     x + LumiDashboardScreen.PANEL_PADDING,
                     layout.bodyY() + statusOffset,
                     statistics.isPresent()
-                            ? LumiTheme.ACCENT : LumiTheme.MUTED,
+                            ? LumiTheme.accent() : LumiTheme.MUTED,
                     false);
         }
         if (geometry.latestVisible()) {

@@ -183,7 +183,7 @@ public final class LumiMergeScreen extends LumiModalScreen {
         }
         graphics.drawCenteredString(font,
                 Component.translatable("luma.merge.source_wins"),
-                width / 2, panelY + 52, LumiTheme.ACCENT);
+                width / 2, panelY + 52, LumiTheme.accent());
         List<HistorySnapshotPayload.Branch> sources = sourceBranches();
         int visibleRows = visibleBranchRows(panelHeight);
         int buttonWidth = Math.min(148, Math.max(80, panelWidth / 3));
@@ -232,7 +232,7 @@ public final class LumiMergeScreen extends LumiModalScreen {
         drawPreview(graphics, pendingSource, startX, previewY,
                 previewWidth, previewHeight,
                 "luma.ideas.merge_source_preview",
-                LumiTheme.ACCENT);
+                LumiTheme.accent());
         if (target != null) {
             drawPreview(graphics, target,
                     startX + previewWidth + gap, previewY,
@@ -244,7 +244,7 @@ public final class LumiMergeScreen extends LumiModalScreen {
                 font, Component.literal("→"),
                 panelX + panelWidth / 2,
                 previewY + previewHeight / 2 - 4,
-                LumiTheme.ACCENT);
+                LumiTheme.accent());
         graphics.drawCenteredString(
                 font,
                 font.plainSubstrByWidth(

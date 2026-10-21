@@ -204,7 +204,7 @@ public final class LumiRestoreScreen extends LumiModalScreen {
         } else if (form.previewToken().isPresent()) {
             status = Component.translatable("luma.partial_restore.summary",
                     form.changedBlocks(), form.changedSections());
-            color = form.changedBlocks() == 0 ? LumiTheme.MUTED : LumiTheme.ACCENT;
+            color = form.changedBlocks() == 0 ? LumiTheme.MUTED : LumiTheme.accent();
         }
         if (status != null) {
             graphics.drawCenteredString(font, font.plainSubstrByWidth(

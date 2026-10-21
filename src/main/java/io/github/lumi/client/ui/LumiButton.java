@@ -116,7 +116,7 @@ public class LumiButton extends Button {
         }
         if (active && kind == Kind.SELECTED) {
             graphics.fill(getX(), getY() + 3, getX() + 2, getY() + getHeight() - 3,
-                    accentColor == null ? LumiTheme.ACCENT : accentColor);
+                    accentColor == null ? LumiTheme.accent() : accentColor);
         }
         if (icon != null) {
             int preferredSize = LumiUiScale.current().targetGuiScale() == 3 ? 8 : 12;
@@ -168,21 +168,15 @@ public class LumiButton extends Button {
     }
 
     public enum Kind {
-        NORMAL(0xff222326, 0xff343438),
-        PRIMARY(0xff7a5a21, 0xff936d29),
-        DANGER(0xff40262a, 0xff783438),
-        SELECTED(0xff211f18, 0xff211f18);
-
-        private final int fill;
-        private final int hover;
-
-        Kind(int fill, int hover) {
-            this.fill = fill;
-            this.hover = hover;
-        }
+        NORMAL, PRIMARY, DANGER, SELECTED;
 
         int fill(boolean hovered) {
-            return hovered ? hover : fill;
+            return switch (this) {
+                case NORMAL -> hovered ? 0xff343438 : 0xff222326;
+                case PRIMARY -> LumiTheme.accentSurface(hovered ? .52F : .42F);
+                case DANGER -> hovered ? 0xff783438 : 0xff40262a;
+                case SELECTED -> LumiTheme.accentSurface(.08F);
+            };
         }
     }
 }

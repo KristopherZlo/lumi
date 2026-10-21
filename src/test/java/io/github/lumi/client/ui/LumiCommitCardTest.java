@@ -30,7 +30,7 @@ class LumiCommitCardTest {
     }
 
     @Test
-    void reservesRoomForTheNameBesideALocalizedCurrentBadge() {
+    void reservesRoomForTheNameBesideALocalizedLatestBadge() {
         assertEquals(0, LumiCommitCard.badgeWidth(0, 80));
         assertEquals(0, LumiCommitCard.badgeWidth(99, 80));
         assertEquals(50, LumiCommitCard.badgeWidth(100, 180));

@@ -1,4 +1,8 @@
 {
+  "lumi.accent.current": "Lumi accent: %s. Use /lumi accent default or /lumi accent #RRGGBB.",
+  "lumi.accent.changed": "Lumi accent set to %s.",
+  "lumi.accent.invalid": "Use default or a six-digit HEX color, such as #8ECFFF.",
+  "lumi.accent.save_failed": "Could not save the accent color. The previous color is still active.",
   "lumi.axiom.mode": "Axiom Undo/Redo",
   "lumi.axiom.entry_unavailable": "This Axiom action is still synchronizing or is no longer available. Lumi history is retained.",
   "lumi.axiom.mode_changed": "The Axiom history mode has changed. Reconnect before using its history.",

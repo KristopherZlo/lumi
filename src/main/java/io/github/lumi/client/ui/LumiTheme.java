@@ -1,13 +1,20 @@
 package io.github.lumi.client.ui;
 
+import com.mojang.brigadier.arguments.StringArgumentType;
+import io.github.lumi.client.state.ClientAccentRepository;
+import java.io.IOException;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.network.chat.Component;
 
 /** Colors and simple surfaces shared by the Lumi V2 presentation. */
-final class LumiTheme {
+public final class LumiTheme {
     static final int PAGE_HEADER_HEIGHT = 42;
     static final int TEXT = 0xfff4f1ea;
     static final int MUTED = 0xffa9a39a;
-    static final int ACCENT = 0xffd9b86c;
+    private static int accent = ClientAccentRepository.DEFAULT;
     static final int DANGER = 0xffff8585;
     static final int BACKDROP = 0xd608090a;
     static final int WINDOW = 0xff141517;
@@ -20,10 +27,58 @@ final class LumiTheme {
     static final int INSET_BORDER = 0xff2b2a2f;
     static final int CHIP = 0xff242326;
     static final int CHIP_BORDER = 0xff3c3830;
-    static final int STATUS = 0xff211f18;
-    static final int STATUS_BORDER = 0xff5a4724;
 
     private LumiTheme() {
+    }
+
+    public static void registerCommands() {
+        var preferences = new ClientAccentRepository(
+                FabricLoader.getInstance().getConfigDir().resolve("lumi-accent"));
+        accent = preferences.load();
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, access) ->
+                dispatcher.register(ClientCommandManager.literal("lumi").then(
+                        ClientCommandManager.literal("accent")
+                                .executes(context -> {
+                                    context.getSource().sendFeedback(Component.translatable(
+                                            "lumi.accent.current", ClientAccentRepository.hex(accent)));
+                                    return 1;
+                                })
+                                .then(ClientCommandManager.argument("color", StringArgumentType.greedyString())
+                                        .suggests((context, builder) -> builder.suggest("default")
+                                                .suggest("#D9B86C").buildFuture())
+                                        .executes(context -> {
+                                            try {
+                                                int color = ClientAccentRepository.parse(
+                                                        StringArgumentType.getString(context, "color"));
+                                                preferences.save(color);
+                                                accent = color;
+                                                context.getSource().sendFeedback(Component.translatable(
+                                                        "lumi.accent.changed", ClientAccentRepository.hex(color)));
+                                                return 1;
+                                            } catch (IllegalArgumentException invalid) {
+                                                context.getSource().sendError(Component.translatable("lumi.accent.invalid"));
+                                            } catch (IOException failed) {
+                                                context.getSource().sendError(Component.translatable("lumi.accent.save_failed"));
+                                            }
+                                            return 0;
+                                        })))));
+    }
+
+    static int accent() {
+        return accent;
+    }
+
+    static int status() { return accentSurface(.08F); }
+
+    static int statusBorder() { return accentSurface(.3F); }
+
+    static int accentSurface(float strength) {
+        int result = 0xff000000;
+        for (int shift = 0; shift <= 16; shift += 8) {
+            int base = WINDOW >>> shift & 255;
+            result |= Math.round(base + ((accent >>> shift & 255) - base) * strength) << shift;
+        }
+        return result;
     }
 
     static void outlined(

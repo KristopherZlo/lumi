@@ -56,7 +56,7 @@ final class LumiScrollbar extends Button {
                 getY() + getHeight(), LumiTheme.INSET_BORDER);
         int thumbY = thumbY();
         graphics.fill(getX(), thumbY, getX() + WIDTH,
-                thumbY + thumbHeight(), LumiTheme.ACCENT);
+                thumbY + thumbHeight(), LumiTheme.accent());
     }
 
     @Override

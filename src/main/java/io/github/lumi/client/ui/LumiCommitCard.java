@@ -74,9 +74,8 @@ final class LumiCommitCard {
             drawPreview(graphics, version, layout.previewX(), layout.previewY());
         }
         if (layout.textWidth() <= 0) return;
-        String badge = head
-                ? Component.translatable("luma.project.active_head_badge").getString()
-                : featured ? Component.translatable("luma.dashboard.latest_badge").getString() : "";
+        String badge = !head && featured
+                ? Component.translatable("luma.dashboard.latest_badge").getString() : "";
         int badgeWidth = badge.isEmpty() ? 0 : badgeWidth(layout.textWidth(), font.width(badge));
         if (badgeWidth > 0) {
             int badgeX = layout.textX() + layout.textWidth() - badgeWidth;

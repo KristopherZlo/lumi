@@ -126,7 +126,7 @@ public final class LumiUpdateScreen extends LumiModalScreen {
         if (checking) {
             graphics.drawString(font,
                     Component.translatable("luma.action.checking_updates"),
-                    panelX + 22, panelY + 76, LumiTheme.ACCENT, false);
+                    panelX + 22, panelY + 76, LumiTheme.accent(), false);
             return;
         }
         if (result == null) {
@@ -147,7 +147,7 @@ public final class LumiUpdateScreen extends LumiModalScreen {
             body = Component.translatable("luma.update.check_failed_body");
         }
         graphics.drawString(font, heading, panelX + 22, panelY + 76,
-                LumiTheme.ACCENT, false);
+                LumiTheme.accent(), false);
         int y = drawWrapped(graphics, body, panelY + 98, LumiTheme.TEXT);
         if (result.status() == UpdateCheckResult.Status.UPDATE_AVAILABLE
                 && fitsResultLine(y + 8, resultBottom)) {

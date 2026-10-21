@@ -68,7 +68,7 @@ public final class LumiPackageInspectionScreen extends LumiModalScreen {
                 graphics,
                 Component.translatable("luma.share.package_safety_warning"),
                 panelX + 20, panelY + 36, panelWidth - 40,
-                LumiTheme.ACCENT);
+                LumiTheme.accent());
         int actionY = panelY + actionOffset(panelHeight);
         int errorSpace = error.isEmpty() ? 0 : 14;
         int detailsY = Math.max(panelY + 68, warningBottom + 6);

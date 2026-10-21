@@ -23,6 +23,7 @@ import io.github.lumi.client.onboarding.OnboardingController;
 import io.github.lumi.client.onboarding.OnboardingEvent;
 import io.github.lumi.client.ui.LumiSaveScreen;
 import io.github.lumi.client.ui.LumiEffectPreview;
+import io.github.lumi.client.ui.LumiTheme;
 import io.github.lumi.client.ui.LumiFallingPlayerOverlay;
 import io.github.lumi.client.ui.LumiSettingsScreen;
 import io.github.lumi.client.ui.LumiUpdateScreen;
@@ -228,6 +229,7 @@ public final class LumiClient implements ClientModInitializer {
         new LumiSelectionOverlay(SELECTION).register();
         new LumiSelectionHud(SELECTION).register();
         ZONE_OVERLAY.register();
+        LumiTheme.registerCommands();
         new LumiOperationHud(
                 HISTORY, PENDING_STATISTICS, NOTIFICATIONS,
                 PENDING_OVERLAY::highlightProgress).register();

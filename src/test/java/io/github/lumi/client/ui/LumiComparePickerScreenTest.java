@@ -35,7 +35,7 @@ class LumiComparePickerScreenTest {
                 "layout.x() + layout.width() - 42, footerY"));
         assertTrue(source.contains("minecraft.setScreen(null)"));
         assertTrue(source.contains(
-                "selected ? LumiTheme.ACCENT : LumiTheme.PANEL_BORDER"));
+                "selected ? LumiTheme.accent() : LumiTheme.PANEL_BORDER"));
         assertTrue(source.contains("snapshot.dimensionId(), version.id()"));
     }
 

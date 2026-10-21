@@ -265,12 +265,12 @@ public abstract class LumiScreen extends Screen {
         if (contextualHint == null) return;
         LumiTheme.outlined(
                 graphics, hintX, hintY, hintWidth, hintHeight,
-                LumiTheme.STATUS, LumiTheme.STATUS_BORDER);
+                LumiTheme.status(), LumiTheme.statusBorder());
         String title = font.plainSubstrByWidth(
                 Component.translatable(contextualHint.titleKey()).getString(),
                 hintTitleWidth());
         graphics.drawString(font, title, hintX + 8, hintY + 8,
-                LumiTheme.ACCENT, false);
+                LumiTheme.accent(), false);
         if (contextualHints.size() > 1) {
             String counter = (contextualHintIndex + 1)
                     + "/" + contextualHints.size();

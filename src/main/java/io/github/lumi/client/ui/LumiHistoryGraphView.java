@@ -88,7 +88,7 @@ final class LumiHistoryGraphView {
         int cardX = position.x();
         int cardY = position.y();
         LumiTheme.outlined(graphics, cardX, cardY, cardWidth, 56,
-                LumiTheme.PANEL, LumiTheme.ACCENT);
+                LumiTheme.PANEL, LumiTheme.accent());
         var texture = previews.texture(dimensionId, version.id()).orElse(null);
         if (texture == null) {
             LumiPreviewRenderer.drawPlaceholder(
@@ -109,7 +109,7 @@ final class LumiHistoryGraphView {
                 textX, cardY + 20, LumiTheme.MUTED, false);
         graphics.drawString(font,
                 Long.toString(version.statistics().blocks()),
-                textX, cardY + 33, LumiTheme.ACCENT, false);
+                textX, cardY + 33, LumiTheme.accent(), false);
     }
 
     Optional<HistoryGraphLayout.Node> nodeAt(double mouseX, double mouseY) {

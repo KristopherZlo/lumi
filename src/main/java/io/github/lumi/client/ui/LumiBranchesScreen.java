@@ -221,7 +221,7 @@ public final class LumiBranchesScreen extends LumiPageScreen {
                         font.plainSubstrByWidth(
                                 shortName(branch.name()), nameWidth),
                         layout.x() + 24, rowY + (stacksActions(layout.width()) ? 8 : 9),
-                        branch.active() ? LumiTheme.ACCENT : LumiTheme.TEXT,
+                        branch.active() ? LumiTheme.accent() : LumiTheme.TEXT,
                         false);
             }
         }

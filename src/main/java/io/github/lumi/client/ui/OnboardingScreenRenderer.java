@@ -58,7 +58,7 @@ final class OnboardingScreenRenderer {
         graphics.fill(
                 hole.right(), hole.y(), screenWidth, hole.bottom(),
                 LumiTheme.BACKDROP);
-        outline(graphics, hole, LumiTheme.ACCENT);
+        outline(graphics, hole, LumiTheme.accent());
         var prompt = placement.prompt();
         LumiTheme.outlined(
                 graphics,
@@ -86,7 +86,7 @@ final class OnboardingScreenRenderer {
                 x, y, LumiTheme.MUTED, false);
         graphics.drawString(
                 font, Component.translatable(controller.current().titleKey()),
-                x, y + 16, LumiTheme.ACCENT, false);
+                x, y + 16, LumiTheme.accent(), false);
         int lineY = y + 36;
         for (var line : font.split(
                 Component.translatable(controller.current().helpKey()), textWidth)) {

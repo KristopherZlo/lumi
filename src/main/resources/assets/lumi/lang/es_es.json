@@ -1,4 +1,8 @@
 {
+  "lumi.accent.current": "Acento de Lumi: %s. Usa /lumi accent default o /lumi accent #RRGGBB.",
+  "lumi.accent.changed": "Color de acento de Lumi: %s.",
+  "lumi.accent.invalid": "Usa default o un color HEX de seis dígitos, como #8ECFFF.",
+  "lumi.accent.save_failed": "No se pudo guardar el color. El color anterior sigue activo.",
   "key.category.lumi.general": "Lumi",
   "key.lumi.undo": "Deshacer",
   "key.lumi.redo": "Rehacer",

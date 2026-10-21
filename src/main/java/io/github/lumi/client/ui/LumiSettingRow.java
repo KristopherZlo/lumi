@@ -87,7 +87,7 @@ final class LumiSettingRow extends Button {
                 getX() + getWidth() - 8, getY() + getHeight(), LumiTheme.INSET_BORDER);
         if (active && isFocused()) {
             graphics.fill(getX(), getY() + 4, getX() + 2, getY() + getHeight() - 4,
-                    LumiTheme.ACCENT);
+                    LumiTheme.accent());
         }
 
         var font = Minecraft.getInstance().font;
@@ -122,14 +122,14 @@ final class LumiSettingRow extends Button {
         int valueY = getY() + (getHeight() - CONTROL_HEIGHT) / 2;
         LumiTheme.outlined(
                 graphics, valueX, valueY, valueWidth, CONTROL_HEIGHT,
-                selected ? LumiTheme.STATUS : LumiTheme.CHIP,
+                selected ? LumiTheme.status() : LumiTheme.CHIP,
                 selected
-                        ? LumiTheme.STATUS_BORDER : LumiTheme.CHIP_BORDER);
+                        ? LumiTheme.statusBorder() : LumiTheme.CHIP_BORDER);
         graphics.drawCenteredString(
                 font,
                 font.plainSubstrByWidth(valueText, valueWidth - 8),
                 valueX + valueWidth / 2, valueY + 5,
-                selected ? LumiTheme.ACCENT : LumiTheme.MUTED);
+                selected ? LumiTheme.accent() : LumiTheme.MUTED);
     }
 
     private void drawToggle(GuiGraphics graphics, int width) {
@@ -140,7 +140,7 @@ final class LumiSettingRow extends Button {
         graphics.fill(x + 2, y, x + width - 2, y + 14, track);
         graphics.fill(x, y + 2, x + width, y + 12, track);
         if (active && position > 0) {
-            int accent = LumiTheme.withOpacity(LumiTheme.ACCENT, position * .65F);
+            int accent = LumiTheme.withOpacity(LumiTheme.accent(), position * .65F);
             graphics.fill(x + 2, y, x + width - 2, y + 14, accent);
             graphics.fill(x, y + 2, x + width, y + 12, accent);
         }

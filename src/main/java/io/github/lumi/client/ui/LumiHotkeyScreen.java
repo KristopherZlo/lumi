@@ -50,7 +50,7 @@ public final class LumiHotkeyScreen extends LumiModalScreen {
             renderPanel(graphics,
                     panelX + 12, y - 5, panelWidth - 24, 30);
             graphics.drawString(font, shortcut.display(modifier),
-                    panelX + 20, y + 3, LumiTheme.ACCENT, false);
+                    panelX + 20, y + 3, LumiTheme.accent(), false);
             graphics.drawString(font, Component.translatable(shortcut.labelKey()),
                     panelX + 118, y, LumiTheme.TEXT, false);
             graphics.drawString(font,

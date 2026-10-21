@@ -191,7 +191,7 @@ public final class LumiDeletedVersionsScreen extends LumiPageScreen {
                         contentTextWidth(panelWidth)),
                 panelX + panelWidth / 2,
                 panelY + confirmationWarningOffset(panelHeight),
-                LumiTheme.ACCENT);
+                LumiTheme.accent());
     }
 
     static int footerOffset(int panelHeight) {

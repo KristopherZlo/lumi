@@ -87,7 +87,7 @@ public final class LumiZoneRestoreScreen extends LumiModalScreen {
             graphics.drawCenteredString(font, clippedCenteredHeader(
                     Component.translatable("luma.restore.confirm_safety"),
                     centerX, contentLeft, contentRight),
-                    centerX, panelY + 92, LumiTheme.ACCENT);
+                    centerX, panelY + 92, LumiTheme.accent());
             if (!error.isEmpty()) {
                 graphics.drawCenteredString(font, clippedCenteredHeader(
                         errorText(error), centerX, contentLeft, contentRight),

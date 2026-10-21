@@ -291,7 +291,7 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
                     graphics, version, version.tags(),
                     LumiDashboardScreen.versionCardLayout(
                             layout.bodyX(), layout.bodyWidth(), y),
-                    LumiTheme.ACCENT, false, false, mouseX, mouseY);
+                    LumiTheme.accent(), false, false, mouseX, mouseY);
         }
         if (loadedView.isEmpty()) {
             Optional<HistoryPagePayload> page = page();
@@ -328,7 +328,7 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
                     LumiDashboardScreen.versionCardLayout(
                             layout.bodyX(), layout.bodyWidth(),
                             LumiDashboardScreen.latestCardY(geometry)),
-                    LumiTheme.ACCENT, false, true, mouseX, mouseY);
+                    LumiTheme.accent(), false, true, mouseX, mouseY);
         });
     }
 

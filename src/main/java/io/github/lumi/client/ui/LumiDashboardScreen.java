@@ -628,7 +628,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                     pendingText,
                     x + PANEL_PADDING, layout.bodyY() + pendingOffset,
                     pending == 0
-                            ? LumiTheme.MUTED : LumiTheme.ACCENT,
+                            ? LumiTheme.MUTED : LumiTheme.accent(),
                     false);
         }
 
@@ -720,7 +720,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         }
         try {
             commitCards.render(
-                    graphics, version, tags, card, LumiTheme.ACCENT,
+                    graphics, version, tags, card, LumiTheme.accent(),
                     snapshot.head().equals(version.id()), featured,
                     mouseX, mouseY);
         } finally {

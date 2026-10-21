@@ -117,7 +117,7 @@ class LumiDropdown<T> extends LumiButton {
             boolean optionSelected = Objects.equals(option, selected);
             LumiTheme.outlined(graphics, getX(), y, getWidth(), ROW_HEIGHT,
                     LumiTheme.WINDOW, optionSelected
-                            ? LumiTheme.ACCENT : LumiTheme.INSET_BORDER);
+                            ? LumiTheme.accent() : LumiTheme.INSET_BORDER);
             int hoverAlpha = Math.round(40 * hover[index]);
             if (hoverAlpha > 0) {
                 graphics.fill(getX() + 1, y + 1,
@@ -129,7 +129,7 @@ class LumiDropdown<T> extends LumiButton {
                     font.plainSubstrByWidth(label.apply(option).getString(),
                             getWidth() - 12 - LumiScrollbar.GUTTER_WIDTH),
                     getX() + 5, y + 5,
-                    optionSelected ? LumiTheme.ACCENT : LumiTheme.TEXT,
+                    optionSelected ? LumiTheme.accent() : LumiTheme.TEXT,
                     false);
         }
         configureScrollbar();

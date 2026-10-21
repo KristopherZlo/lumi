@@ -231,7 +231,7 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
                 Component.translatable(left
                         ? "luma.compare.left_column"
                         : "luma.compare.right_column"),
-                x + width / 2, layout.y() + 52, LumiTheme.ACCENT);
+                x + width / 2, layout.y() + 52, LumiTheme.accent());
         List<HistorySnapshotPayload.Version> versions = versions(left);
         if (versions.isEmpty()) {
             String error = history(left).error();
@@ -271,7 +271,7 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
         LumiTheme.outlined(
                 graphics, x, y, width, ROW_HEIGHT,
                 LumiTheme.PANEL,
-                selected ? LumiTheme.ACCENT : LumiTheme.PANEL_BORDER);
+                selected ? LumiTheme.accent() : LumiTheme.PANEL_BORDER);
         boolean compact = compactCards();
         int previewWidth = compact ? COMPACT_PREVIEW_WIDTH : PREVIEW_WIDTH;
         int previewHeight = compact ? COMPACT_PREVIEW_HEIGHT : PREVIEW_HEIGHT;

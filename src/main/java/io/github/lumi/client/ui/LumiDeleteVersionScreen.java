@@ -102,7 +102,7 @@ public final class LumiDeleteVersionScreen extends LumiModalScreen {
             graphics.drawCenteredString(font, clippedCenteredHeader(
                     Component.translatable("luma.save_details.delete_warning"),
                     centerX, contentLeft, contentRight),
-                    centerX, panelY + 90, LumiTheme.ACCENT);
+                    centerX, panelY + 90, LumiTheme.accent());
             if (!error.isEmpty()) {
                 graphics.drawCenteredString(font, clippedCenteredHeader(
                         errorText(error), centerX, contentLeft, contentRight),

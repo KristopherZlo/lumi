@@ -1,4 +1,8 @@
 {
+  "lumi.accent.current": "Акцент Lumi: %s. Команда: /lumi accent default или /lumi accent #RRGGBB.",
+  "lumi.accent.changed": "Цвет акцента Lumi: %s.",
+  "lumi.accent.invalid": "Укажите default или HEX из шести цифр, например #8ECFFF.",
+  "lumi.accent.save_failed": "Не удалось сохранить цвет акцента. Прежний цвет остаётся активным.",
   "lumi.axiom.mode": "Отмена Axiom",
   "lumi.axiom.entry_unavailable": "Это действие Axiom ещё синхронизируется или больше недоступно. История Lumi сохранена.",
   "lumi.axiom.mode_changed": "Режим истории Axiom изменился. Переподключитесь перед её использованием.",

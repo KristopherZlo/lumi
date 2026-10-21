@@ -308,10 +308,10 @@ public final class LumiSaveScreen extends LumiModalScreen {
 
         LumiTheme.outlined(graphics, x + 6, y + 34,
                 layout.width() - 12, 26,
-                LumiTheme.STATUS, LumiTheme.STATUS_BORDER);
+                LumiTheme.status(), LumiTheme.statusBorder());
         Component status = status();
         int statusColor = error.isEmpty()
-                ? LumiTheme.ACCENT : LumiTheme.DANGER;
+                ? LumiTheme.accent() : LumiTheme.DANGER;
         graphics.drawString(font,
                 font.plainSubstrByWidth(status.getString(), layout.width() - 132),
                 x + 12, y + 43, statusColor, false);

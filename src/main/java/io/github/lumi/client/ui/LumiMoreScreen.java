@@ -132,7 +132,7 @@ public final class LumiMoreScreen extends LumiPageScreen {
             renderPanel(graphics, panelX + 16, y,
                     panelWidth - 32, category.height());
             graphics.drawString(font, Component.translatable(category.key()),
-                    panelX + 24, y + 7, LumiTheme.ACCENT, false);
+                    panelX + 24, y + 7, LumiTheme.accent(), false);
         }
         graphics.disableScissor();
         int viewportHeight = Math.max(0, actionBottom - actionTop);
