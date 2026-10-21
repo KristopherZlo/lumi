@@ -210,6 +210,8 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
     }
 
     private boolean awaitLighting(long deadlineNanos) throws IOException {
+        // Frozen dimensions skip the ordinary chunk tick that starts small lighting batches.
+        level.getChunkSource().getLightEngine().tryScheduleUpdate();
         if (!lighting.isDone()) {
             return false;
         }

@@ -79,6 +79,8 @@ class LumiOperationHudTest {
         assertEquals(24, LumiHudPanel.contentHeight(true, 0, false, 0));
         assertEquals(42, LumiHudPanel.contentHeight(false, 1, false, 0));
         assertEquals(50, LumiHudPanel.contentHeight(false, 1, true, 0));
+        int expanded = LumiHudPanel.contentHeight(true, 1, false, 3);
+        assertEquals(8, expanded - (24 + 4 + 2 * 13 + 9));
         assertEquals(LumiHudPanel.contentHeight(false, 3, true, 3),
                 LumiHudPanel.contentHeight(false, 500, true, 500));
         assertTrue(LumiHudPanel.contentHeight(false, 500, true, 500) < 120);

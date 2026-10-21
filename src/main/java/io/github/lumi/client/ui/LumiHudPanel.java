@@ -118,7 +118,7 @@ final class LumiHudPanel {
 
     static int contentHeight(boolean compact, int detailLines, boolean busy, int shortcuts) {
         return (compact ? 24 : 42 + (Math.clamp(detailLines, 1, 3) - 1) * 11)
-                + (busy ? 8 : 0) + Math.clamp(shortcuts, 0, 3) * 13;
+                + (busy ? 8 : 0) + Math.clamp(shortcuts, 0, 3) * 13 + (shortcuts > 0 ? 8 : 0);
     }
 
     private static void text(GuiGraphics graphics, String text, int x, int y, int width, int color, float alpha) {

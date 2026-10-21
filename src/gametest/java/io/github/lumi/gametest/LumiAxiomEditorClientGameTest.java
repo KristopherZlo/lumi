@@ -11,6 +11,7 @@ import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.client.LumiCompareRenderClientGameTest;
 import io.github.lumi.client.ui.LumiHotkeyScreen;
 import io.github.lumi.client.ui.LumiUiScale;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -23,6 +24,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
 
 /** Exercises native mouse routing with Axiom's actual editor viewport enabled. */
 public final class LumiAxiomEditorClientGameTest implements FabricClientGameTest {
@@ -145,6 +147,12 @@ public final class LumiAxiomEditorClientGameTest implements FabricClientGameTest
         try {
             context.runOnClient(client -> {
                 EditorUI.disable();
+                for (String command : List.of("lumi accent default", "lumi accent #8ECFFF", "lumi motion true")) {
+                    var parsed = client.getConnection().getCommands().parse(
+                            command, client.getConnection().getSuggestionsProvider());
+                    if (parsed.getReader().canRead() || parsed.getContext().getCommand() == null)
+                        throw new AssertionError("Client chat rejected local command: " + command);
+                }
                 client.getConnection().sendCommand("lumi accent #8ECFFF");
             });
             if (preferences.load() != 0xff8ecfff) throw new AssertionError("Accent command did not persist HEX color");
@@ -152,8 +160,19 @@ public final class LumiAxiomEditorClientGameTest implements FabricClientGameTest
             var actions = new LumiBehaviorActions(world.getServer(), report);
             var position = world.getServer().computeOnServer(server ->
                     server.getPlayerList().getPlayers().getFirst().blockPosition().east(2));
-            actions.placeBlocks("hud_fixture", Items.STONE,
-                    List.of(actions.surfacePosition(position.getX(), position.getZ())));
+            var block = actions.surfacePosition(position.getX(), position.getZ());
+            var before = world.getServer().computeOnServer(server -> server.overworld().getBlockState(block));
+            actions.placeBlocks("hud_fixture", Items.STONE, List.of(block));
+            try {
+                var operations = new LumiBehaviorOperations(context, world.getServer(), report);
+                operations.undoVisible("hud_single_block", false, block, before);
+                operations.redo("hud_single_block");
+                if (!world.getServer().computeOnServer(server -> server.overworld()
+                        .getBlockState(block).is(Blocks.STONE)))
+                    throw new AssertionError("Single-block Redo did not restore stone");
+            } catch (IOException failed) {
+                throw new AssertionError("Single-block Undo/Redo failed", failed);
+            }
             var save = context.computeOnClient(client -> LumiClient.networking().save("HUD courtyard"));
             waitForSuccess(context, save);
             context.waitTicks(10);

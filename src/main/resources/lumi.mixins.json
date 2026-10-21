@@ -45,6 +45,7 @@
     "TransientCarrierEntityMixin"
   ],
   "client": [
+    "client.ClientCommandsMixin",
     "client.AxiomToolExecutorMixin",
     "client.AxiomDispatchCompletionMixin",
     "client.AxiomDispatcherPendingAccess",
