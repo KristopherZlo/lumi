@@ -1,6 +1,7 @@
 package io.github.lumi.client.state;
 
 import io.github.lumi.network.HistorySnapshotPayload;
+import io.github.lumi.domain.model.HudDisplayMode;
 import io.github.lumi.network.OperationEventPayload;
 import java.util.Map;
 import java.util.Objects;
@@ -18,6 +19,12 @@ public record ClientHistoryState(
 
     public static ClientHistoryState empty() {
         return new ClientHistoryState(Optional.empty(), Map.of());
+    }
+
+    public HudDisplayMode hudDisplayMode() {
+        return snapshot.stream().flatMap(value -> value.workspaces().stream())
+                .filter(HistorySnapshotPayload.WorkspaceView::active).findFirst()
+                .map(HistorySnapshotPayload.WorkspaceView::hudDisplayMode).orElse(HudDisplayMode.GUI);
     }
 
     public Optional<OperationEventPayload> activeOperation() {

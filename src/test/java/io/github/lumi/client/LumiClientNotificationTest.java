@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 
 class LumiClientNotificationTest {
     @Test
-    void rendersEveryTerminalOutcomeWithStateColor() throws Exception {
+    void preservesOutcomeColorsWithoutDuplicatingGuiFeedback() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/LumiClient.java"));
         int start = source.indexOf("private static void acceptOperationEvent(");
@@ -18,7 +18,7 @@ class LumiClientNotificationTest {
 
         assertFalse(notifications.contains("message().startsWith(\"luma.\")"));
         assertTrue(notifications.contains(
-                "showFeedback(event.message(), eventColor(event.state(), event.message()))"));
+                "showFeedback(event.message(), eventColor(event.state(), event.message()),"));
         assertTrue(notifications.contains(
                 "\"luma.status.world_operation_busy\".equals(message)"));
         assertTrue(notifications.contains(
@@ -35,6 +35,7 @@ class LumiClientNotificationTest {
         assertTrue(source.contains(
                 "HISTORY, PENDING_STATISTICS, NOTIFICATIONS"));
         assertTrue(source.contains(
-                "workspace.hudDisplayMode() != HudDisplayMode.GUI"));
+                "HISTORY.state().hudDisplayMode() != HudDisplayMode.GUI"));
+        assertTrue(source.contains("MinecraftPlayerMessages.chat(player, styled)"));
     }
 }

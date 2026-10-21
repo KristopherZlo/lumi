@@ -61,6 +61,10 @@ final class LumiMotion {
         enabled = value;
     }
 
+    static boolean enabled() {
+        return enabled;
+    }
+
     boolean running() {
         return durationNanos != 0L && value() < 1.0F;
     }

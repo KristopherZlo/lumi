@@ -48,6 +48,7 @@ class LumiMotionTest {
         assertEquals(0, motion.toward(0));
         try {
             LumiMotion.setEnabled(false);
+            assertFalse(LumiMotion.enabled());
             assertEquals(1, motion.toward(1));
             assertEquals(0, motion.toward(0));
             assertFalse(motion.running());

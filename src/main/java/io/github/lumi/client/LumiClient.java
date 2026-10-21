@@ -311,7 +311,12 @@ public final class LumiClient implements ClientModInitializer {
         NOTIFICATIONS.add(styled,
                 0xff000000 | (rgb == null ? 0xf0f3f6 : rgb), request,
                 color == ChatFormatting.RED || color == ChatFormatting.DARK_RED);
-        MinecraftPlayerMessages.overlay(player, styled);
+        if (HISTORY.state().hudDisplayMode() != HudDisplayMode.GUI) {
+            MinecraftPlayerMessages.overlay(player, styled);
+        }
+        if (color == ChatFormatting.RED || color == ChatFormatting.DARK_RED) {
+            MinecraftPlayerMessages.chat(player, styled);
+        }
     }
 
     private static void acceptOperationEvent(OperationEventPayload event) {
@@ -763,10 +768,7 @@ public final class LumiClient implements ClientModInitializer {
 
     private static void acceptSnapshot(HistorySnapshotPayload snapshot) {
         BRANCH_SLOTS.synchronize(snapshot);
-        if (snapshot.workspaces().stream()
-                .filter(HistorySnapshotPayload.WorkspaceView::active)
-                .anyMatch(workspace ->
-                        workspace.hudDisplayMode() != HudDisplayMode.GUI)) {
+        if (HISTORY.state().hudDisplayMode() != HudDisplayMode.GUI) {
             NOTIFICATIONS.clear();
         }
         if (snapshot.pendingKeys() == 0) {

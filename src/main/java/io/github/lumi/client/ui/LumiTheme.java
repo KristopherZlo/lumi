@@ -1,6 +1,7 @@
 package io.github.lumi.client.ui;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import io.github.lumi.client.state.ClientAccentRepository;
 import java.io.IOException;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
@@ -8,6 +9,7 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallba
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ServerboundChatCommandPacket;
 
 /** Colors and simple surfaces shared by the Lumi V2 presentation. */
 public final class LumiTheme {
@@ -35,8 +37,15 @@ public final class LumiTheme {
         var preferences = new ClientAccentRepository(
                 FabricLoader.getInstance().getConfigDir().resolve("lumi-accent"));
         accent = preferences.load();
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, access) ->
-                dispatcher.register(ClientCommandManager.literal("lumi").then(
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, access) -> {
+            // Forward other /lumi subcommands without re-entering the client dispatcher.
+            dispatcher.register(ClientCommandManager.literal("lumi").then(ClientCommandManager
+                    .argument("serverCommand", StringArgumentType.greedyString()).executes(context -> {
+                        context.getSource().getClient().getConnection().send(
+                                new ServerboundChatCommandPacket(context.getInput()));
+                        return 1;
+                    })));
+            dispatcher.register(ClientCommandManager.literal("lumi").then(
                         ClientCommandManager.literal("accent")
                                 .executes(context -> {
                                     context.getSource().sendFeedback(Component.translatable(
@@ -61,7 +70,14 @@ public final class LumiTheme {
                                                 context.getSource().sendError(Component.translatable("lumi.accent.save_failed"));
                                             }
                                             return 0;
-                                        })))));
+                                        }))));
+            dispatcher.register(ClientCommandManager.literal("lumi").then(
+                    ClientCommandManager.literal("motion").then(ClientCommandManager
+                            .argument("enabled", BoolArgumentType.bool()).executes(context -> {
+                                LumiMotion.setEnabled(BoolArgumentType.getBool(context, "enabled"));
+                                return 1;
+                            }))));
+        });
     }
 
     static int accent() {
