@@ -1182,12 +1182,14 @@
   "luma.easter.star_wars.save.3": "And so, amid increasingly dramatic, astonishing, and unnecessarily adjective-filled circumstances, %3$s recorded \"%1$s\" on %2$s, adding another luminous chapter to a history already overflowing with improbable construction.",
   "luma.status.undo_overlap": "Later edits overlap this action. Undo those edits first. Nothing was changed.",
   "luma.status.undo_conflict": "The world has changed since this action. Nothing was changed.",
+  "lumi.astro.title": "Lumi Invaders",
   "lumi.astro.controls": "←/→ or A/D: move · Space: fire · P: pause · Esc: back",
   "lumi.astro.score": "Score %s",
-  "lumi.astro.wave": "Wave %s",
+  "lumi.astro.level": "Level %s",
   "lumi.astro.level_clear": "Level cleared",
   "lumi.astro.next_level": "Enter: next level",
   "lumi.astro.game_over": "Game over",
   "lumi.astro.paused": "Paused",
-  "lumi.astro.restart": "Enter: restart after game over · P: resume"
+  "lumi.astro.restart": "Enter: new game",
+  "lumi.astro.resume": "P: resume"
 }

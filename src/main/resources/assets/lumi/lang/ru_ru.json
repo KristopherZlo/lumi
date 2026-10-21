@@ -1146,12 +1146,14 @@
   "luma.easter.star_wars.save.3": "И вот, среди всё более драматичных, поразительных и совершенно переполненных прилагательными обстоятельств, %3$s записал сохранение «%1$s» %2$s, добавив сияющую главу в уже невероятно богатую историю строительства.",
   "luma.status.undo_overlap": "Более поздние правки пересекаются с этим действием. Сначала отмените их. Мир не изменён.",
   "luma.status.undo_conflict": "Состояние мира изменилось после этого действия. Мир не изменён.",
+  "lumi.astro.title": "Lumi Invaders",
   "lumi.astro.controls": "←/→ или A/D: движение · Пробел: огонь · P: пауза · Esc: назад",
   "lumi.astro.score": "Счёт %s",
-  "lumi.astro.wave": "Волна %s",
+  "lumi.astro.level": "Уровень %s",
   "lumi.astro.level_clear": "Уровень пройден",
   "lumi.astro.next_level": "Enter: следующий уровень",
   "lumi.astro.game_over": "Игра окончена",
   "lumi.astro.paused": "Пауза",
-  "lumi.astro.restart": "Enter: новая игра после проигрыша · P: продолжить"
+  "lumi.astro.restart": "Enter: новая игра",
+  "lumi.astro.resume": "P: продолжить"
 }
