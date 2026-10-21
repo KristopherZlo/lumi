@@ -5,6 +5,7 @@ package io.github.lumi.client.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.client.state.ClientHistoryStore;
@@ -50,6 +51,23 @@ class LumiOperationHudTest {
                 Component.literal("Target could not be applied; returned safely"), 0xffffaa00,
                 5_000_000_000L, Optional.empty(), false, 1), List.of());
         assertEquals(0xffffaa00, warning.detailColor());
+        for (var message : List.of(Component.translatable("luma.selection.resized"), Component.literal("Updated"))) {
+            var first = hud.feedback(new ClientNotificationStore.Notification(
+                    message, 0xffffffff, 5_000_000_000L, Optional.empty(), false, 1), List.of());
+            var repeated = hud.feedback(new ClientNotificationStore.Notification(
+                    message.copy(), 0xffffffff, 6_000_000_000L, Optional.empty(), false, 1), List.of());
+            assertEquals(first.identity(), repeated.identity());
+            assertEquals(first.detail(), repeated.detail());
+            assertNotEquals(first.identity(), warning.identity());
+        }
+        var nextSave = hud.feedback(new ClientNotificationStore.Notification(
+                Component.literal("Operation completed"), 0xff00ff00,
+                6_000_000_000L, request, false, 1), List.of());
+        assertNotEquals(saved.identity(), nextSave.identity());
+        var nextFailure = hud.feedback(new ClientNotificationStore.Notification(
+                Component.literal("Cannot write history"), 0xffff0000,
+                6_000_000_000L, request, true, 1), List.of());
+        assertNotEquals(failed.identity(), nextFailure.identity());
     }
 
     @Test

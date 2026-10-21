@@ -20,6 +20,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.Identifier;
 
 /** Compact HUD backed by immutable server events and local highlight progress. */
@@ -137,6 +138,11 @@ public final class LumiOperationHud {
         String detail = notification.message().getString();
         boolean saved = false;
         Object identity = notification.expiresAtNanos();
+        if (request == null && !notification.error()) {
+            var contents = notification.message().getContents();
+            identity = contents instanceof TranslatableContents translation
+                    ? translation.getKey() : notification.message();
+        }
         if (!notification.error() && request != null) {
             if (request.undo() || request.redo()) {
                 title = translated(request.undo() ? "lumi.hud.undone" : "lumi.hud.redone");
