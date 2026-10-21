@@ -3,6 +3,8 @@ package io.github.lumi.gametest;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.moulberry.axiom.editor.EditorUI;
 import com.moulberry.axiom.ContextMenuManager;
+import com.moulberry.axiom.screen.SwitchBuilderToolScreen;
+import com.moulberry.axiom.screen.SwitchHotbarScreen;
 import io.github.lumi.client.LumiCompareRenderClientGameTest;
 import io.github.lumi.client.ui.LumiHotkeyScreen;
 import io.github.lumi.client.ui.LumiUiScale;
@@ -15,6 +17,9 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 /** Exercises native mouse routing with Axiom's actual editor viewport enabled. */
 public final class LumiAxiomEditorClientGameTest implements FabricClientGameTest {
@@ -35,6 +40,7 @@ public final class LumiAxiomEditorClientGameTest implements FabricClientGameTest
                 client.getWindow().getWidth(), client.getWindow().getHeight() });
         boolean previousEditor = context.computeOnClient(client -> EditorUI.isEnabled());
         try {
+            verifySelectionMenus(context);
             for (boolean editor : new boolean[] {false, true}) {
                 context.runOnClient(client -> { if (editor) EditorUI.enable(); else EditorUI.disable(); });
                 context.waitFor(client -> EditorUI.isActive() == editor, 1200);
@@ -125,5 +131,40 @@ public final class LumiAxiomEditorClientGameTest implements FabricClientGameTest
         return screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast)
                 .filter(button -> button.active && button.visible && button.getMessage().getString().equals(label))
                 .findFirst().orElseThrow(() -> new AssertionError("Missing visible close control"));
+    }
+
+    private static void verifySelectionMenus(ClientGameTestContext context) {
+        context.runOnClient(client -> {
+            var menus = ContextMenuManager.getInstance();
+            var main = client.player.getMainHandItem().copy();
+            var offhand = client.player.getOffhandItem().copy();
+            Screen previousScreen = client.screen;
+            try {
+                menus.close();
+                client.player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+                client.player.setItemInHand(InteractionHand.OFF_HAND, ItemStack.EMPTY);
+                menus.open(new SwitchHotbarScreen());
+                if (!menus.isActive()) throw new AssertionError("Axiom Alt menu was blocked without the selection tool");
+                menus.close();
+                for (var hand : InteractionHand.values()) {
+                    client.player.setItemInHand(hand, new ItemStack(Items.WOODEN_SWORD));
+                    menus.open(new SwitchHotbarScreen());
+                    if (menus.isActive()) throw new AssertionError("Axiom hotbar menu opened with a wooden sword in " + hand);
+                    menus.open(new SwitchBuilderToolScreen());
+                    if (menus.isActive()) throw new AssertionError("Axiom tool menu opened with a wooden sword in " + hand);
+                    menus.open(new Screen(Component.literal("Unrelated Axiom menu")) {
+                        @Override public void onClose() { }
+                    });
+                    if (!menus.isActive()) throw new AssertionError("Selection tool blocked an unrelated Axiom menu");
+                    menus.close();
+                    client.player.setItemInHand(hand, ItemStack.EMPTY);
+                }
+            } finally {
+                menus.close();
+                client.player.setItemInHand(InteractionHand.MAIN_HAND, main);
+                client.player.setItemInHand(InteractionHand.OFF_HAND, offhand);
+                client.setScreen(previousScreen);
+            }
+        });
     }
 }
