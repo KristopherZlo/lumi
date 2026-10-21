@@ -50,18 +50,19 @@ class LumiSnowfallTest {
     @Test
     void screensaverWaitsForIdleBouncesAndDismissesOnInput() {
         var dvd = new LumiDvdScreensaver();
+        long idleMillis = 30 * 60 * 1_000L;
         assertFalse(dvd.advance(0, 40, 40, 160, 100, 48, 18, true));
-        assertFalse(dvd.advance(4_999, 40, 40, 160, 100, 48, 18, true));
-        assertTrue(dvd.advance(5_000, 40, 40, 160, 100, 48, 18, true));
+        assertFalse(dvd.advance(idleMillis - 1, 40, 40, 160, 100, 48, 18, true));
+        assertTrue(dvd.advance(idleMillis, 40, 40, 160, 100, 48, 18, true));
         assertEquals(0, dvd.opacity());
-        assertTrue(dvd.advance(5_300, 40, 40, 160, 100, 48, 18, true));
+        assertTrue(dvd.advance(idleMillis + 300, 40, 40, 160, 100, 48, 18, true));
         assertEquals(.5F, dvd.opacity(), .001F);
-        assertTrue(dvd.advance(5_600, 40, 40, 160, 100, 48, 18, true));
+        assertTrue(dvd.advance(idleMillis + 600, 40, 40, 160, 100, 48, 18, true));
         assertEquals(1, dvd.opacity());
         int color = dvd.color();
         boolean changed = false;
         boolean reachedEdge = false;
-        for (long now = 5_700; now < 10_000; now += 100) {
+        for (long now = idleMillis + 700; now < idleMillis + 5_000; now += 100) {
             assertTrue(dvd.advance(now, 40, 40, 160, 100, 48, 18, true));
             assertTrue(dvd.x() >= 0 && dvd.x() <= 112);
             assertTrue(dvd.y() >= 0 && dvd.y() <= 82);
@@ -70,13 +71,14 @@ class LumiSnowfallTest {
         }
         assertTrue(changed);
         assertTrue(reachedEdge);
-        assertFalse(dvd.allowInput(9_999));
+        long dismissedAt = idleMillis + 5_000;
+        assertFalse(dvd.allowInput(dismissedAt - 1));
         assertEquals(0, dvd.opacity());
-        assertTrue(dvd.allowInput(10_000));
-        assertTrue(dvd.advance(15_000, 40, 40, 160, 100, 48, 18, true));
-        assertFalse(dvd.advance(15_001, 41, 40, 160, 100, 48, 18, true));
-        dvd.activity(20_000);
-        assertFalse(dvd.advance(20_001, 41, 40, 160, 100, 48, 18, true));
-        assertFalse(dvd.advance(30_000, 41, 40, 160, 100, 48, 18, false));
+        assertTrue(dvd.allowInput(dismissedAt));
+        assertTrue(dvd.advance(dismissedAt + idleMillis, 40, 40, 160, 100, 48, 18, true));
+        assertFalse(dvd.advance(dismissedAt + idleMillis + 1, 41, 40, 160, 100, 48, 18, true));
+        dvd.activity(dismissedAt + idleMillis * 2);
+        assertFalse(dvd.advance(dismissedAt + idleMillis * 2 + 1, 41, 40, 160, 100, 48, 18, true));
+        assertFalse(dvd.advance(dismissedAt + idleMillis * 3, 41, 40, 160, 100, 48, 18, false));
     }
 }
