@@ -13,6 +13,16 @@ import org.junit.jupiter.api.Test;
 
 class LumiOperationHudTest {
     @Test
+    void boundsDetailedFeedbackAndFitsTheProgressTrackInsideOnePanel() {
+        assertEquals(24, LumiHudPanel.contentHeight(true, 0, false, 0));
+        assertEquals(42, LumiHudPanel.contentHeight(false, 1, false, 0));
+        assertEquals(50, LumiHudPanel.contentHeight(false, 1, true, 0));
+        assertEquals(LumiHudPanel.contentHeight(false, 3, true, 3),
+                LumiHudPanel.contentHeight(false, 500, true, 500));
+        assertTrue(LumiHudPanel.contentHeight(false, 500, true, 500) < 120);
+    }
+
+    @Test
     void stacksOperationBelowCollapsedOrExpandedWorkspacePanel() {
         assertEquals(38, LumiOperationHud.nextPanelY(10, 22));
         assertEquals(84, LumiOperationHud.nextPanelY(10, 68));
